@@ -46,7 +46,7 @@ int main(int argc, char* const argv[]) {
 
     valread = read(new_socket , buffer, 1024);
     printf("%s\n",buffer );
-    send(new_socket , hello.c_str() , strlen(hello.c_str()) , 0 );
+    send(new_socket , hello.c_str() , hello.length() , 0 );
     printf("Hello message sent\n");
     return 0;
 }
