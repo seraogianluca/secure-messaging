@@ -23,7 +23,7 @@ int main(int argc, char* const argv[]) {
     string message = readMessage();
 
     int res = sendMessage(message);
-    if (res > 0) {
+    if (res >= 0) {
         cout << "Message sent\n" << endl;
     } 
 
@@ -67,4 +67,5 @@ int sendMessage(string message) {
     send(sock , message.c_str() , message.length() , 0 );
     valread = read( sock , buffer, 1024);
     cout << buffer << endl;
+    return 0;
 }
