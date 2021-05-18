@@ -17,13 +17,20 @@ class Crypto {
     public:
         Crypto(unsigned char *sk) {
             session_key = new unsigned char[KEY_SIZE];
+            iv = new unsigned char[IV_SIZE];
+
             for(int i = 0; i < KEY_SIZE; i++) {
                 session_key[i] = sk[i];
+            }
+
+            for(int i = 0; i < IV_SIZE; i++) {
+                iv[i] = 0;
             }
         }
 
         ~Crypto() {
             delete session_key;
+            delete iv;
         }
 
         //EVP_PKEY* readPrivateKey(string pwd);
