@@ -25,6 +25,7 @@ unsigned char* Crypto::generateNonce(){
         throw "An error occurred in RAND_poll."; 
     if(RAND_bytes(nonce, 16) != 1)
         throw "An error occurred in RAND_bytes.";
+        
     return nonce;
 }
 
@@ -75,6 +76,8 @@ int Crypto::decryptMessage(unsigned char *ciphr_msg, unsigned char *msg) {
     int pl_len;
     unsigned char *header;
 
+    // AAD (12) | MSG (ANY*) | TAG (16)
+
     unsigned char *iv;
     iv = (unsigned char*)malloc(IV_SIZE);
     if(!iv) {
@@ -87,29 +90,49 @@ int Crypto::decryptMessage(unsigned char *ciphr_msg, unsigned char *msg) {
         throw "An error occurred while copying the iv.";
     }
 
+    unsigned char *tag;
+    tag = (unsigned char*)malloc(TAG_SIZE);
+    if(!tag) {
+        free(tag);
+        free(iv);
+        throw "An error occurred while allocating the tag."; 
+    }
+        
+    unsigned char* ptr_to_tag = ciphr_msg + sizeof(ciphr_msg) - TAG_SIZE;
+    if(memccpy(tag, ptr_to_tag , 0, TAG_SIZE) == NULL) {
+        free(tag);
+        free(iv);
+        throw "An error occurred while copying the tag.";
+    }
+
     if(!(ctx = EVP_CIPHER_CTX_new())) {
+        free(tag);
         free(iv);
         throw "An error occurred while creating the context.";
     }
 
     if(!EVP_DecryptInit(ctx, AUTH_ENCR, session_key, iv)) {
+        free(tag);
         free(iv);
         throw "An error occurred while initializing the context.";
     }
     
     if(!EVP_DecryptUpdate(ctx, NULL, &len, header, IV_SIZE)) {
+        free(tag);
         free(iv);
         throw "An error occurred while getting AAD header.";
     }
         
-    int ciphr_len =  sizeof ciphr_msg - IV_SIZE;   
+    int ciphr_len =  sizeof(ciphr_msg) - IV_SIZE;   
     if(!EVP_DecryptUpdate(ctx, msg, &len, ciphr_msg, ciphr_len)) {
+        free(tag);
         free(iv);
         throw "An error occurred while decrypting the message";
     }
     pl_len = len;
     
     if(!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_SIZE, tag)) {
+        free(tag);
         free(iv);
         throw "An error occurred while setting the expected tag.";
     }
@@ -117,13 +140,13 @@ int Crypto::decryptMessage(unsigned char *ciphr_msg, unsigned char *msg) {
     ret = EVP_DecryptFinal(ctx, msg + len, &len);
 
     EVP_CIPHER_CTX_cleanup(ctx);
+    free(tag);
+    free(iv);
 
     if(ret > 0) {
-        /* Success */
-        plaintext_len += len;
-        return plaintext_len;
+        pl_len += len;
+        return pl_len;
     } else {
-        /* Verify failed */
         return -1;
     }
 }
