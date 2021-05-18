@@ -35,6 +35,11 @@ string readMessage() {
     string message;
     cout << "Write here your message >> ";
     getline(cin, message);
+    if(!cin) {
+        cerr << "Error in standard input." << endl;
+
+    }
+
     if (message.length() > MESSAGE_MAX_SIZE) {
         cerr << "Error: the message must be loger than " << endl;
         exit(EXIT_FAILURE);
@@ -64,8 +69,13 @@ int sendMessage(string message) {
         cerr << "\nConnection Failed \n" << endl;
         return -1;
     }
-    send(sock , message.c_str() , message.length() , 0 );
-    valread = read( sock , buffer, 1024);
+    send(sock, message.c_str(), message.length(), 0 );
+    if(read(sock,buffer,1024) == -1) {
+        // TODO: controllare se vogliamo usare errno.h
+        cerr << "Error in response" << endl;
+        return -1;
+    }
+
     cout << buffer << endl;
     return 0;
 }
