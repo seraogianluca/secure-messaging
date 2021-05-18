@@ -10,22 +10,25 @@ ifdef LO_ENV
 endif
 
 CURRENT_DIR = $(shell pwd)
+TEST_PATH = test/
 CLIENT_PATH = src/client/
 CRYPTO_PATH = src/crypto/
 SERVER_PATH = src/server/
 
 ifeq ($(ENV), 1)
 $(info "=================Compiled by Gianluca======================")
-TARGET=client server
+TARGET= crypto
 CC=clang++
 CFLAGS= -Wall -lcrypto
 CPPFLAGS="-I/opt/homebrew/opt/openssl@1.1/include"
 LDFLAGS="-L/opt/homebrew/opt/openssl@1.1/lib"
 all: $(TARGET)
-client: $(CLIENT_PATH)client_main.cpp $(CLIENT_PATH)client.cpp
-	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -o client $(CLIENT_PATH)client_main.cpp $(CLIENT_PATH)client.cpp $(CRYPTO_PATH)crypto.cpp -I$(CURRENT_DIR)
-server: $(SERVER_PATH)server_main.cpp $(SERVER_PATH)server.cpp
-	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -o server $(SERVER_PATH)server_main.cpp $(SERVER_PATH)server.cpp $(CRYPTO_PATH)crypto.cpp -I$(CURRENT_DIR)
+crypto: $(TEST_PATH)crypto_tests.cpp $(CRYPTO_PATH)crypto.cpp
+	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -o crypto $(TEST_PATH)crypto_tests.cpp $(CRYPTO_PATH)crypto.cpp -I$(CURRENT_DIR)
+#client: $(CLIENT_PATH)client_main.cpp $(CLIENT_PATH)client.cpp
+#	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -o client $(CLIENT_PATH)client_main.cpp $(CLIENT_PATH)client.cpp $(CRYPTO_PATH)crypto.cpp -I$(CURRENT_DIR)
+#server: $(SERVER_PATH)server_main.cpp $(SERVER_PATH)server.cpp
+#	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -o server $(SERVER_PATH)server_main.cpp $(SERVER_PATH)server.cpp $(CRYPTO_PATH)crypto.cpp -I$(CURRENT_DIR)
 clean:
 	$(RM) $(TARGET)       
 endif

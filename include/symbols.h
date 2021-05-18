@@ -17,6 +17,7 @@
 
 // Authenticated encryption
 #define AUTH_ENCR EVP_aes_128_gcm()
+#define KEY_SIZE 16
 #define IV_SIZE 12
 #define TAG_SIZE 16
 

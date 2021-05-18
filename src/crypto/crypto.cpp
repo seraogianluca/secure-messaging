@@ -19,28 +19,50 @@ EVP_PKEY* Crypto::readPrivateKey(string pwd) {
 }
 */
 
-unsigned char* Crypto::generateNonce(){ 
-    unsigned char nonce[16];
+string Crypto::generateNonce() { 
+    unsigned char nonce_buf[16];
+    string nonce;
+
     if(RAND_poll() != 1)
         throw "An error occurred in RAND_poll."; 
-    if(RAND_bytes(nonce, 16) != 1)
+    if(RAND_bytes(nonce_buf, 16) != 1)
         throw "An error occurred in RAND_bytes.";
-        
+    
+    for (size_t i = 0; i < 16; i++) {
+        nonce.append(1, static_cast<char>(nonce_buf[i]));
+    }
     return nonce;
 }
 
-int Crypto::encryptMessage(unsigned char *msg, unsigned char *ciphr_msg, unsigned char *tag) {
+int Crypto::generateIV() {
+    iv = new unsigned char[IV_SIZE];
+
+    if(RAND_poll() != 1)
+        throw "An error occurred in RAND_poll."; 
+    if(RAND_bytes(iv, IV_SIZE) != 1)
+        throw "An error occurred in RAND_bytes.";
+
+    return 0;
+}
+
+unsigned char* Crypto::getIV() {
+    unsigned char* ret_iv = new unsigned char[IV_SIZE];
+
+    for(int i = 0; i < IV_SIZE; i++) {
+        ret_iv[i] = iv[i];
+    }
+
+    return ret_iv;
+}
+
+int Crypto::encryptMessage(unsigned char *msg, int msg_len,
+                        unsigned char *ciphr_msg,
+                        unsigned char *tag) {
     EVP_CIPHER_CTX *ctx;
-    unsigned char iv[IV_SIZE];
     int len = 0;
     int ciphr_len = 0;
 
-    // Generate a random IV
-    // TODO: controllare se va bene generarlo per ogni messaggio
-    if(RAND_poll() != 1)
-        throw "An error occurred in RAND_poll.";
-    if(RAND_bytes(iv, IV_SIZE) != 1)
-        throw "An error occurred in RAND_bytes.";
+    generateIV();
     
     if(!(ctx = EVP_CIPHER_CTX_new()))
         throw "An error occurred while creating the context.";   
@@ -53,7 +75,7 @@ int Crypto::encryptMessage(unsigned char *msg, unsigned char *ciphr_msg, unsigne
         throw "An error occurred in adding AAD header.";
     
     // TODO: Controllare se server un for
-    if(EVP_EncryptUpdate(ctx, ciphr_msg, &len, msg, sizeof msg) != 1)
+    if(EVP_EncryptUpdate(ctx, ciphr_msg, &len, msg, msg_len) != 1)
         throw "An error occurred while encrypting the message.";
     ciphr_len = len;
 
@@ -69,79 +91,34 @@ int Crypto::encryptMessage(unsigned char *msg, unsigned char *ciphr_msg, unsigne
     return ciphr_len;
 }
 
-int Crypto::decryptMessage(unsigned char *ciphr_msg, unsigned char *msg) {
+int Crypto::decryptMessage(unsigned char *ciphr_msg, int ciphr_len,
+                        unsigned char* iv_src,
+                        unsigned char* tag, 
+                        unsigned char *msg) {
     EVP_CIPHER_CTX *ctx;
     int ret;
     int len;
     int pl_len;
-    unsigned char *header;
 
-    // AAD (12) | MSG (ANY*) | TAG (16)
-
-    unsigned char *iv;
-    iv = (unsigned char*)malloc(IV_SIZE);
-    if(!iv) {
-        free(iv);
-        throw "An error occurred while allocating the iv."; 
-    }
-        
-    if(memccpy(iv, ciphr_msg, 0, IV_SIZE) == NULL) {
-        free(iv);
-        throw "An error occurred while copying the iv.";
-    }
-
-    unsigned char *tag;
-    tag = (unsigned char*)malloc(TAG_SIZE);
-    if(!tag) {
-        free(tag);
-        free(iv);
-        throw "An error occurred while allocating the tag."; 
-    }
-        
-    unsigned char* ptr_to_tag = ciphr_msg + sizeof(ciphr_msg) - TAG_SIZE;
-    if(memccpy(tag, ptr_to_tag , 0, TAG_SIZE) == NULL) {
-        free(tag);
-        free(iv);
-        throw "An error occurred while copying the tag.";
-    }
-
-    if(!(ctx = EVP_CIPHER_CTX_new())) {
-        free(tag);
-        free(iv);
+    if(!(ctx = EVP_CIPHER_CTX_new()))
         throw "An error occurred while creating the context.";
-    }
 
-    if(!EVP_DecryptInit(ctx, AUTH_ENCR, session_key, iv)) {
-        free(tag);
-        free(iv);
+    if(!EVP_DecryptInit(ctx, AUTH_ENCR, session_key, iv_src))
         throw "An error occurred while initializing the context.";
-    }
     
-    if(!EVP_DecryptUpdate(ctx, NULL, &len, header, IV_SIZE)) {
-        free(tag);
-        free(iv);
+    if(!EVP_DecryptUpdate(ctx, NULL, &len, iv_src, IV_SIZE))
         throw "An error occurred while getting AAD header.";
-    }
         
-    int ciphr_len =  sizeof(ciphr_msg) - IV_SIZE;   
-    if(!EVP_DecryptUpdate(ctx, msg, &len, ciphr_msg, ciphr_len)) {
-        free(tag);
-        free(iv);
+    if(!EVP_DecryptUpdate(ctx, msg, &len, ciphr_msg, ciphr_len))
         throw "An error occurred while decrypting the message";
-    }
     pl_len = len;
     
-    if(!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_SIZE, tag)) {
-        free(tag);
-        free(iv);
+    if(!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_SIZE, tag))
         throw "An error occurred while setting the expected tag.";
-    }
     
     ret = EVP_DecryptFinal(ctx, msg + len, &len);
 
     EVP_CIPHER_CTX_cleanup(ctx);
-    free(tag);
-    free(iv);
 
     if(ret > 0) {
         pl_len += len;
