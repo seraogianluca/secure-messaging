@@ -9,6 +9,7 @@
 #define OP_LOGOUT 1
 #define OP_REQUEST_TO_TALK 2
 #define OP_MESSAGE 3
+#define OP_CERTIFICATE_REQUEST 4
 
 // 
 
