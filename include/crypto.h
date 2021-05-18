@@ -13,9 +13,10 @@ class Crypto {
         unsigned char *session_key;
 
     public:
-        Crypto() {
-
+        Crypto(unsigned char *sk) {
+            session_key = sk;
         };
+
         //EVP_PKEY* readPrivateKey(string pwd);
         unsigned char* generateNonce();
         int encryptMessage(unsigned char *msg, unsigned char *ciphr_msg, unsigned char *tag);
