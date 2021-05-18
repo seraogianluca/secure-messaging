@@ -15,3 +15,8 @@
 
 #define MAX_MESSAGE_SIZE 10000
 
+// Authenticated encryption
+#define AUTH_ENCR EVP_aes_128_gcm()
+#define IV_SIZE 12
+#define TAG_SIZE 16
+
