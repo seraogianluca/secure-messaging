@@ -2,7 +2,7 @@
 
 int Client::login(string pwd) {
     // Generate nonce
-    Crypto crypto; // Refactor
+    Crypto crypto(NULL); // Refactor
     string nonce_client = convert(crypto.generateNonce());
     try {
         string helloMessage = "hello" + nonce_client;
