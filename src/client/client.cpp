@@ -5,46 +5,47 @@ int Client::login(string pwd) {
     Crypto crypto; // Refactor
     string nonce_client = convert(crypto.generateNonce());
     try {
-        string helloMessge = "hello" + nonce_client;
+        string helloMessage = "hello" + nonce_client;
         sendMessage(helloMessage);
         string message_received = readMessage();
         string nonce_received = extractClientNonce(message_received, nonce_client.length());
         string nonce_server = extractServerNonce(message_received, nonce_client.length());
         if(nonce_client.compare(nonce_received) != 0) {
-            throw exception("Login Error: The freshness of the message is not confirmed");
+            throw "Login Error: The freshness of the message is not confirmed";
         }
         string requestCertificateMessage = (char)OP_CERTIFICATE_REQUEST + nonce_server + nonce_client;
-        sendMessage(string requestCertificateMessage);
+        sendMessage(requestCertificateMessage);
         string certificate = readMessage();
         bool verification = verifyCertificate();
+        return 0;
     } catch(const char* ex){
-        throw exception("Login Error: " + ex);
+        throw "Login Error: " + string(ex);
     }
 }
 
 void Client::sendMessage(string message) {
-    int sock = 0, valread;
+    int sock = 0;
     struct sockaddr_in serv_addr;
 
     char buffer[1024] = {0};
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         cerr << "\n Socket creation error \n" << endl;
-        throw exception("Socket creation error");
+        throw "Socket creation error";
     }
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
     
     // Convert IPv4 and IPv6 addresses from text to binary form
     if(inet_pton(AF_INET, SERVER, &serv_addr.sin_addr)<=0) {
-        throw exception("\nInvalid address/ Address not supported \n")
+        throw "\nInvalid address/ Address not supported \n";
     }
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        throw exception("\nConnection Failed \n");
+        throw "\nConnection Failed \n";
     }
     send(sock, message.c_str(), message.length(), 0 );
     if(read(sock,buffer,1024) == -1) {
         // TODO: controllare se vogliamo usare errno.h
-        throw exception("\nError in response\n");
+        throw "\nError in response\n";
     }
 }
 

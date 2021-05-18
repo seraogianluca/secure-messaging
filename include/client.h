@@ -13,7 +13,7 @@ using namespace std;
 class Client {
     private:
         string username;
-        int sendMessage(string message);
+        void sendMessage(string message);
         string convert(unsigned char* value);
         string readMessage();
         bool verifyCertificate();
