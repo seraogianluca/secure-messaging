@@ -67,25 +67,37 @@ int Crypto::encryptMessage(unsigned char *msg, int msg_len,
     if(!(ctx = EVP_CIPHER_CTX_new()))
         throw "An error occurred while creating the context.";   
 
-    if(EVP_EncryptInit(ctx, AUTH_ENCR, session_key, iv) != 1)
+    if(EVP_EncryptInit(ctx, AUTH_ENCR, session_key, iv) != 1) {
+        // QUESTION: Bisogna fare la free in questi casi di errore?
+        EVP_CIPHER_CTX_free(ctx);
         throw "An error occurred while initializing the context.";
-    
+    }
+         
     //AAD: header in the clear that contains the IV
-    if(EVP_EncryptUpdate(ctx, NULL, &len, iv, IV_SIZE) != 1)
+    if(EVP_EncryptUpdate(ctx, NULL, &len, iv, IV_SIZE) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
         throw "An error occurred in adding AAD header.";
+    }
+        
     
     // TODO: Controllare se server un for
-    if(EVP_EncryptUpdate(ctx, ciphr_msg, &len, msg, msg_len) != 1)
+    if(EVP_EncryptUpdate(ctx, ciphr_msg, &len, msg, msg_len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
         throw "An error occurred while encrypting the message.";
+    }
     ciphr_len = len;
 
-    if(EVP_EncryptFinal(ctx, ciphr_msg + len, &len) != 1)
+    if(EVP_EncryptFinal(ctx, ciphr_msg + len, &len) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
         throw "An error occurred while finalizing the ciphertext.";
+    }
     ciphr_len += len;
 
     //Get the tag
-    if(EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, TAG_SIZE, tag) != 1)
+    if(EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, TAG_SIZE, tag) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
         throw "An error occurred while getting the tag.";
+    }
     
     EVP_CIPHER_CTX_free(ctx);
     return ciphr_len;
@@ -103,22 +115,32 @@ int Crypto::decryptMessage(unsigned char *ciphr_msg, int ciphr_len,
     if(!(ctx = EVP_CIPHER_CTX_new()))
         throw "An error occurred while creating the context.";
 
-    if(!EVP_DecryptInit(ctx, AUTH_ENCR, session_key, iv_src))
+    if(!EVP_DecryptInit(ctx, AUTH_ENCR, session_key, iv_src)) {
+        EVP_CIPHER_CTX_free(ctx);
         throw "An error occurred while initializing the context.";
+    }
     
-    if(!EVP_DecryptUpdate(ctx, NULL, &len, iv_src, IV_SIZE))
+    if(!EVP_DecryptUpdate(ctx, NULL, &len, iv_src, IV_SIZE)) {
+        EVP_CIPHER_CTX_free(ctx);
         throw "An error occurred while getting AAD header.";
+    }
         
-    if(!EVP_DecryptUpdate(ctx, msg, &len, ciphr_msg, ciphr_len))
+    if(!EVP_DecryptUpdate(ctx, msg, &len, ciphr_msg, ciphr_len)) {
+        EVP_CIPHER_CTX_free(ctx);
         throw "An error occurred while decrypting the message";
+    }
     pl_len = len;
     
-    if(!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_SIZE, tag))
+    if(!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_SIZE, tag)) {
+        EVP_CIPHER_CTX_free(ctx);
         throw "An error occurred while setting the expected tag.";
+    }
     
     ret = EVP_DecryptFinal(ctx, msg + len, &len);
 
-    EVP_CIPHER_CTX_cleanup(ctx);
+    //QUESTION: che differenza c'è tra free e cleanup?
+    //EVP_CIPHER_CTX_cleanup(ctx);
+    EVP_CIPHER_CTX_free(ctx);
 
     if(ret > 0) {
         pl_len += len;
