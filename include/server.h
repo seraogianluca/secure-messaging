@@ -21,12 +21,13 @@ class Server {
         vector<user> onlineUsers;
         void sendMessage(string message);
         string readMessage();
-        string extractClientNonce(string message, size_t serverNonceLen);
+        string extractClientNonce(string message);
         string extractServerNonce(string message, size_t serverNonceLen);
     public:
-        Server();
-        ~Server();
+        Server(){};
+        ~Server(){};
 
+        void handleLogin();
         int forwardMessage(string dest, string message);
         int authenticate(string dest);
         int sendOnlineUsers(string dest);

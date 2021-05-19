@@ -9,8 +9,8 @@
 ### Server-Auth
 
 1) Client hello. M1 C->S: hello||nc
-2) Server hello. M2 S->C: hello||ns||nc
-3) Client requests certificate. M3 C->S: cert_req||ns||nc
+2) Server hello. M2 S->C: hello||nc||ns
+3) Client requests certificate. M3 C->S: cert_req||nc||ns
 4) Server sends certificate. M4 S->C: cert||nc
 //5) Server: S -> C: hello done
 
