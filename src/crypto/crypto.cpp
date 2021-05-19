@@ -1,23 +1,39 @@
 #include "include/crypto.h"
 
-/*
 EVP_PKEY* Crypto::readPrivateKey(string pwd) {
+    //QUESTION: necessario controllo su pwd tramite white/black list??
     EVP_PKEY* prvKey;
     FILE* file;
     file = fopen("prvkey.pem", "r");
-    if(!file) {
-        cerr << "Error: file does not exists";
-        return NULL;
-    }
+    if(!file)
+        throw "An error occurred, the file doesn't exist.";
     prvKey = PEM_read_PrivateKey(file, NULL, NULL, (char*)pwd.c_str());
-    fclose(file);
-    if(!prvKey){ 
-        cerr << "Error: PEM_read_PRVKEY returned NULL\n";
-        return NULL;
+    if(!prvKey){
+        fclose(file);
+        throw "An error occurred while reading the private key.";
     }
+    if(fclose(file)!=0)
+        throw "An error occurred while closing the file.";
     return prvKey;
 }
-*/
+
+EVP_PKEY* Crypto::readPublicKey(string user) {
+    //QUESTION: necessario controllo su user tramite white/black list??
+    EVP_PKEY* pubKey;
+    FILE* file;
+    string path = user + "_pubkey.pem";
+    file = fopen(path.c_str(), "r");
+    if(!file)
+        throw "An error occurred, the file doesn't exist.";
+    pubKey = PEM_read_PUBKEY(file, NULL, NULL, NULL);
+    if(!pubKey){
+        fclose(file);
+        throw "An error occurred while reading the private key.";
+    }
+    if(fclose(file)!=0)
+        throw "An error occurred while closing the file.";
+    return pubKey;
+}
 
 string Crypto::generateNonce() { 
     unsigned char nonce_buf[16];
@@ -47,11 +63,9 @@ int Crypto::generateIV() {
 
 unsigned char* Crypto::getIV() {
     unsigned char* ret_iv = new unsigned char[IV_SIZE];
-
     for(int i = 0; i < IV_SIZE; i++) {
         ret_iv[i] = iv[i];
     }
-
     return ret_iv;
 }
 
@@ -61,9 +75,7 @@ int Crypto::encryptMessage(unsigned char *msg, int msg_len,
     EVP_CIPHER_CTX *ctx;
     int len = 0;
     int ciphr_len = 0;
-
-    generateIV();
-    
+    generateIV();    
     if(!(ctx = EVP_CIPHER_CTX_new()))
         throw "An error occurred while creating the context.";   
 
@@ -79,7 +91,6 @@ int Crypto::encryptMessage(unsigned char *msg, int msg_len,
         throw "An error occurred in adding AAD header.";
     }
         
-    
     // TODO: Controllare se server un for
     if(EVP_EncryptUpdate(ctx, ciphr_msg, &len, msg, msg_len) != 1) {
         EVP_CIPHER_CTX_free(ctx);
@@ -150,3 +161,59 @@ int Crypto::decryptMessage(unsigned char *ciphr_msg, int ciphr_len,
     }
 }
 
+X509* Crypto::loadCertificate(){
+    X509 *cert = NULL;
+    FILE *file = fopen("/cert/cert.pem","r");
+    if(!file)
+        throw "An error occurred while opening the file.";
+    cert = PEM_read_X509(file,NULL,NULL,NULL);
+    if(!cert){
+        fclose(file);
+        throw "An error occurred while reading the pem certificate.";
+    }
+    if(fclose(file)!=0)
+        throw "An error occurred while closing the file.";
+    return cert;
+}
+
+int Crypto::sendCertificate(int sock, X509* cert){
+    BIO *b = BIO_new_socket(sock,BIO_NOCLOSE);
+    if(PEM_write_bio_X509(b,cert)!=1){
+        BIO_free(b);
+        throw "An error occurred during the writing of the certificate into the bio.";
+    }
+    BIO_free(b);
+    return 0;
+}
+
+X509* Crypto::receiveCertificate(int sock){
+    BIO *b = BIO_new_socket(sock,BIO_NOCLOSE);
+    X509 *buff = PEM_read_bio_X509(b, NULL, NULL, NULL);
+    if(buff == NULL){
+        BIO_free(b);
+        throw "An error occurred during the reading of the certificate from the bio.";
+    }
+    BIO_free(b);
+    return buff;
+}
+
+int Crypto::sendPublicKey(EVP_PKEY* pubkey, int sock){
+    BIO *b = BIO_new_socket(sock, BIO_NOCLOSE);
+    if(PEM_write_bio_PUBKEY(b,pubkey)!=1){
+        BIO_free(b);
+        throw "An error occurred during the writing of the public key into the bio.";
+    }
+    BIO_free(b);
+    return 0;
+}
+
+EVP_PKEY* Crypto::receivePublicKey(int sock){
+    BIO *b = BIO_new_socket(sock, BIO_NOCLOSE);
+    EVP_PKEY *pubkey = PEM_read_bio_PUBKEY(b, NULL, NULL, NULL);
+    if(pubkey == NULL){
+        BIO_free(b);
+        throw "An error occurred during the reading of the public key from the bio.";
+    }
+    BIO_free(b);
+    return pubkey;
+}
