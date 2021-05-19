@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include "include/client.h"
 
 #define PORT 8080
 
@@ -19,13 +20,12 @@ int sendMessage(string message);
 int main(int argc, char* const argv[]) {
 
     cout << "Welcome in the Secure-Messaging client" << endl;
-
-    string message = readMessage();
-
-    int res = sendMessage(message);
-    if (res >= 0) {
-        cout << "Message sent\n" << endl;
-    } 
+    try {
+        Client client;
+        client.login("password");
+    } catch(const exception& ex) {
+        cerr << ex.what() << endl;
+    }
 
     return 0;
 }

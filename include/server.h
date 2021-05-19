@@ -1,6 +1,13 @@
-#include <string>
 #include <vector>
+#include <iostream>
+#include <string>
+#include <stdexcept>
 #include "symbols.h"
+#include "include/crypto.h"
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include "include/symbols.h"
 
 using namespace std;
 
@@ -12,7 +19,10 @@ struct user {
 class Server {
     private:
         vector<user> onlineUsers;
-        int sendMessage(string message);
+        void sendMessage(string message);
+        string readMessage();
+        string extractClientNonce(string message, size_t serverNonceLen);
+        string extractServerNonce(string message, size_t serverNonceLen);
     public:
         Server();
         ~Server();

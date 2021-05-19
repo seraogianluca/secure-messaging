@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <exception>
 #include "include/symbols.h"
 
 using namespace std;
@@ -21,8 +22,8 @@ class Client {
         string extractServerNonce(string message, size_t clientNonceLen);
 
     public:
-        Client(); //Constructor
-        ~Client(); //Distructor
+        Client() {}; //Constructor
+        ~Client() {}; //Distructor
 
         int login(string pwd);
         int logout();
