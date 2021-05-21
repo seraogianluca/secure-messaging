@@ -46,10 +46,10 @@ class Crypto {
        
         // Certificates
         X509* loadCertificate();
-        int sendCertificate(int sock, X509* cert);
-        X509* receiveCertificate(int sock);
+        int sendCertificate(int sock, X509* cert, unsigned char* cert_buf);
+        X509* receiveCertificate(int sock,int cert_len,unsigned char* cert_buff);
 
         // Public Key handling
-        int sendPublicKey(EVP_PKEY* pubkey, int sock);
-        EVP_PKEY* receivePublicKey(int sock);
+        int sendPublicKey(EVP_PKEY* pubkey, unsigned char* pubkey_buf);
+        EVP_PKEY* receivePublicKey(unsigned char* pubkey_buf, int pubkey_size);
 };

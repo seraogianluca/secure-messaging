@@ -8,15 +8,7 @@ string str_to_hex(string str) {
     return ss.str();
 }
 
-void nonce_test(Crypto c) {
-    
-}
-
-void auth_encrypt_test(Crypto c) {
-    
-}
-
-int main() {
+void nonce_test() {
     Crypto c((unsigned char*)"1234567890123456");
 
     // Nonce test
@@ -32,8 +24,10 @@ int main() {
     } catch(const char *msg) {
         cerr << msg << endl;
     }
+}
 
-    // Encryption test
+void auth_encrypt_test() {
+    Crypto c((unsigned char*)"1234567890123456");
     unsigned char msg[] = "Test message";
     unsigned char *ciphertext;
     unsigned char *tag;
@@ -59,9 +53,7 @@ int main() {
     } catch(const char *msg) {
         cerr << msg << endl;
     }
-
     iv = c.getIV();
-
     try {
 
         dec_msg = (unsigned char*)malloc(ciphertext_len);
@@ -83,4 +75,12 @@ int main() {
     free(ciphertext);
     free(tag);
     free(dec_msg);
+}
+
+int main() {
+
+    // Encryption test
+    
+
+    
 }

@@ -163,7 +163,7 @@ int Crypto::decryptMessage(unsigned char *ciphr_msg, int ciphr_len,
 
 X509* Crypto::loadCertificate(){
     X509 *cert = NULL;
-    FILE *file = fopen("/cert/cert.pem","r");
+    FILE *file = fopen(CA_CERT_PATH,"r");
     if(!file)
         throw "An error occurred while opening the file.";
     cert = PEM_read_X509(file,NULL,NULL,NULL);
@@ -176,44 +176,48 @@ X509* Crypto::loadCertificate(){
     return cert;
 }
 
-int Crypto::sendCertificate(int sock, X509* cert){
-    BIO *b = BIO_new_socket(sock,BIO_NOCLOSE);
-    if(PEM_write_bio_X509(b,cert)!=1){
-        BIO_free(b);
-        throw "An error occurred during the writing of the certificate into the bio.";
-    }
-    BIO_free(b);
-    return 0;
+int Crypto::sendCertificate(int sock, X509* cert, unsigned char* cert_buf){
+    int cert_size = i2d_X509(cert,&cert_buf);
+    if(cert_size<0)
+        throw "An error occurred during the writing of the certificate.";
+    return cert_size;
 }
 
-X509* Crypto::receiveCertificate(int sock){
-    BIO *b = BIO_new_socket(sock,BIO_NOCLOSE);
-    X509 *buff = PEM_read_bio_X509(b, NULL, NULL, NULL);
-    if(buff == NULL){
-        BIO_free(b);
-        throw "An error occurred during the reading of the certificate from the bio.";
-    }
-    BIO_free(b);
+X509* Crypto::receiveCertificate(int sock,int cert_len,unsigned char* cert_buff){
+    X509 *buff = d2i_X509(NULL,(const unsigned char**)&cert_buff,cert_len);
+    if(!buff)
+        throw "An error occurred during the reading of the certificate.";
     return buff;
 }
 
-int Crypto::sendPublicKey(EVP_PKEY* pubkey, int sock){
-    BIO *b = BIO_new_socket(sock, BIO_NOCLOSE);
-    if(PEM_write_bio_PUBKEY(b,pubkey)!=1){
-        BIO_free(b);
+int Crypto::sendPublicKey(EVP_PKEY* pubkey, unsigned char* pubkey_buf){
+    BIO *mbio = BIO_new(BIO_s_mem());
+    if(mbio==NULL)
+        throw "An error occurred during the creation of the bio.";
+    if(PEM_write_bio_PUBKEY(mbio,pubkey)!=1){
+        BIO_free(mbio);
         throw "An error occurred during the writing of the public key into the bio.";
     }
-    BIO_free(b);
-    return 0;
+    long pubkey_size = BIO_get_mem_data(mbio,&pubkey_buf);
+    if(pubkey_size<0){
+        BIO_free(mbio);
+        throw "An error occurred during the reading of the public key.";
+    }
+    BIO_free(mbio);
+    return pubkey_size;
 }
 
-EVP_PKEY* Crypto::receivePublicKey(int sock){
-    BIO *b = BIO_new_socket(sock, BIO_NOCLOSE);
-    EVP_PKEY *pubkey = PEM_read_bio_PUBKEY(b, NULL, NULL, NULL);
+EVP_PKEY* Crypto::receivePublicKey(unsigned char* pubkey_buf, int pubkey_size){
+    BIO *mbio = BIO_new(BIO_s_mem());
+    if(mbio==NULL)
+        throw "An error occurred during the creation of the bio.";
+    if(BIO_write(mbio,pubkey_buf,pubkey_size)<=0)
+        throw "An error occurred during the writing of the bio.";
+    EVP_PKEY *pubkey = PEM_read_bio_PUBKEY(mbio, NULL, NULL, NULL);
     if(pubkey == NULL){
-        BIO_free(b);
+        BIO_free(mbio);
         throw "An error occurred during the reading of the public key from the bio.";
     }
-    BIO_free(b);
+    BIO_free(mbio);
     return pubkey;
 }
