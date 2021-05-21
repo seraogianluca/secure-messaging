@@ -4,6 +4,7 @@
 #include <string>
 #include <unistd.h>
 #include "include/server.h"
+#include "include/socket.h"
 
 #define PORT 8080
 
@@ -11,9 +12,12 @@ using namespace std;
 
 int main(int argc, char* const argv[]) {
     try {
-        Server server;
-        cout << "Login" << endl;
-        server.handleLogin();
+        SocketServer serverSocket = SocketServer(SOCK_STREAM); //TCP
+        while(true) {
+            serverSocket.initSet();
+            serverSocket.selectActivity();
+            serverSocket.handleSockets();
+        }
     } catch(const std::exception& e) {
         std::cerr << e.what() << '\n';
     }
