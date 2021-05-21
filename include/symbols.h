@@ -20,3 +20,6 @@
 #define IV_SIZE 12
 #define TAG_SIZE 16
 
+//CERTIFICATE PATH
+#define CA_CERT_PATH "./cert/ca_cert.pem"
+
