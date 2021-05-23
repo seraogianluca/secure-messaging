@@ -6,42 +6,24 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include "include/client.h"
-
-#define PORT 8080
+#include "include/socket.h"
 
 using namespace std;
-
-const string LOCALHOST = "127.0.0.1";
-const int MESSAGE_MAX_SIZE = 10000;
 
 string readMessage();
 int sendMessage(string message);
 
 int main(int argc, char* const argv[]) {
-
-    cout << "Welcome in the Secure-Messaging client" << endl;
     try {
-        Client client;
-        client.login("password");
-    } catch(const exception& ex) {
-        cerr << ex.what() << endl;
+        SocketClient socketClient = SocketClient(SOCK_STREAM);
+        socketClient.makeConnection();
+        string greetingMessage = socketClient.receiveMessage();
+        cout << "Received a greeting message to confirm the connection: " << greetingMessage  << endl;
+        socketClient.sendMessage("Saluti");
+        string message = socketClient.receiveMessage();
+        cout << message << endl;
+    } catch(const std::exception& e) {
+        std::cerr << e.what() << '\n';
     }
-
     return 0;
-}
-
-
-string readMessage() {
-    string message;
-    cout << "Write here your message >> ";
-    getline(cin, message);
-    if(!cin) {
-        cerr << "Error in standard input." << endl;
-
-    }
-    if (message.length() > MESSAGE_MAX_SIZE) {
-        cerr << "Error: the message must be loger than " << endl;
-        exit(EXIT_FAILURE);
-    }
-    return message;
 }

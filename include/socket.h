@@ -8,6 +8,7 @@
 #include <string.h>
 #include "include/symbols.h"
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros 
+#include <errno.h>
 
 using namespace std;
 
@@ -18,7 +19,7 @@ class SocketClient {
         int socketType;
         struct sockaddr_in address;
         int master_fd;
-        int client_socket[30];
+        int port;
         void createSocket();
 
     public:
@@ -41,6 +42,7 @@ class SocketServer: private SocketClient {
         int sd;
         int activity;
         int addrlen;
+        int port;
         char buffer[1025];
         void serverBind();
         void listenForConnections();
@@ -50,7 +52,7 @@ class SocketServer: private SocketClient {
         ~SocketServer();
         void initSet();
         void selectActivity();
-        void handleSockets();
+        bool isMasterSet();
         void acceptNewConnection();
         void readMessageOnOtherSockets();
 };

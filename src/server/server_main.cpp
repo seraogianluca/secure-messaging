@@ -16,7 +16,11 @@ int main(int argc, char* const argv[]) {
         while(true) {
             serverSocket.initSet();
             serverSocket.selectActivity();
-            serverSocket.handleSockets();
+            if(serverSocket.isMasterSet()) {
+                serverSocket.acceptNewConnection();
+            } else {
+                serverSocket.readMessageOnOtherSockets();
+            }
         }
     } catch(const std::exception& e) {
         std::cerr << e.what() << '\n';

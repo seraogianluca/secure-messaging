@@ -2,14 +2,17 @@
 
 SocketClient::SocketClient(int socketType) {
     this->socketType = socketType;
+    this->port = 8080;
+    createSocket();
 }
 
 void SocketClient::createSocket() {
     if ((this->master_fd = socket(AF_INET, this->socketType, 0)) < 0) {
         throw runtime_error("Socket not created.");
     }
+    cout << "Socket correctly created" << endl;
     this->address.sin_family = AF_INET;
-    this->address.sin_port = htons(PORT);
+    this->address.sin_port = htons(this->port);
     // Convert IPv4 and IPv6 addresses from text to binary form
     if(inet_pton(AF_INET, SERVER, &this->address.sin_addr)<=0) {
         throw runtime_error("Invalid address/ Address not supported");
@@ -23,21 +26,24 @@ SocketClient::~SocketClient() {
 }
 
 void SocketClient::makeConnection() {
-    if (connect(this->master_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    if (connect(master_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        perror("Connection Error");
         throw runtime_error("Connection Failed");
     }
 }
 
 void SocketClient::sendMessage(string message) {
-    if (send(this->master_fd , message.c_str() , message.length() , 0 )) {
+    if (send(master_fd, message.c_str(), message.length(), 0 ) != message.length()) {
+        perror("Send Error");
         throw runtime_error("Send failed");
     }   
 }
 
 string SocketClient::receiveMessage() {
-    char buffer[MAX_MESSAGE_SIZE];
+    char buffer[1024];
     // ssize_t recv(int sockfd, const void *buf, size_t len, int flags);
-    if (recv(this->master_fd, buffer, MAX_MESSAGE_SIZE, 0)) {
+    if (recv(master_fd, buffer, 1024, 0) <= 0) {
+        perror("Receive Error");
         throw runtime_error("Receive failed");
     }
     return string(buffer);   
@@ -47,18 +53,21 @@ string SocketClient::receiveMessage() {
 
 SocketServer::SocketServer(int socketType):SocketClient(socketType) {
 
+    this->port = 8888;
     for (size_t i = 0; i < MAX_CLIENTS; i++) {
         this->client_socket[i] = 0;
     }
     
-    int opt = true;
     this->address.sin_addr.s_addr = INADDR_ANY;
+    // int opt = true;
     //set master socket to allow multiple connections , 
     //this is just a good habit, it will work without this 
-    if(setsockopt(this->master_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, 
-          sizeof(opt)) < 0 ) {  
-        throw runtime_error("Error setting the options");
-    }
+    // if(setsockopt(this->master_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, 
+    //       sizeof(opt)) < 0 ) {  
+    //     throw runtime_error("Error setting the options");
+    // }
+    this->serverBind();
+    this->listenForConnections();
 }
 
 SocketServer::~SocketServer() {
@@ -68,7 +77,7 @@ void SocketServer::serverBind() {
     if (bind(master_fd, (struct sockaddr *)&address, sizeof(address)) < 0)  {  
         throw runtime_error("Error in binding");
     }  
-    cout << "Listener on port %d \n" <<  PORT << endl;  
+    cout << "Listening on port: " <<  port << endl;  
 }
 
 void SocketServer::listenForConnections() {
@@ -97,19 +106,15 @@ void SocketServer::initSet() {
     addrlen = sizeof(address);
 }
 
-void SocketServer::handleSockets() {
-    if (FD_ISSET(master_fd, &readfds)) {
-        this->acceptNewConnection();
-    } else {
-        readMessageOnOtherSockets();
-    }
+bool SocketServer::isMasterSet() {
+    return FD_ISSET(master_fd, &readfds);
 }
 
 void SocketServer::selectActivity() {
     activity = select( max_sd + 1 , &readfds , NULL , NULL , NULL);  
        
     if ((activity < 0) && (errno!=EINTR)) {  
-        throw runtime_error("Error in the select funtion");
+        throw runtime_error("Error in the select function");
     } 
 }
 
@@ -118,28 +123,29 @@ void SocketServer::acceptNewConnection() {
 
     if ((new_socket = accept(master_fd, 
         (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
-        // perror("accept");  
-        // exit(EXIT_FAILURE);
+        perror("accept");  
         throw runtime_error("Failure on accept");
     }  
     
     //inform user of socket number - used in send and receive commands
+    cout << "--------------------------------" << endl;
     cout << "New connection incoming" << endl;
-    cout << "Socket fd is " << new_socket << endl;
-    cout << "IP: " <<  inet_ntoa(address.sin_addr) << endl;
-    cout << "Port: " << ntohs(address.sin_port) << endl;
+    cout << "Socket fd is \t" << new_socket << endl;
+    cout << "IP: \t\t" <<  inet_ntoa(address.sin_addr) << endl;
+    cout << "Port: \t\t" << ntohs(address.sin_port) << endl;
+    cout << "--------------------------------" << endl << endl;
     //send new connection greeting message 
-    string message = "Greeting message";
-    if( send(new_socket, message.c_str(), message.length(), 0) != message.length()) {  
+    string message = "Hi, i'm the server";
+    if(send(new_socket, message.c_str(), message.length(), 0) != message.length()) {  
         throw("Error sending the greeting message");
     }  
-    puts("Welcome message sent successfully");  
+    cout << "Welcome message sent successfully to " << new_socket << endl;
     //add new socket to array of sockets 
     for (int i = 0; i < MAX_CLIENTS; i++)  {  
         //if position is empty 
         if(client_socket[i] == 0)  {  
             client_socket[i] = new_socket;  
-            printf("Adding to list of sockets as %d\n" , i);  
+            cout << "Adding to list of sockets in position " << i << endl;
             break;  
         }  
     } 
@@ -154,12 +160,14 @@ void SocketServer::readMessageOnOtherSockets() {
             int valread;
             if ((valread = read( sd , buffer, 1024)) == 0)  {  
                 //Somebody disconnected , get his details and print 
-                getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);  
-                printf("Host disconnected , ip %s , port %d \n" , 
-                inet_ntoa(address.sin_addr) , ntohs(address.sin_port));  
+                getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
+                cout << "----Host disconnected----" << endl;
+                cout << "IP: \t\t" << inet_ntoa(address.sin_addr) << endl;
+                cout << "Port: \t\t" << ntohs(address.sin_port) << endl;
+                cout << "-------------------------" << endl << endl;
                 //Close the socket and mark as 0 in list for reuse 
-                    close( sd );  
-                    client_socket[i] = 0;  
+                close(sd);  
+                client_socket[i] = 0;  
             } 
             //Echo back the message that came in 
             else {  
