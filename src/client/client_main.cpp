@@ -8,23 +8,19 @@
 #include "include/client.h"
 #include "include/socket.h"
 
-using namespace std;
-
-string readMessage();
-int sendMessage(string message);
 int showMenu();
 
 int main(int argc, char* const argv[]) {
     try {
         SocketClient socketClient = SocketClient(SOCK_STREAM);
         socketClient.makeConnection();
-        string greetingMessage = socketClient.receiveMessage();
+        string greetingMessage = socketClient.receiveMessage(socketClient.getMasterFD());
         cout << "Connection confirmed: " << greetingMessage  << endl;
         while(true) {
             int value = showMenu();
             if(value == 1) {
-                socketClient.sendMessage("Hey there");
-                string message = socketClient.receiveMessage();
+                socketClient.sendMessage("Hey there", socketClient.getMasterFD());
+                string message = socketClient.receiveMessage(socketClient.getMasterFD());
                 cout << "Message Received: " << message << endl;
             } else if(value == 2) {
 
@@ -33,8 +29,8 @@ int main(int argc, char* const argv[]) {
                 return 0;
             }
         }
-    } catch(const std::exception& e) {
-        std::cerr << e.what() << '\n';
+    } catch(const exception& e) {
+        cerr << e.what() << '\n';
     }
     return 0;
 }

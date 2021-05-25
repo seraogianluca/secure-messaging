@@ -8,7 +8,8 @@
 #include <openssl/bio.h>
 
 using namespace std;
-
+//TODO: mettere il throw runtime_exception
+//TODO: mettere una funzione per stampare gli errori
 class Crypto {
     private:
         // Controllare che non restino salvate da qualche parte altrimenti non è sicura!!

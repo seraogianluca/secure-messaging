@@ -19,8 +19,9 @@ void SocketClient::createSocket() {
     }
 }
 
-
-
+int SocketClient::getMasterFD() {
+    return master_fd;
+}
 
 SocketClient::~SocketClient() {
 }
@@ -32,19 +33,18 @@ void SocketClient::makeConnection() {
     }
 }
 
-void SocketClient::sendMessage(string message) {
-    if (send(master_fd, message.c_str(), message.length(), 0 ) != message.length()) {
+void SocketClient::sendMessage(string message, int sd) {
+    if (send(sd, message.c_str(), message.length(), 0 ) != message.length()) {
         perror("Send Error");
         throw runtime_error("Send failed");
     }   
 }
 
-string SocketClient::receiveMessage() {
+string SocketClient::receiveMessage(int sd) {
     char buffer[1025];
-
     int n;
     // ssize_t recv(int sockfd, const void *buf, size_t len, int flags);
-    if ((n = recv(master_fd, buffer, sizeof(buffer)-1, 0)) <= 0) {
+    if ((n = recv(sd, buffer, sizeof(buffer)-1, 0)) <= 0) {
         perror("Receive Error");
         throw runtime_error("Receive failed");
     }
@@ -109,8 +109,13 @@ void SocketServer::initSet() {
     addrlen = sizeof(address);
 }
 
-bool SocketServer::isMasterSet() {
-    return FD_ISSET(master_fd, &readfds);
+bool SocketServer::isFDSet(int fd) {
+    return FD_ISSET(fd, &readfds);
+}
+
+int SocketServer::getClient(unsigned int i) {
+    if (i > MAX_CLIENTS-1) { throw runtime_error("Max clients exceeds");}
+    return client_socket[i];
 }
 
 void SocketServer::selectActivity() {
@@ -140,7 +145,7 @@ void SocketServer::acceptNewConnection() {
     //send new connection greeting message 
     string message = "Hi, i'm the server";
     if(send(new_socket, message.c_str(), message.length(), 0) != message.length()) {  
-        throw("Error sending the greeting message");
+        throw runtime_error("Error sending the greeting message");
     }  
     cout << "Welcome message sent successfully to " << new_socket << endl;
     //add new socket to array of sockets 
@@ -160,17 +165,10 @@ void SocketServer::readMessageOnOtherSockets() {
         if (FD_ISSET( sd , &readfds)) {  
             //Check if it was for closing , and also read the 
             //incoming message 
-            int valread;
-            if ((valread = read( sd , buffer, 1024)) == 0)  {  
+            int valread = read(sd, buffer, 1024);
+            if (valread == 0)  { 
                 //Somebody disconnected , get his details and print 
-                getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
-                cout << "----Host disconnected----" << endl;
-                cout << "IP: \t\t" << inet_ntoa(address.sin_addr) << endl;
-                cout << "Port: \t\t" << ntohs(address.sin_port) << endl;
-                cout << "-------------------------" << endl << endl;
-                //Close the socket and mark as 0 in list for reuse 
-                close(sd);  
-                client_socket[i] = 0;
+                disconnectHost(sd, i);
             } 
             //Echo back the message that came in 
             else {  
@@ -181,4 +179,15 @@ void SocketServer::readMessageOnOtherSockets() {
             }  
         }  
     }  
+}
+
+void SocketServer::disconnectHost(int sd, unsigned int i) {
+    getpeername(sd , (struct sockaddr*)&address , (socklen_t*)&addrlen);
+    cout << "\n----Host disconnected----" << endl;
+    cout << "IP: \t\t" << inet_ntoa(address.sin_addr) << endl;
+    cout << "Port: \t\t" << ntohs(address.sin_port) << endl;
+    cout << "-------------------------" << endl << endl;
+    //Close the socket and mark as 0 in list for reuse 
+    close(sd);  
+    client_socket[i] = 0;
 }

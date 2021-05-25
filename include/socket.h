@@ -25,15 +25,16 @@ class SocketClient {
     public:
         SocketClient(int socketType);
         ~SocketClient();
-        void sendMessage(string message);
-        string receiveMessage();
+        int getMasterFD();
+        void sendMessage(string message, int sd);
+        string receiveMessage(int sd);
         void makeConnection();
 };
 
 
 
 
-class SocketServer: private SocketClient {
+class SocketServer: public SocketClient {
     
     private:
         int client_socket[MAX_CLIENTS];
@@ -50,10 +51,12 @@ class SocketServer: private SocketClient {
     public:
         SocketServer(int socketType);
         ~SocketServer();
+        int getClient(unsigned int i);
         void initSet();
         void selectActivity();
-        bool isMasterSet();
+        bool isFDSet(int fd);
         void acceptNewConnection();
         void readMessageOnOtherSockets();
+        void disconnectHost(int sd, unsigned int i);
 };
 
