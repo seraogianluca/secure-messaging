@@ -10,8 +10,14 @@
 
 int showMenu();
 
+string readFromStdout();
+void authentication();
+
 int main(int argc, char* const argv[]) {
     try {
+
+        string password = readFromStdout("Insert password: ");
+
         Crypto c((unsigned char*)"1234567890123456");
         unsigned char msg[] = "Test message";
         unsigned char *ciphertext;
@@ -63,4 +69,41 @@ int showMenu() {
     size_t value;
     cin >> value;
     return value;
+}
+
+string readFromStdout(string message) {
+    cout << message << "\n --> ";
+    string value;
+    getline(cin, value);
+    while (value.length() == 0) {
+        cout << "Insert at least a character." << endl;
+        cout << message << "\n --> ";
+        getline(cin, value);
+    }
+    return value;
+}
+
+void authentication(Crypto crypto, SocketClient s, Client c) {
+    try {
+        string nonce_client = crypto.generateNonce();
+        string helloMessage = "hello" + nonce_client;
+        s.sendMessage(helloMessage, s.getMasterFD());
+
+        string receivedMessage =  s.receiveMessage(s.getMasterFD());
+        string nonce_received = c.extractClientNonce(receivedMessage, nonce_client.length());
+        string nonce_server = c.extractServerNonce(receivedMessage, nonce_client.length());
+        if(nonce_client.compare(nonce_received) != 0) {
+            throw runtime_error("Login Error: The freshness of the message is not confirmed");
+        }
+        cout << "Freshness Confirmed" << endl;
+        string requestCertificateMessage = (char)OP_CERTIFICATE_REQUEST + nonce_server + nonce_client;
+        s.sendMessage(requestCertificateMessage, s.getMasterFD());
+
+        string certificate = s.receiveMessage(s.getMasterFD());
+        bool verification = c.verifyCertificate();
+    } catch(const std::exception& e) {
+        throw runtime_error(e.what() + '\n');
+    }
+    
+    
 }

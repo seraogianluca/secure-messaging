@@ -14,11 +14,6 @@ using namespace std;
 class Client {
     private:
         string username;
-        void sendMessage(string message);
-        string readMessage();
-        bool verifyCertificate();
-        string extractClientNonce(string message, size_t clientNonceLen);
-        string extractServerNonce(string message, size_t clientNonceLen);
 
     public:
         Client() {}; //Constructor
@@ -28,5 +23,8 @@ class Client {
         int logout();
         int requestToTalk(string peerUsername);
         int textMessage(string peerUsername, string message);
+        bool verifyCertificate();
+        string extractClientNonce(string message, size_t clientNonceLen);
+        string extractServerNonce(string message, size_t clientNonceLen);
         string convert(unsigned char* value);
 };
