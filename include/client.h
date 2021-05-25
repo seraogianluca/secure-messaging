@@ -15,7 +15,6 @@ class Client {
     private:
         string username;
         void sendMessage(string message);
-        string convert(unsigned char* value);
         string readMessage();
         bool verifyCertificate();
         string extractClientNonce(string message, size_t clientNonceLen);
@@ -29,4 +28,5 @@ class Client {
         int logout();
         int requestToTalk(string peerUsername);
         int textMessage(string peerUsername, string message);
+        string convert(unsigned char* value);
 };

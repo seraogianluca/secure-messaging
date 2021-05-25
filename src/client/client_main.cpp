@@ -12,14 +12,34 @@ int showMenu();
 
 int main(int argc, char* const argv[]) {
     try {
+        Crypto c((unsigned char*)"1234567890123456");
+        unsigned char msg[] = "Test message";
+        unsigned char *ciphertext;
+        unsigned char *tag;
+        unsigned char *iv;
+        unsigned char *dec_msg; 
+        int ciphertext_len;
+        int plaintext_len = sizeof(msg);
         SocketClient socketClient = SocketClient(SOCK_STREAM);
+        Client client = Client();
         socketClient.makeConnection();
         string greetingMessage = socketClient.receiveMessage(socketClient.getMasterFD());
         cout << "Connection confirmed: " << greetingMessage  << endl;
         while(true) {
             int value = showMenu();
             if(value == 1) {
-                socketClient.sendMessage("1Hey there", socketClient.getMasterFD());
+                ciphertext = (unsigned char*)malloc(plaintext_len+TAG_SIZE);
+                tag = (unsigned char*)malloc(TAG_SIZE);
+                ciphertext_len = c.encryptMessage(msg, 
+                                                plaintext_len, 
+                                                ciphertext, 
+                                                tag);
+                cout << "Ciphertext:" << endl;
+                BIO_dump_fp(stdout, (const char*)ciphertext, ciphertext_len);
+                cout << "Tag:" << endl;
+                BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
+                string msg_enc = "1"+client.convert(ciphertext);
+                socketClient.sendMessage(msg_enc, socketClient.getMasterFD());
                 string message = socketClient.receiveMessage(socketClient.getMasterFD());
                 cout << "Message Received: " << message << endl;
             } else if(value == 2) {
