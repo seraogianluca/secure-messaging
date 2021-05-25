@@ -13,14 +13,12 @@ using namespace std;
 
 struct user {
     string username;
-    int port;
+    int sd;
 };
 
 class Server {
     private:
-        vector<user> onlineUsers;
-        void sendMessage(string message);
-        string readMessage();
+        user onlineUsers[MAX_CLIENTS];
         string extractClientNonce(string message);
         string extractServerNonce(string message, size_t serverNonceLen);
     public:
@@ -28,6 +26,9 @@ class Server {
         ~Server(){};
 
         void handleLogin();
+        void addUser(user user);
+        void deleteUser(user user);
+        int getOperationCode(string message);
         int forwardMessage(string dest, string message);
         int authenticate(string dest);
         int sendOnlineUsers(string dest);

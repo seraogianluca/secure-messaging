@@ -19,7 +19,7 @@ int main(int argc, char* const argv[]) {
         while(true) {
             int value = showMenu();
             if(value == 1) {
-                socketClient.sendMessage("Hey there", socketClient.getMasterFD());
+                socketClient.sendMessage("1Hey there", socketClient.getMasterFD());
                 string message = socketClient.receiveMessage(socketClient.getMasterFD());
                 cout << "Message Received: " << message << endl;
             } else if(value == 2) {

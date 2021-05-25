@@ -44,19 +44,15 @@ CPPFLAGS="-I/usr/local/opt/openssl@1.1/include"
 LDFLAGS="-L/usr/local/opt/openssl@1.1/lib"
 all: $(TARGET)
 server_main.out: socket.o server_main.o
-	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) socket.o server_main.o -o server_main.out -I$(CURRENT_DIR)
+	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) server.o socket.o server_main.o -o server_main.out -I$(CURRENT_DIR)
 client_main.out: socket.o client_main.o
 	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) socket.o client_main.o -o client_main.out -I$(CURRENT_DIR)
 socket.o: 
 	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -c $(SOCKET_PATH)socket.cpp -I$(CURRENT_DIR)
 server_main.o:
-	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -c $(SERVER_PATH)server_main.cpp $(SERVER_PATH)server.cpp $(CRYPTO_PATH)crypto.cpp $() -I$(CURRENT_DIR)
+	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -c $(SERVER_PATH)server_main.cpp $(SERVER_PATH)server.cpp -I$(CURRENT_DIR)
 client_main.o:
-	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -c $(CLIENT_PATH)client_main.cpp $(CLIENT_PATH)client.cpp $(CRYPTO_PATH)crypto.cpp $() -I$(CURRENT_DIR)
-# client: $(CLIENT_PATH)client_main.cpp $(CLIENT_PATH)client.cpp
-# 	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -o client $(CLIENT_PATH)client_main.cpp $(CLIENT_PATH)client.cpp $(CRYPTO_PATH)crypto.cpp -I$(CURRENT_DIR)
-# server: $(SERVER_PATH)server_main.cpp $(SERVER_PATH)server.cpp
-# 	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -o server $(SERVER_PATH)server_main.cpp $(SERVER_PATH)server.cpp $(CRYPTO_PATH)crypto.cpp -I$(CURRENT_DIR)
+	$(CC) $(CPPFLAGS) $(LDFLAGS) $(CFLAGS) -c $(CLIENT_PATH)client_main.cpp -I$(CURRENT_DIR)
 clean:
 	$(RM) -rf *.o      
 endif
