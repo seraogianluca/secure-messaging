@@ -40,12 +40,15 @@ void SocketClient::sendMessage(string message) {
 }
 
 string SocketClient::receiveMessage() {
-    char buffer[1024];
+    char buffer[1025];
+
+    int n;
     // ssize_t recv(int sockfd, const void *buf, size_t len, int flags);
-    if (recv(master_fd, buffer, 1024, 0) <= 0) {
+    if ((n = recv(master_fd, buffer, sizeof(buffer)-1, 0)) <= 0) {
         perror("Receive Error");
         throw runtime_error("Receive failed");
     }
+    buffer[n] = '\0';
     return string(buffer);   
 }
 
@@ -167,14 +170,14 @@ void SocketServer::readMessageOnOtherSockets() {
                 cout << "-------------------------" << endl << endl;
                 //Close the socket and mark as 0 in list for reuse 
                 close(sd);  
-                client_socket[i] = 0;  
+                client_socket[i] = 0;
             } 
             //Echo back the message that came in 
             else {  
                 //set the string terminating NULL byte on the end 
                 //of the data read 
                 buffer[valread] = '\0';  
-                send(sd , buffer , strlen(buffer) , 0 );  
+                send(sd , buffer , strlen(buffer) , 0 );
             }  
         }  
     }  

@@ -12,18 +12,39 @@ using namespace std;
 
 string readMessage();
 int sendMessage(string message);
+int showMenu();
 
 int main(int argc, char* const argv[]) {
     try {
         SocketClient socketClient = SocketClient(SOCK_STREAM);
         socketClient.makeConnection();
         string greetingMessage = socketClient.receiveMessage();
-        cout << "Received a greeting message to confirm the connection: " << greetingMessage  << endl;
-        socketClient.sendMessage("Saluti");
-        string message = socketClient.receiveMessage();
-        cout << message << endl;
+        cout << "Connection confirmed: " << greetingMessage  << endl;
+        while(true) {
+            int value = showMenu();
+            if(value == 1) {
+                socketClient.sendMessage("Hey there");
+                string message = socketClient.receiveMessage();
+                cout << "Message Received: " << message << endl;
+            } else if(value == 2) {
+
+            } else {
+                cout << "Exit from the application." << endl;
+                return 0;
+            }
+        }
     } catch(const std::exception& e) {
         std::cerr << e.what() << '\n';
     }
     return 0;
+}
+
+int showMenu() {
+    cout << endl;
+    cout << "1. Send a message" << endl;
+    cout << "0. Exit" << endl;
+    cout << "--> ";
+    size_t value;
+    cin >> value;
+    return value;
 }
