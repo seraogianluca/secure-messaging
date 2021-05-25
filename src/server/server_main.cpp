@@ -3,6 +3,8 @@
 
 #define PORT 8080
 
+void login();
+void logout();
 
 int main(int argc, char* const argv[]) {
     try {
@@ -23,14 +25,25 @@ int main(int argc, char* const argv[]) {
                         if (messageReceived.length() == 0)  { 
                             //Somebody disconnected , get his details and print 
                             serverSocket.disconnectHost(sd, i);
-                        } 
-                        //Echo back the message that came in 
-                        else {
+                        } else {
                             cout << "Received message from peer: " << messageReceived << endl;
                             int operationCode = server.getOperationCode(messageReceived);
                             cout << "Operation code: " << operationCode << endl;
                             if (operationCode == 0) {
                                 // Login
+                                login();
+                            }
+                            if (operationCode == 1) {
+                                // Logout
+                            }
+                            if (operationCode == 2) {
+                                // Request to talk
+                            }
+                            if (operationCode == 3) {
+                                // Message
+                            }
+                            if (operationCode == 4) {
+                                // Certificate Request
                             }
                         }
                     }  
@@ -43,3 +56,11 @@ int main(int argc, char* const argv[]) {
     return 0;
 }
 
+
+void login() {
+
+}
+
+void logout() {
+
+}
