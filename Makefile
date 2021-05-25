@@ -1,14 +1,3 @@
-setEnvironment:
-ifdef GIAN_ENV
-    ENV=1
-endif
-ifdef ANT_ENV
-    ENV=2
-endif
-ifdef LO_ENV
-    ENV=3
-endif
-
 CURRENT_DIR = $(shell pwd)
 OS = $(shell uname)
 TEST_PATH = test/
@@ -38,7 +27,7 @@ clean:
 	$(RM) -rf *.o     
 endif
 
-ifeq ($(ENV), 3)
+ifeq ($(OS), Linux)
 $(info "==============Compiled by Lorenzo======================")
 TARGET=server_main.out client_main.out
 #TARGET=crypto_client crypto_server

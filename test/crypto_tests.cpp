@@ -53,7 +53,7 @@ void auth_encrypt_test() {
     } catch(const char *msg) {
         cerr << msg << endl;
     }
-    iv = c.getIV();
+    //iv = c.getIV();
     try {
 
         dec_msg = (unsigned char*)malloc(ciphertext_len);

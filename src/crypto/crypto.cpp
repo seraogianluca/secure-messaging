@@ -61,10 +61,10 @@ int Crypto::generateIV() {
     return 0;
 }
 
-unsigned char* Crypto::getIV() {
+unsigned char* Crypto::getIV(string message) {
     unsigned char* ret_iv = new unsigned char[IV_SIZE];
     for(int i = 0; i < IV_SIZE; i++) {
-        ret_iv[i] = iv[i];
+        ret_iv[i] = (unsigned char) message.at(i);
     }
     return ret_iv;
 }
