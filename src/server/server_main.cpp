@@ -39,12 +39,15 @@ int main(int argc, char* const argv[]) {
                                 // Logout
                                 unsigned char iv[IV_SIZE];
                                 int ciphertext_len = messageReceived.length()-IV_SIZE-1;
+                                cout<<"Lunghezza: "<<messageReceived.length()<<endl;
                                 unsigned char enc[ciphertext_len];
                                 string ivMessage = messageReceived.substr(1,IV_SIZE+1);
                                 string encMessage = messageReceived.substr(IV_SIZE+1,messageReceived.length());
                                 strncpy((char*)iv,ivMessage.c_str(),IV_SIZE);
                                 strncpy((char*)enc,encMessage.c_str(),ciphertext_len);
                                 unsigned char* dec_msg = (unsigned char*)malloc(ciphertext_len);
+                                iv[IV_SIZE]='\0';
+                                enc[ciphertext_len]='\0';
                                 int plaintext_len = c.decryptMessage(enc,
                                                                 ciphertext_len,
                                                                 iv,

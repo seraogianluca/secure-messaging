@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <string.h>
 #include "symbols.h"
 #include <openssl/evp.h>
 #include <openssl/pem.h>
