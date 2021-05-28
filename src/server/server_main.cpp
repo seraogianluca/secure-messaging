@@ -40,10 +40,10 @@ int main(int argc, char* const argv[]) {
                                 unsigned char iv[IV_SIZE];
                                 int ciphertext_len = sizeof(messageReceived)-IV_SIZE-1;
                                 unsigned char enc[ciphertext_len];
-                                string ivMessage = messageReceived.substr(1,IV_SIZE+1);
-                                string encMessage = messageReceived.substr(IV_SIZE+1,messageReceived.length());
-                                strncpy((char*)iv,ivMessage.c_str(),IV_SIZE);
-                                strncpy((char*)enc,encMessage.c_str(),ciphertext_len);
+                                unsigned char* ivMessage;
+                                memcpy(ivMessage, &messageReceived[1], IV_SIZE + 1);
+                                unsigned char* encMessage;
+                                memcpy(encMessage, &messageReceived[IV_SIZE+1], sizeof(messageReceived));
                                 unsigned char* dec_msg = (unsigned char*)malloc(ciphertext_len);
                                 int plaintext_len = c.decryptMessage(enc,
                                                                 ciphertext_len,
