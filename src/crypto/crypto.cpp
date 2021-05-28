@@ -1,5 +1,16 @@
 #include "include/crypto.h"
 
+unsigned char* Crypto::stringToChar(string str) {
+    size_t buf_size = str.length();
+    unsigned char ret[buf_size+1];
+    strncpy((char*)ret,str.c_str(),buf_size+1);
+    return ret;
+}
+
+string Crypto::charToString(unsigned char* str) {
+    return string((char*)str);
+}
+
 EVP_PKEY* Crypto::readPrivateKey(string pwd) {
     //QUESTION: necessario controllo su pwd tramite white/black list??
     EVP_PKEY* prvKey;

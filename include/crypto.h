@@ -36,6 +36,9 @@ class Crypto {
             delete iv;
         }
 
+        unsigned char* Crypto::stringToChar(string str);
+        string Crypto::charToString(unsigned char* value);
+
         EVP_PKEY* readPrivateKey(string pwd);
         EVP_PKEY* readPublicKey(string user);
         string generateNonce();

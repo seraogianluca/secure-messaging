@@ -1,13 +1,5 @@
 #include "include/client.h"
 
-string Client::convert(unsigned char* value) {
-    string s;
-    for (size_t i = 0; i < sizeof(value); i++){
-        s.append(1, static_cast<char>(value[i]));
-    }
-    return s;
-}
-
 bool Client::verifyCertificate() {
     //TODO: implement
     return true;
