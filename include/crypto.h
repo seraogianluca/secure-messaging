@@ -57,4 +57,7 @@ class Crypto {
         // Public Key handling
         int sendPublicKey(EVP_PKEY* pubkey, unsigned char* pubkey_buf);
         EVP_PKEY* receivePublicKey(unsigned char* pubkey_buf, int pubkey_size);
+
+        // Hash
+        unsigned char* computeHash(unsigned char* msg, unsigned int msg_size);
 };

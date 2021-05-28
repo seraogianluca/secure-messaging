@@ -232,3 +232,17 @@ EVP_PKEY* Crypto::receivePublicKey(unsigned char* pubkey_buf, int pubkey_size){
     BIO_free(mbio);
     return pubkey;
 }
+
+unsigned char* Crypto::computeHash(unsigned char* msg, unsigned int msg_size) {
+    unsigned char* digest[DIGEST_LEN];
+    int digestlen;
+    EVP_MD_CTX* ctx;
+
+    ctx = EVP_MD_CTX_new();
+    EVP_DigestInit(ctx, HASH);
+    EVP_DigestUpdate(ctx, msg, msg_size); 
+    EVP_DigestFinal(ctx, digest, digestlen);
+    EVP_MD_CTX_free(ctx);
+    
+    return digest;
+}
