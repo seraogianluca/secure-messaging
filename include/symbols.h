@@ -20,6 +20,10 @@
 #define IV_SIZE 12
 #define TAG_SIZE 16
 
+// Hash
+#define HASH EVP_sha256()
+#define DIGEST_LEN EVP_MD_size(EVP_sha256())
+
 //CERTIFICATE PATH
 #define CA_CERT_PATH "./cert/ca_cert.pem"
 

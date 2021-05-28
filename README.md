@@ -26,3 +26,14 @@
 ### Client-Server session key establishment
 
 Perfect forward secrecy + replay attack
+
+### Diffie-Hellman key exchange
+- Client A invia Client B request to talk
+- Client B accetta request to talk 
+- (?)
+- Client A calcola chiave pubblica DH e la invia a Client B
+- Client B riceve la chiave pubblica DH di client A
+- Client B calcola chiave pubblica DH e la invia a Client A
+- Client A riceve la chiave pubblica DH di client B
+- Client A e Client B calcolano la session key ed eliminano i paramentri
+- LA SESSION KEY CALCOLATA NON PUO' ESSERE USATA PER ENCRYPTION, DEVE ESSERE FATTO L'HASH. 
