@@ -24,9 +24,9 @@ string Server::extractClientNonce(string message) {
 }
 
 
-int Server::getOperationCode(string message) {
-    if(message.length() == 0) {throw runtime_error("Message format not correct");}
-    int opCode = message.at(0) - '0';
+int Server::getOperationCode(unsigned char* message) {
+    if(sizeof(message) == 0) {throw runtime_error("Message format not correct");}
+    int opCode = message[0] - '0';
     if (opCode < 0 || opCode > 4) { throw runtime_error("Operation Code not valid");}
     return opCode;
 }

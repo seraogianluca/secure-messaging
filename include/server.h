@@ -28,7 +28,7 @@ class Server {
         void handleLogin();
         void addUser(user user);
         void deleteUser(user user);
-        int getOperationCode(string message);
+        int getOperationCode(unsigned char* message);
         int forwardMessage(string dest, string message);
         int authenticate(string dest);
         int sendOnlineUsers(string dest);

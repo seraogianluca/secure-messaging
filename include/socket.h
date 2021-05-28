@@ -26,8 +26,8 @@ class SocketClient {
         SocketClient(int socketType);
         ~SocketClient();
         int getMasterFD();
-        void sendMessage(string message, int sd);
-        string receiveMessage(int sd);
+        void sendMessage(unsigned char* message, int sd);
+        unsigned char* receiveMessage(int sd);
         void makeConnection();
 };
 
