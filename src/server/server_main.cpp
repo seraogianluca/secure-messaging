@@ -39,15 +39,26 @@ int main(int argc, char* const argv[]) {
                             if (operationCode == 1) {
                                 // Logout
                                 // OP||IV||CIPHERTEXT||TAG
+                                cout << "Byte received: " << message_len << endl;
+                                cout << "Message: " << endl;
+                                BIO_dump_fp(stdout, (const char*)messageReceived, message_len);
+                                
                                 unsigned char iv[IV_SIZE];
-                                int ciphertext_len = message_len-IV_SIZE-1;
-                                memcpy(iv, &messageReceived[1], IV_SIZE);
-                                BIO_dump_fp(stdout, (const char*)iv, IV_SIZE);
-                                unsigned char encMessage[ciphertext_len];
-                                memcpy(encMessage, &messageReceived[IV_SIZE+1], ciphertext_len);
-                                BIO_dump_fp(stdout, (const char*)encMessage, ciphertext_len);
                                 unsigned char tag[TAG_SIZE];
-                                memcpy(tag, &messageReceived[message_len-TAG_SIZE], TAG_SIZE);
+                                int start = 1;
+                                memcpy(iv, messageReceived+start, IV_SIZE);
+                                cout << "IV: " << endl;
+                                BIO_dump_fp(stdout, (const char*)iv, IV_SIZE);
+                                start += IV_SIZE;
+                                
+                                int ciphertext_len = message_len-IV_SIZE-TAG_SIZE-1;
+                                unsigned char encMessage[ciphertext_len];
+                                memcpy(encMessage, messageReceived+start, ciphertext_len);
+                                cout << "Ciphertext: " << endl;
+                                BIO_dump_fp(stdout, (const char*)encMessage, ciphertext_len);
+                                memcpy(tag, messageReceived+message_len-TAG_SIZE, TAG_SIZE);
+                                cout << "Tag: " << endl;
+                                BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
                                 unsigned char dec_msg[ciphertext_len];
                                 int plaintext_len = c.decryptMessage(encMessage,
                                                                 ciphertext_len,
@@ -57,8 +68,7 @@ int main(int argc, char* const argv[]) {
                                 if(plaintext_len == -1)
                                     cout << "Not corresponding tag." << endl;
                                 else {
-                                    cout<<"Plaintext:"<<endl;
-                                    BIO_dump_fp (stdout, (const char *)dec_msg, plaintext_len);
+                                    cout << "Plaintext: " << dec_msg << endl;
                                 }
                             }
                             if (operationCode == 2) {

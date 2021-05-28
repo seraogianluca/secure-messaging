@@ -19,13 +19,6 @@ int main(int argc, char* const argv[]) {
         string password = readFromStdout("Insert password: ");
 
         Crypto c((unsigned char*)"1234567890123456");
-        unsigned char msg[] = "Test message";
-        unsigned char *ciphertext;
-        unsigned char *tag;
-        unsigned char *iv;
-        unsigned char *dec_msg; 
-        int ciphertext_len;
-        int plaintext_len = sizeof(msg);
         SocketClient socketClient = SocketClient(SOCK_STREAM);
         Client client = Client();
         socketClient.makeConnection();
@@ -35,6 +28,12 @@ int main(int argc, char* const argv[]) {
         while(true) {
             int value = showMenu();
             if(value == 1) {
+                unsigned char msg[] = "Test message";
+                unsigned char *ciphertext;
+                unsigned char *tag;
+                int ciphertext_len;
+                int plaintext_len = sizeof(msg);
+
                 ciphertext = (unsigned char*)malloc(plaintext_len+TAG_SIZE);
                 tag = (unsigned char*)malloc(TAG_SIZE);
                 ciphertext_len = c.encryptMessage(msg, 
@@ -45,11 +44,20 @@ int main(int argc, char* const argv[]) {
                 BIO_dump_fp(stdout, (const char*)ciphertext, ciphertext_len);
                 cout << "Tag:" << endl;
                 BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
-                unsigned char msg[ciphertext_len+1];
-                cout<<"MESSAGGIO1: "<<ciphertext<<endl;
-                memcpy(msg,"1", 1);
-                memcpy(&msg[1],ciphertext,ciphertext_len);
-                socketClient.sendMessage(socketClient.getMasterFD(), msg, ciphertext_len+1);
+
+                int msg_size = ciphertext_len + IV_SIZE + TAG_SIZE + 1;
+                unsigned char buffer[msg_size];
+                memcpy(buffer,"1", 1);
+                int start = 1;
+                memcpy(buffer+start, c.getIV(), IV_SIZE);
+                start += IV_SIZE;
+                memcpy(buffer+start,ciphertext,ciphertext_len);
+                start += ciphertext_len;
+                memcpy(buffer+start,tag,TAG_SIZE);
+                cout << "Message: " << endl;
+                BIO_dump_fp(stdout, (const char*)buffer, msg_size);
+                cout << "Message size: " << msg_size << endl;
+                socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_size);
                 unsigned int messageDecryptedLen;
                 unsigned char* message = socketClient.receiveMessage(socketClient.getMasterFD(), messageDecryptedLen);
                 cout << "Message Received: " << message << endl;

@@ -72,12 +72,8 @@ int Crypto::generateIV() {
     return 0;
 }
 
-unsigned char* Crypto::getIV(string message) {
-    unsigned char* ret_iv = new unsigned char[IV_SIZE];
-    for(int i = 0; i < IV_SIZE; i++) {
-        ret_iv[i] = (unsigned char) message.at(i);
-    }
-    return ret_iv;
+unsigned char* Crypto::getIV() {
+    return iv;
 }
 
 int Crypto::encryptMessage(unsigned char *msg, int msg_len,
@@ -86,7 +82,8 @@ int Crypto::encryptMessage(unsigned char *msg, int msg_len,
     EVP_CIPHER_CTX *ctx;
     int len = 0;
     int ciphr_len = 0;
-    generateIV();    
+    generateIV();
+
     if(!(ctx = EVP_CIPHER_CTX_new()))
         throw "An error occurred while creating the context.";   
 
@@ -234,14 +231,14 @@ EVP_PKEY* Crypto::receivePublicKey(unsigned char* pubkey_buf, int pubkey_size){
 }
 
 unsigned char* Crypto::computeHash(unsigned char* msg, unsigned int msg_size) {
-    unsigned char* digest[DIGEST_LEN];
-    int digestlen;
+    unsigned char digest[DIGEST_LEN];
+    unsigned int digestlen;
     EVP_MD_CTX* ctx;
 
     ctx = EVP_MD_CTX_new();
     EVP_DigestInit(ctx, HASH);
     EVP_DigestUpdate(ctx, msg, msg_size); 
-    EVP_DigestFinal(ctx, digest, digestlen);
+    EVP_DigestFinal(ctx, digest, &digestlen);
     EVP_MD_CTX_free(ctx);
     
     return digest;
