@@ -11,7 +11,6 @@ int main(int argc, char* const argv[]) {
         SocketServer serverSocket = SocketServer(SOCK_STREAM); //TCP
         Server server = Server();
         Crypto c((unsigned char*)"1234567890123456");
-        unsigned char *tag;
         while(true) {
             serverSocket.initSet();
             serverSocket.selectActivity();
@@ -20,11 +19,13 @@ int main(int argc, char* const argv[]) {
             } else {
                 for (unsigned int i = 0; i < MAX_CLIENTS; i++)  {  
                     int sd = serverSocket.getClient(i); 
-                    if (serverSocket.isFDSet(sd)) {  
+                    if (serverSocket.isFDSet(sd)) {
                         //Check if it was for closing , and also read the 
-                        //incoming message 
-                        unsigned char* messageReceived = serverSocket.receiveMessage(sd);
-                        if (sizeof(messageReceived) == 0)  { 
+                        //incoming message                         
+                        unsigned int message_len;
+                        unsigned char* messageReceived = serverSocket.receiveMessage(sd, message_len);
+                        cout << "Received: " << messageReceived << endl;
+                        if (message_len == 0)  { 
                             //Somebody disconnected , get his details and print 
                             serverSocket.disconnectHost(sd, i);
                         } else {
@@ -37,15 +38,18 @@ int main(int argc, char* const argv[]) {
                             }
                             if (operationCode == 1) {
                                 // Logout
+                                // OP||IV||CIPHERTEXT||TAG
                                 unsigned char iv[IV_SIZE];
-                                int ciphertext_len = sizeof(messageReceived)-IV_SIZE-1;
-                                unsigned char enc[ciphertext_len];
-                                unsigned char* ivMessage = (unsigned char*) malloc(IV_SIZE);
-                                memcpy(ivMessage, &messageReceived[1], IV_SIZE + 1);
-                                unsigned char* encMessage = (unsigned char*) malloc(ciphertext_len);
-                                memcpy(encMessage, &messageReceived[IV_SIZE+1], sizeof(messageReceived));
-                                unsigned char* dec_msg = (unsigned char*)malloc(ciphertext_len);
-                                int plaintext_len = c.decryptMessage(enc,
+                                int ciphertext_len = message_len-IV_SIZE-1;
+                                memcpy(iv, &messageReceived[1], IV_SIZE);
+                                BIO_dump_fp(stdout, (const char*)iv, IV_SIZE);
+                                unsigned char encMessage[ciphertext_len];
+                                memcpy(encMessage, &messageReceived[IV_SIZE+1], ciphertext_len);
+                                BIO_dump_fp(stdout, (const char*)encMessage, ciphertext_len);
+                                unsigned char tag[TAG_SIZE];
+                                memcpy(tag, &messageReceived[message_len-TAG_SIZE], TAG_SIZE);
+                                unsigned char dec_msg[ciphertext_len];
+                                int plaintext_len = c.decryptMessage(encMessage,
                                                                 ciphertext_len,
                                                                 iv,
                                                                 tag,

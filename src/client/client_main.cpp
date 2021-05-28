@@ -29,8 +29,9 @@ int main(int argc, char* const argv[]) {
         SocketClient socketClient = SocketClient(SOCK_STREAM);
         Client client = Client();
         socketClient.makeConnection();
-        // string greetingMessage = socketClient.receiveMessage(socketClient.getMasterFD());
-        // cout << "Connection confirmed: " << greetingMessage  << endl;
+        unsigned int greetingMessageLen;
+        unsigned char* greetingMessage = socketClient.receiveMessage(socketClient.getMasterFD(), greetingMessageLen);
+        cout << "Connection confirmed: " << greetingMessage  << endl;
         while(true) {
             int value = showMenu();
             if(value == 1) {
@@ -44,14 +45,13 @@ int main(int argc, char* const argv[]) {
                 BIO_dump_fp(stdout, (const char*)ciphertext, ciphertext_len);
                 cout << "Tag:" << endl;
                 BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
-                unsigned char* msg = (unsigned char*)malloc(sizeof(char)+ciphertext_len);
+                unsigned char msg[ciphertext_len+1];
                 cout<<"MESSAGGIO1: "<<ciphertext<<endl;
-                memcpy(msg,"1", sizeof(char));
+                memcpy(msg,"1", 1);
                 memcpy(&msg[1],ciphertext,ciphertext_len);
-                cout<<"MESSAGGIO: "<<msg<<endl;
-                cout<<"Lun: "<<sizeof(msg)<<endl;
-                socketClient.sendMessage(msg, socketClient.getMasterFD());
-                unsigned char* message = socketClient.receiveMessage(socketClient.getMasterFD());
+                socketClient.sendMessage(socketClient.getMasterFD(), msg, ciphertext_len+1);
+                unsigned int messageDecryptedLen;
+                unsigned char* message = socketClient.receiveMessage(socketClient.getMasterFD(), messageDecryptedLen);
                 cout << "Message Received: " << message << endl;
             } else if(value == 2) {
 

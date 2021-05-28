@@ -33,22 +33,25 @@ void SocketClient::makeConnection() {
     }
 }
 
-void SocketClient::sendMessage(unsigned char* message, int sd) {
-    if (send(sd, message, sizeof(message), 0 ) != sizeof(message)) {
+void SocketClient::sendMessage(int sd, unsigned char* message, unsigned int message_len) {
+    if (message_len > MAX_MESSAGE_SIZE) {
+        throw runtime_error("Max message size exceeded in Send");
+    }
+    //Check int for wrapping
+    if (send(sd, message, message_len, 0 ) !=  message_len) {
         perror("Send Error");
         throw runtime_error("Send failed");
     }   
 }
 
-unsigned char* SocketClient::receiveMessage(int sd) {
+unsigned char* SocketClient::receiveMessage(int sd, unsigned int& message_len) {
     unsigned char buffer[MAX_MESSAGE_SIZE];
-    int n;
     // ssize_t recv(int sockfd, const void *buf, size_t len, int flags);
-    if ((n = recv(sd, buffer, sizeof(buffer)-1, 0)) <= 0) {
+    if ((message_len = recv(sd, buffer, MAX_MESSAGE_SIZE-1, 0)) <= 0) {
         perror("Receive Error");
         throw runtime_error("Receive failed");
     }
-    buffer[n] = '\0';
+    buffer[message_len] = '\0';
     return buffer;   
 }
 
