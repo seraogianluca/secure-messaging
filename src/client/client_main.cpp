@@ -29,8 +29,8 @@ int main(int argc, char* const argv[]) {
         SocketClient socketClient = SocketClient(SOCK_STREAM);
         Client client = Client();
         socketClient.makeConnection();
-        string greetingMessage = socketClient.receiveMessage(socketClient.getMasterFD());
-        cout << "Connection confirmed: " << greetingMessage  << endl;
+        // string greetingMessage = socketClient.receiveMessage(socketClient.getMasterFD());
+        // cout << "Connection confirmed: " << greetingMessage  << endl;
         while(true) {
             int value = showMenu();
             if(value == 1) {
@@ -45,9 +45,9 @@ int main(int argc, char* const argv[]) {
                 cout << "Tag:" << endl;
                 BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
                 string msg_enc = "1"+client.convert(ciphertext);
-                socketClient.sendMessage(msg_enc, socketClient.getMasterFD());
-                string message = socketClient.receiveMessage(socketClient.getMasterFD());
-                cout << "Message Received: " << message << endl;
+                // socketClient.sendMessage(msg_enc, socketClient.getMasterFD());
+                // string message = socketClient.receiveMessage(socketClient.getMasterFD());
+                // cout << "Message Received: " << message << endl;
             } else if(value == 2) {
 
             } else {
@@ -87,23 +87,21 @@ void authentication(Crypto crypto, SocketClient s, Client c) {
     try {
         string nonce_client = crypto.generateNonce();
         string helloMessage = "hello" + nonce_client;
-        s.sendMessage(helloMessage, s.getMasterFD());
+        // s.sendMessage(helloMessage.c_str(), s.getMasterFD());
 
-        string receivedMessage =  s.receiveMessage(s.getMasterFD());
-        string nonce_received = c.extractClientNonce(receivedMessage, nonce_client.length());
-        string nonce_server = c.extractServerNonce(receivedMessage, nonce_client.length());
-        if(nonce_client.compare(nonce_received) != 0) {
-            throw runtime_error("Login Error: The freshness of the message is not confirmed");
-        }
-        cout << "Freshness Confirmed" << endl;
-        string requestCertificateMessage = (char)OP_CERTIFICATE_REQUEST + nonce_server + nonce_client;
-        s.sendMessage(requestCertificateMessage, s.getMasterFD());
+        // unsigned char* receivedMessage =  s.receiveMessage(s.getMasterFD());
+        // string nonce_received = c.extractClientNonce(receivedMessage, nonce_client.length());
+        // string nonce_server = c.extractServerNonce(receivedMessage, nonce_client.length());
+        // if(nonce_client.compare(nonce_received) != 0) {
+        //     throw runtime_error("Login Error: The freshness of the message is not confirmed");
+        // }
+        // cout << "Freshness Confirmed" << endl;
+        // string requestCertificateMessage = (char)OP_CERTIFICATE_REQUEST + nonce_server + nonce_client;
+        // s.sendMessage(requestCertificateMessage, s.getMasterFD());
 
-        string certificate = s.receiveMessage(s.getMasterFD());
-        bool verification = c.verifyCertificate();
+        // string certificate = s.receiveMessage(s.getMasterFD());
+        // bool verification = c.verifyCertificate();
     } catch(const std::exception& e) {
         throw runtime_error(e.what() + '\n');
     }
-    
-    
 }

@@ -23,8 +23,8 @@ int main(int argc, char* const argv[]) {
                     if (serverSocket.isFDSet(sd)) {  
                         //Check if it was for closing , and also read the 
                         //incoming message 
-                        string messageReceived = serverSocket.receiveMessage(sd);
-                        if (messageReceived.length() == 0)  { 
+                        unsigned char* messageReceived = serverSocket.receiveMessage(sd);
+                        if (sizeof(messageReceived) == 0)  { 
                             //Somebody disconnected , get his details and print 
                             serverSocket.disconnectHost(sd, i);
                         } else {
@@ -33,29 +33,29 @@ int main(int argc, char* const argv[]) {
                             cout << "Operation code: " << operationCode << endl;
                             if (operationCode == 0) {
                                 // Login
-                                login();
+                            //    login();
                             }
                             if (operationCode == 1) {
                                 // Logout
                                 unsigned char iv[IV_SIZE];
-                                int ciphertext_len = messageReceived.length()-IV_SIZE-1;
+                                int ciphertext_len = sizeof(messageReceived)-IV_SIZE-1;
                                 unsigned char enc[ciphertext_len];
-                                string ivMessage = messageReceived.substr(1,IV_SIZE+1);
-                                string encMessage = messageReceived.substr(IV_SIZE+1,messageReceived.length());
-                                strncpy((char*)iv,ivMessage.c_str(),IV_SIZE);
-                                strncpy((char*)enc,encMessage.c_str(),ciphertext_len);
-                                unsigned char* dec_msg = (unsigned char*)malloc(ciphertext_len);
-                                int plaintext_len = c.decryptMessage(enc,
-                                                                ciphertext_len,
-                                                                iv,
-                                                                tag,
-                                                                dec_msg);
-                                if(plaintext_len == -1)
-                                    cout << "Not corresponding tag." << endl;
-                                else {
-                                    cout<<"Plaintext:"<<endl;
-                                    BIO_dump_fp (stdout, (const char *)dec_msg, plaintext_len);
-                                }
+                                // string ivMessage = messageReceived.substr(1,IV_SIZE+1);
+                                // string encMessage = messageReceived.substr(IV_SIZE+1,messageReceived.length());
+                                // strncpy((char*)iv,ivMessage.c_str(),IV_SIZE);
+                            //     strncpy((char*)enc,encMessage.c_str(),ciphertext_len);
+                            //     unsigned char* dec_msg = (unsigned char*)malloc(ciphertext_len);
+                            //     int plaintext_len = c.decryptMessage(enc,
+                            //                                     ciphertext_len,
+                            //                                     iv,
+                            //                                     tag,
+                            //                                     dec_msg);
+                            //     if(plaintext_len == -1)
+                            //         cout << "Not corresponding tag." << endl;
+                            //     else {
+                            //         cout<<"Plaintext:"<<endl;
+                            //         BIO_dump_fp (stdout, (const char *)dec_msg, plaintext_len);
+                            //     }
                             }
                             if (operationCode == 2) {
                                 // Request to talk
