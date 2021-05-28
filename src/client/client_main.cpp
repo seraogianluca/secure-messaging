@@ -44,10 +44,12 @@ int main(int argc, char* const argv[]) {
                 BIO_dump_fp(stdout, (const char*)ciphertext, ciphertext_len);
                 cout << "Tag:" << endl;
                 BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
-                string msg_enc = "1"+client.convert(ciphertext);
-                // socketClient.sendMessage(msg_enc, socketClient.getMasterFD());
-                // string message = socketClient.receiveMessage(socketClient.getMasterFD());
-                // cout << "Message Received: " << message << endl;
+                unsigned char* msg = (unsigned char*)malloc(1+ciphertext_len);
+                memcpy(msg, "1", sizeof(int));
+                memcpy(msg,ciphertext,ciphertext_len);
+                socketClient.sendMessage(msg, socketClient.getMasterFD());
+                unsigned char* message = socketClient.receiveMessage(socketClient.getMasterFD());
+                cout << "Message Received: " << message << endl;
             } else if(value == 2) {
 
             } else {
