@@ -10,7 +10,7 @@
 
 int showMenu();
 
-string readFromStdout();
+string readFromStdout(string message);
 void authentication();
 
 int main(int argc, char* const argv[]) {
@@ -40,7 +40,7 @@ int main(int argc, char* const argv[]) {
                                                 plaintext_len, 
                                                 ciphertext, 
                                                 tag);
-                cout << "Ciphertext:" << endl;
+                cout << "Ciphertext: " <<ciphertext_len<<endl;
                 BIO_dump_fp(stdout, (const char*)ciphertext, ciphertext_len);
                 cout << "Tag:" << endl;
                 BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
