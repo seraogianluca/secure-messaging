@@ -132,3 +132,11 @@ void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len
     free(ciphertext);
     free(tag);
 }
+
+void dhExchange(Crypto crypto){
+    EVP_PKEY* params = crypto.buildParameters();
+    EVP_PKEY* my_prvkey = crypto.keyGeneration(params);
+    //inviare a B
+    //attendere ricezione da B
+    unsigned char* secret = crypto.secretDerivation(my_prvkey);
+}

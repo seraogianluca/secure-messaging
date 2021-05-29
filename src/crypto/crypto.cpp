@@ -184,14 +184,14 @@ X509* Crypto::loadCertificate(){
     return cert;
 }
 
-int Crypto::sendCertificate(int sock, X509* cert, unsigned char* cert_buf){
+int Crypto::sendCertificate(X509* cert, unsigned char* cert_buf){
     int cert_size = i2d_X509(cert,&cert_buf);
     if(cert_size<0)
         throw "An error occurred during the writing of the certificate.";
     return cert_size;
 }
 
-X509* Crypto::receiveCertificate(int sock,int cert_len,unsigned char* cert_buff){
+X509* Crypto::receiveCertificate(int cert_len,unsigned char* cert_buff){
     X509 *buff = d2i_X509(NULL,(const unsigned char**)&cert_buff,cert_len);
     if(!buff)
         throw "An error occurred during the reading of the certificate.";
@@ -231,6 +231,7 @@ EVP_PKEY* Crypto::receivePublicKey(unsigned char* pubkey_buf, int pubkey_size){
 }
 
 unsigned char* Crypto::computeHash(unsigned char* msg, unsigned int msg_size) {
+    //fare i controlli e le free
     unsigned char digest[DIGEST_LEN];
     unsigned int digestlen;
     EVP_MD_CTX* ctx;
@@ -242,4 +243,71 @@ unsigned char* Crypto::computeHash(unsigned char* msg, unsigned int msg_size) {
     EVP_MD_CTX_free(ctx);
     
     return digest;
+}
+
+EVP_PKEY* Crypto::buildParameters(){
+    EVP_PKEY* dh_params = EVP_PKEY_new();
+    DH* temp = DH_get_2048_224();
+    if( EVP_PKEY_set1_DH(dh_params,temp)==NULL){
+        DH_free(temp);
+        throw runtime_error("An error occurred during the generation of parameters");
+    }
+    DH_free(temp);
+    return dh_params;
+}
+
+EVP_PKEY* Crypto::keyGeneration(EVP_PKEY* dh_params){
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(dh_params,NULL);
+    if(ctx == NULL)
+        throw runtime_error("An error occurred during the creation of the context");
+    EVP_PKEY* my_prvkey = NULL;
+    if(EVP_PKEY_keygen_init(ctx)<1){
+        EVP_PKEY_CTX_free(ctx);
+        throw runtime_error("An error occurred during the intialization of the context");
+    }
+    if(EVP_PKEY_keygen(ctx, &my_prvkey)<1){
+        EVP_PKEY_CTX_free(ctx);
+        throw runtime_error("An error occurred during the intialization of the context");
+    }
+    EVP_PKEY_CTX_free(ctx);
+    return my_prvkey;
+}
+
+unsigned char* Crypto::secretDerivation(EVP_PKEY* my_prvkey){
+    EVP_PKEY* peer_pubkey;
+    size_t secretlen;
+    FILE* p2r = fopen("pubkey.pem", "r");
+    if(!p2r)
+        throw runtime_error("An error occurred opening the file");
+    EVP_PKEY* peer_pubkey = PEM_read_PUBKEY(p2r, NULL, NULL, NULL);
+    fclose(p2r);
+    if(!peer_pubkey)
+        throw runtime_error("An error occurred reading the public key");    
+    EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(my_prvkey,NULL);
+    if(ctx_drv == NULL)
+        throw runtime_error("An error occurred during the creation of the context");
+    if(EVP_PKEY_derive_init(ctx_drv)<1){
+        EVP_PKEY_CTX_free(ctx_drv);
+        EVP_PKEY_free(peer_pubkey);
+        throw runtime_error("An error occurred during the intialization of the context");
+    }
+    if(EVP_PKEY_derive_set_peer(ctx_drv, peer_pubkey)<1){
+        EVP_PKEY_CTX_free(ctx_drv);
+        EVP_PKEY_free(peer_pubkey);
+        throw runtime_error("An error occurred setting the peer's public key");
+    }
+    if(EVP_PKEY_derive(ctx_drv, NULL, &secretlen)<1){
+        EVP_PKEY_CTX_free(ctx_drv);
+        EVP_PKEY_free(peer_pubkey);
+        throw runtime_error("An error occurred retrieving the secret length");
+    }
+    unsigned char secret[secretlen];
+    if(EVP_PKEY_derive(ctx_drv, secret, &secretlen)<1){
+        EVP_PKEY_CTX_free(ctx_drv);
+        EVP_PKEY_free(peer_pubkey);
+        throw runtime_error("An error occurred during the derivation of the secret");
+    }
+    EVP_PKEY_CTX_free(ctx_drv);
+    EVP_PKEY_free(peer_pubkey);
+    return secret;
 }

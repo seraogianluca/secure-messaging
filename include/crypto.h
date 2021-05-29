@@ -51,8 +51,8 @@ class Crypto {
        
         // Certificates
         X509* loadCertificate();
-        int sendCertificate(int sock, X509* cert, unsigned char* cert_buf);
-        X509* receiveCertificate(int sock,int cert_len,unsigned char* cert_buff);
+        int sendCertificate(X509* cert, unsigned char* cert_buf);
+        X509* receiveCertificate(int cert_len,unsigned char* cert_buff);
 
         // Public Key handling
         int sendPublicKey(EVP_PKEY* pubkey, unsigned char* pubkey_buf);
@@ -60,4 +60,9 @@ class Crypto {
 
         // Hash
         unsigned char* computeHash(unsigned char* msg, unsigned int msg_size);
+
+        //Diffie-Hellmann
+        EVP_PKEY* buildParameters();
+        EVP_PKEY* keyGeneration(EVP_PKEY* dh_params);
+        unsigned char* secretDerivation(EVP_PKEY* my_prvkey);
 };
