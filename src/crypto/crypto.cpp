@@ -242,17 +242,24 @@ EVP_PKEY* Crypto::deserializePublicKey(unsigned char* pubkey_buf, int pubkey_siz
 }
 
 unsigned char* Crypto::computeHash(unsigned char* msg, unsigned int msg_size) {
-    //fare i controlli e le free
     unsigned char digest[DIGEST_LEN];
     unsigned int digestlen;
     EVP_MD_CTX* ctx;
 
     ctx = EVP_MD_CTX_new();
-    EVP_DigestInit(ctx, HASH);
-    EVP_DigestUpdate(ctx, msg, msg_size); 
-    EVP_DigestFinal(ctx, digest, &digestlen);
+    if(EVP_DigestInit(ctx, HASH)<1){
+        EVP_MD_CTX_free(ctx);
+        throw runtime_error("An error occurred during the initialization of the digest.");
+    }
+    if(EVP_DigestUpdate(ctx, msg, msg_size)<1){
+        EVP_MD_CTX_free(ctx);
+        throw runtime_error("An error occurred during the creation of the digest.");
+    } 
+    if(EVP_DigestFinal(ctx, digest, &digestlen)<1){
+        EVP_MD_CTX_free(ctx);
+        throw runtime_error("An error occurred during the conclusion of the digest.");
+    }
     EVP_MD_CTX_free(ctx);
-    
     return digest;
 }
 
