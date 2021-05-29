@@ -205,15 +205,17 @@ X509* Crypto::receiveCertificate(int cert_len,unsigned char* cert_buff){
     return buff;
 }
 
-int Crypto::sendPublicKey(EVP_PKEY* pubkey, unsigned char* pubkey_buf){
+int Crypto::serializePublicKey(EVP_PKEY* prv_key, unsigned char* pubkey_buf){
+    unsigned char* buffer; 
     BIO *mbio = BIO_new(BIO_s_mem());
     if(mbio==NULL)
         throw runtime_error("An error occurred during the creation of the bio.");
-    if(PEM_write_bio_PUBKEY(mbio,pubkey)!=1){
+    if(PEM_write_bio_PUBKEY(mbio,prv_key)!=1){
         BIO_free(mbio);
         throw runtime_error("An error occurred during the writing of the public key into the bio.");
     }
-    long pubkey_size = BIO_get_mem_data(mbio,&pubkey_buf);
+    long pubkey_size = BIO_get_mem_data(mbio, &buffer);
+    memcpy(pubkey_buf, buffer, pubkey_size);
     if(pubkey_size<0){
         BIO_free(mbio);
         throw runtime_error("An error occurred during the reading of the public key.");
@@ -222,15 +224,17 @@ int Crypto::sendPublicKey(EVP_PKEY* pubkey, unsigned char* pubkey_buf){
     return pubkey_size;
 }
 
-EVP_PKEY* Crypto::receivePublicKey(unsigned char* pubkey_buf, int pubkey_size){
+EVP_PKEY* Crypto::deserializePublicKey(unsigned char* pubkey_buf, int pubkey_size){
     BIO *mbio = BIO_new(BIO_s_mem());
+    EVP_PKEY *pubkey;
     if(mbio==NULL)
         throw runtime_error("An error occurred during the creation of the bio.");
     if(BIO_write(mbio,pubkey_buf,pubkey_size)<=0)
         throw runtime_error("An error occurred during the writing of the bio.");
-    EVP_PKEY *pubkey = PEM_read_bio_PUBKEY(mbio, NULL, NULL, NULL);
+    pubkey = PEM_read_bio_PUBKEY(mbio, NULL, NULL, NULL);
     if(pubkey == NULL){
         BIO_free(mbio);
+        // ERR_print_errors_fp(stderr);
         throw runtime_error("An error occurred during the reading of the public key from the bio.");
     }
     BIO_free(mbio);
@@ -255,7 +259,7 @@ unsigned char* Crypto::computeHash(unsigned char* msg, unsigned int msg_size) {
 EVP_PKEY* Crypto::buildParameters(){
     EVP_PKEY* dh_params = EVP_PKEY_new();
     DH* temp = DH_get_2048_224();
-    if( EVP_PKEY_set1_DH(dh_params,temp)==NULL){
+    if( EVP_PKEY_set1_DH(dh_params,temp)==0){
         DH_free(temp);
         throw runtime_error("An error occurred during the generation of parameters");
     }
@@ -280,13 +284,7 @@ EVP_PKEY* Crypto::keyGeneration(EVP_PKEY* dh_params){
     return my_prvkey;
 }
 
-unsigned char* Crypto::secretDerivation(EVP_PKEY* my_prvkey, size_t &secretlen){
-    EVP_PKEY* peer_pubkey;
-    FILE* p2r = fopen("pubkey.pem", "r");
-    if(!p2r)
-        throw runtime_error("An error occurred opening the file");
-    peer_pubkey = PEM_read_PUBKEY(p2r, NULL, NULL, NULL);
-    fclose(p2r);
+unsigned char* Crypto::secretDerivation(EVP_PKEY* my_prvkey, EVP_PKEY* peer_pubkey, size_t &secretlen){
     if(!peer_pubkey)
         throw runtime_error("An error occurred reading the public key");    
     EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(my_prvkey,NULL);

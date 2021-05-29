@@ -7,6 +7,7 @@
 #include <openssl/rand.h>
 #include <openssl/x509.h>
 #include <openssl/bio.h>
+#include <openssl/err.h>
 
 using namespace std;
 //TODO: mettere il throw runtime_exception
@@ -57,8 +58,8 @@ class Crypto {
         X509* receiveCertificate(int cert_len,unsigned char* cert_buff);
 
         // Public Key handling
-        int sendPublicKey(EVP_PKEY* pubkey, unsigned char* pubkey_buf);
-        EVP_PKEY* receivePublicKey(unsigned char* pubkey_buf, int pubkey_size);
+        int serializePublicKey(EVP_PKEY* prv_key, unsigned char* pubkey_buf);
+        EVP_PKEY* deserializePublicKey(unsigned char* pubkey_buf, int pubkey_size);
 
         // Hash
         unsigned char* computeHash(unsigned char* msg, unsigned int msg_size);
@@ -66,5 +67,5 @@ class Crypto {
         //Diffie-Hellmann
         EVP_PKEY* buildParameters();
         EVP_PKEY* keyGeneration(EVP_PKEY* dh_params);
-        unsigned char* secretDerivation(EVP_PKEY* my_prvkey, size_t &secretlen);
+        unsigned char* secretDerivation(EVP_PKEY* my_pubkey, EVP_PKEY* peer_pubkey, size_t &secretlen);
 };
