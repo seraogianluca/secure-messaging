@@ -1,5 +1,12 @@
 #include "include/crypto.h"
 
+void Crypto::setSessionKey(unsigned char* secret, unsigned int size) {
+    session_key = new unsigned char[size];
+    for(int i = 0; i < size; i++) {
+        session_key[i] = secret[i];
+    }
+}
+
 unsigned char* Crypto::stringToChar(string str) {
     size_t buf_size = str.length();
     unsigned char ret[buf_size+1];
@@ -273,9 +280,8 @@ EVP_PKEY* Crypto::keyGeneration(EVP_PKEY* dh_params){
     return my_prvkey;
 }
 
-unsigned char* Crypto::secretDerivation(EVP_PKEY* my_prvkey){
+unsigned char* Crypto::secretDerivation(EVP_PKEY* my_prvkey, size_t &secretlen){
     EVP_PKEY* peer_pubkey;
-    size_t secretlen;
     FILE* p2r = fopen("pubkey.pem", "r");
     if(!p2r)
         throw runtime_error("An error occurred opening the file");
