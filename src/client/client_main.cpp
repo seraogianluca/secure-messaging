@@ -111,7 +111,9 @@ void authentication(Crypto crypto, SocketClient s, Client c) {
 void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len) {
     unsigned char *ciphertext;
     unsigned char *tag;
+    unsigned char *buffer;
     unsigned int ciphr_len;
+    unsigned int msg_len = 0;
 
     ciphertext = (unsigned char *)malloc(pln_len + TAG_SIZE);
     if (ciphertext == NULL) {
@@ -123,11 +125,15 @@ void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len
         throw "An error occurred during tag allocation.";
     }
 
-    ciphr_len = crypto.encryptMessage(msg,pln_len,ciphertext,tag);
-    unsigned int msg_len = 0;
-    unsigned char *buffer;
-    buffer = client.buildMessage(opCode, crypto.getIV(), ciphertext, ciphr_len, tag, msg_len);
-    socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_len);
+    try {
+        ciphr_len = crypto.encryptMessage(msg,pln_len,ciphertext,tag);
+        buffer = client.buildMessage(opCode, crypto.getIV(), ciphertext, ciphr_len, tag, msg_len);
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_len);
+    } catch(const exception& e) {
+        free(ciphertext);
+        free(tag);
+        throw runtime_error(e.what() + '\n');
+    }
     
     free(ciphertext);
     free(tag);
