@@ -37,6 +37,8 @@ class Crypto {
             delete iv;
         }
 
+        void setSessionKey(unsigned char* secret, unsigned int size);
+
         unsigned char* stringToChar(string str);
         string charToString(unsigned char* value);
 
@@ -64,5 +66,5 @@ class Crypto {
         //Diffie-Hellmann
         EVP_PKEY* buildParameters();
         EVP_PKEY* keyGeneration(EVP_PKEY* dh_params);
-        unsigned char* secretDerivation(EVP_PKEY* my_prvkey);
+        unsigned char* secretDerivation(EVP_PKEY* my_prvkey, size_t &secretlen);
 };

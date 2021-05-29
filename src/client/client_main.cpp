@@ -133,10 +133,17 @@ void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len
     free(tag);
 }
 
-void dhExchange(Crypto crypto){
+void keyEstablishment(){
     EVP_PKEY* params = crypto.buildParameters();
-    EVP_PKEY* my_prvkey = crypto.keyGeneration(params);
-    //inviare a B
-    //attendere ricezione da B
-    unsigned char* secret = crypto.secretDerivation(my_prvkey);
+    EVP_PKEY* pub_key_a = crypto.keyGeneration(params);
+    unsigned char buffer[2048];
+    crypto.sendPublicKey(pub_key_a, buffer);
+    socketClient.sendMessage(socketClient.getMasterFD(), buffer, 2048);
+    unsigned int buffer_rcvd_len;
+    unsigned char* buffer_rcvd = socketClient.receiveMessage(socketClient.getMasterFD(), buffer_rcvd_len);
+    EVP_PKEY* pub_key_b = crypto.receivePublicKey(buffer_rcvd, buffer_rcvd_len);
+    size_t secretlen;
+    unsigned char* secret = crypto.secretDerivation(pub_key_b, secretlen);
+    unsigned char* hashedSecret = crypto.computeHash(secret, secretlen); //128 bit digest
+    crypto.setSessionKey(hashedSecret, DIGEST_LEN);
 }
