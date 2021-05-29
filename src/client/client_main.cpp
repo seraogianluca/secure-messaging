@@ -16,6 +16,7 @@ Client client = Client();
 int showMenu();
 string readFromStdout(string message);
 void authentication();
+void keyEstablishment();
 void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len);
 
 int main(int argc, char *const argv[]) {
@@ -32,6 +33,7 @@ int main(int argc, char *const argv[]) {
 
             switch(value) {
                 case 1:
+                    keyEstablishment();
                     break;
                 case 2:
                     break;
@@ -104,7 +106,7 @@ void authentication(Crypto crypto, SocketClient s, Client c) {
     }
     catch (const std::exception &e)
     {
-        throw runtime_error(e.what() + '\n');
+        throw runtime_error(e.what());
     }
 }
 
@@ -114,7 +116,6 @@ void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len
     unsigned char *buffer;
     unsigned int ciphr_len;
     unsigned int msg_len = 0;
-
     ciphertext = (unsigned char *)malloc(pln_len + TAG_SIZE);
     if (ciphertext == NULL) {
         throw "An error occurred during ciphertext allocation.";
@@ -137,4 +138,41 @@ void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len
     
     free(ciphertext);
     free(tag);
+}
+
+void keyEstablishment() {
+    unsigned char* buffer = (unsigned char*) malloc(256);
+    //Check on the malloc and free
+    unsigned char* bufferRecvd;
+    unsigned char* secret;
+    unsigned char* hashedSecret;
+    unsigned char* loginMsg = OP_LOGIN;
+    size_t secretlen;
+    unsigned int buffer_rcvd_len;
+    EVP_PKEY* params;
+    EVP_PKEY* prv_key_a;
+    EVP_PKEY* pub_key_b;
+
+    socketClient.sendMessage(socketClient.getMasterFD(), loginMsg, 1);
+    params = crypto.buildParameters();
+    prv_key_a = crypto.keyGeneration(params);
+    //send g^a mod p
+    unsigned int pubKeyLen = crypto.serializePublicKey(prv_key_a, buffer);
+    socketClient.sendMessage(socketClient.getMasterFD(), buffer, pubKeyLen);
+    cout << "pub_key_a: " << endl;
+    BIO_dump_fp(stdout, (const char*)buffer, pubKeyLen);
+    //receive g^b mod p
+    bufferRecvd = socketClient.receiveMessage(socketClient.getMasterFD(), buffer_rcvd_len);
+    pub_key_b = crypto.deserializePublicKey(bufferRecvd, buffer_rcvd_len);
+    cout << "pub_key_b: " << endl;
+    BIO_dump_fp(stdout, (const char*)bufferRecvd, buffer_rcvd_len);
+
+    secret = crypto.secretDerivation(prv_key_a, pub_key_b, secretlen);
+    hashedSecret = crypto.computeHash(secret, secretlen); //128 bit digest
+    cout << "Secret: " << endl;
+    BIO_dump_fp(stdout, (const char*)secret, secretlen);
+    cout << "Hash: " << endl;
+    BIO_dump_fp(stdout, (const char*)hashedSecret, DIGEST_LEN);
+
+    crypto.setSessionKey(hashedSecret, DIGEST_LEN);
 }

@@ -3,10 +3,11 @@
 
 SocketServer serverSocket = SocketServer(SOCK_STREAM); //TCP
 Server server = Server();
-Crypto c((unsigned char*)"1234567890123456");
+Crypto crypto((unsigned char*)"1234567890123456");
 
 void login();
 void logout();
+void keyEstablishment(int sd);
 
 int main(int argc, char* const argv[]) {
     try {
@@ -35,7 +36,7 @@ int main(int argc, char* const argv[]) {
 
                             if (operationCode == 0) {
                                 // Login
-                            //    login();
+                                keyEstablishment(sd);
                             } else if (operationCode == 3) {
                                 unsigned char iv[IV_SIZE];
                                 unsigned char tag[TAG_SIZE];
@@ -51,7 +52,7 @@ int main(int argc, char* const argv[]) {
                                 memcpy(encMessage, messageReceived+start, ciphertext_len);
                                 memcpy(tag, messageReceived+message_len-TAG_SIZE, TAG_SIZE);
                                 unsigned char dec_msg[ciphertext_len];
-                                int plaintext_len = c.decryptMessage(encMessage,ciphertext_len,iv,tag,dec_msg);
+                                int plaintext_len = crypto.decryptMessage(encMessage,ciphertext_len,iv,tag,dec_msg);
                                 if(plaintext_len == -1)
                                     cout << "Not corresponding tag." << endl;
                                 else {
@@ -85,4 +86,40 @@ void login() {
 
 void logout() {
 
+}
+
+void keyEstablishment(int sd){
+    unsigned char buffer[2048] = {0};
+    unsigned char* bufferRecvd;
+    unsigned char* secret;
+    unsigned char* hashedSecret;
+    size_t secretlen;
+    unsigned int buffer_rcvd_len;
+    EVP_PKEY* params;
+    EVP_PKEY* prv_key_a;
+    EVP_PKEY* pub_key_b;
+
+    params = crypto.buildParameters();
+    prv_key_a = crypto.keyGeneration(params);
+    
+
+    //send g^b mod p
+    bufferRecvd = serverSocket.receiveMessage(sd, buffer_rcvd_len);
+    pub_key_b = crypto.deserializePublicKey(bufferRecvd, buffer_rcvd_len);
+    cout << "pub_key_b: " << endl;
+    BIO_dump_fp(stdout, (const char*)bufferRecvd, buffer_rcvd_len);
+    //receive g^a mod p
+    unsigned int pubKeyLen = crypto.serializePublicKey(prv_key_a, buffer); // Estrae la chiave pubblica e la mette in buffer
+    serverSocket.sendMessage(sd, buffer, pubKeyLen);
+    cout << "pub_key_a: " << endl;
+    BIO_dump_fp(stdout, (const char*)buffer, pubKeyLen);
+
+    secret = crypto.secretDerivation(prv_key_a, pub_key_b, secretlen);
+    hashedSecret = crypto.computeHash(secret, secretlen); //128 bit digest
+    cout << "Secret: " << endl;
+    BIO_dump_fp(stdout, (const char*)secret, secretlen);
+    cout << "Hash: " << endl;
+    BIO_dump_fp(stdout, (const char*)hashedSecret, DIGEST_LEN);
+
+    crypto.setSessionKey(hashedSecret, DIGEST_LEN);
 }
