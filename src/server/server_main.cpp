@@ -1,19 +1,19 @@
 #include "include/server.h"
 #include "include/socket.h"
 
-#define PORT 8080
+SocketServer serverSocket = SocketServer(SOCK_STREAM); //TCP
+Server server = Server();
+Crypto c((unsigned char*)"1234567890123456");
 
 void login();
 void logout();
 
 int main(int argc, char* const argv[]) {
     try {
-        SocketServer serverSocket = SocketServer(SOCK_STREAM); //TCP
-        Server server = Server();
-        Crypto c((unsigned char*)"1234567890123456");
         while(true) {
             serverSocket.initSet();
             serverSocket.selectActivity();
+
             if(serverSocket.isFDSet(serverSocket.getMasterFD())) {
                 serverSocket.acceptNewConnection();
             } else {
@@ -24,47 +24,34 @@ int main(int argc, char* const argv[]) {
                         //incoming message                         
                         unsigned int message_len;
                         unsigned char* messageReceived = serverSocket.receiveMessage(sd, message_len);
-                        cout << "Received: " << messageReceived << endl;
+                        cout << "Message received." << endl;
                         if (message_len == 0)  { 
                             //Somebody disconnected , get his details and print 
                             serverSocket.disconnectHost(sd, i);
                         } else {
-                            cout << "Received message from peer: " << messageReceived << endl;
-                            int operationCode = server.getOperationCode(messageReceived);
+                            int operationCode;
+                            operationCode = server.getOperationCode(messageReceived);
                             cout << "Operation code: " << operationCode << endl;
+
                             if (operationCode == 0) {
                                 // Login
                             //    login();
-                            }
-                            if (operationCode == 1) {
-                                // Logout
-                                // OP||IV||CIPHERTEXT||TAG
-                                cout << "Byte received: " << message_len << endl;
-                                cout << "Message: " << endl;
-                                BIO_dump_fp(stdout, (const char*)messageReceived, message_len);
-                                
+                            } else if (operationCode == 3) {
                                 unsigned char iv[IV_SIZE];
                                 unsigned char tag[TAG_SIZE];
-                                int start = 1;
+                                int start;
+                                int ciphertext_len;
+
+                                start = 1;
                                 memcpy(iv, messageReceived+start, IV_SIZE);
-                                cout << "IV: " << endl;
-                                BIO_dump_fp(stdout, (const char*)iv, IV_SIZE);
                                 start += IV_SIZE;
-                                
-                                int ciphertext_len = message_len-IV_SIZE-TAG_SIZE-1;
+
+                                ciphertext_len = message_len-IV_SIZE-TAG_SIZE-1;
                                 unsigned char encMessage[ciphertext_len];
                                 memcpy(encMessage, messageReceived+start, ciphertext_len);
-                                cout << "Ciphertext: " << endl;
-                                BIO_dump_fp(stdout, (const char*)encMessage, ciphertext_len);
                                 memcpy(tag, messageReceived+message_len-TAG_SIZE, TAG_SIZE);
-                                cout << "Tag: " << endl;
-                                BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
                                 unsigned char dec_msg[ciphertext_len];
-                                int plaintext_len = c.decryptMessage(encMessage,
-                                                                ciphertext_len,
-                                                                iv,
-                                                                tag,
-                                                                dec_msg);
+                                int plaintext_len = c.decryptMessage(encMessage,ciphertext_len,iv,tag,dec_msg);
                                 if(plaintext_len == -1)
                                     cout << "Not corresponding tag." << endl;
                                 else {

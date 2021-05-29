@@ -19,13 +19,14 @@ void Server::handleLogin() {
 }
 
 string Server::extractClientNonce(string message) {
-    if (message.length() < 5) throw runtime_error("Uncorrect format of the message received");
+    if (message.length() < 5) {
+        throw runtime_error("Uncorrect format of the message received");
+    }
     return message.erase(0, 5);
 }
 
 
 int Server::getOperationCode(unsigned char* message) {
-    if(sizeof(message) == 0) {throw runtime_error("Message format not correct");}
     int opCode = message[0] - '0';
     if (opCode < 0 || opCode > 4) { throw runtime_error("Operation Code not valid");}
     return opCode;

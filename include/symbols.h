@@ -5,11 +5,11 @@
 
 // Operation Codes
 
-#define OP_LOGIN 0
-#define OP_LOGOUT 1
-#define OP_REQUEST_TO_TALK 2
-#define OP_MESSAGE 3
-#define OP_CERTIFICATE_REQUEST 4
+#define OP_LOGIN ((unsigned char*)"0")
+#define OP_LOGOUT ((unsigned char*)"1")
+#define OP_REQUEST_TO_TALK ((unsigned char*)"2")
+#define OP_MESSAGE ((unsigned char*)"3")
+#define OP_CERTIFICATE_REQUEST ((unsigned char*)"4")
 
 #define MAX_MESSAGE_SIZE 10000
 #define MAX_CLIENTS 10

@@ -19,12 +19,9 @@ class Client {
         Client() {}; //Constructor
         ~Client() {}; //Distructor
 
-        int login(string pwd);
-        int logout();
-        int requestToTalk(string peerUsername);
-        int textMessage(string peerUsername, string message);
+        unsigned char* buildMessage(unsigned char *opCode, unsigned char *iv, unsigned char *msg, unsigned int msg_size, unsigned char *tag, unsigned int &size);
+
         bool verifyCertificate();
         string extractClientNonce(string message, size_t clientNonceLen);
         string extractServerNonce(string message, size_t clientNonceLen);
-        string convert(unsigned char* value);
 };

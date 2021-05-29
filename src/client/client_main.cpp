@@ -8,79 +8,64 @@
 #include "include/client.h"
 #include "include/socket.h"
 
-int showMenu();
+//TODO: serve costruttore con parametri di default per fare solo dichiarazione
+Crypto crypto = Crypto((unsigned char *)"1234567890123456");
+SocketClient socketClient = SocketClient(SOCK_STREAM);
+Client client = Client();
 
+int showMenu();
 string readFromStdout(string message);
 void authentication();
+void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len);
 
-int main(int argc, char* const argv[]) {
+int main(int argc, char *const argv[]) {
     try {
-
         string password = readFromStdout("Insert password: ");
-
-        Crypto c((unsigned char*)"1234567890123456");
-        SocketClient socketClient = SocketClient(SOCK_STREAM);
-        Client client = Client();
         socketClient.makeConnection();
         unsigned int greetingMessageLen;
-        unsigned char* greetingMessage = socketClient.receiveMessage(socketClient.getMasterFD(), greetingMessageLen);
-        cout << "Connection confirmed: " << greetingMessage  << endl;
-        while(true) {
+        unsigned char *greetingMessage = socketClient.receiveMessage(socketClient.getMasterFD(), greetingMessageLen);
+        cout << "Connection confirmed: " << greetingMessage << endl;
+        while (true) {
             int value = showMenu();
-            if(value == 1) {
-                unsigned char msg[] = "Test message";
-                unsigned char *ciphertext;
-                unsigned char *tag;
-                int ciphertext_len;
-                int plaintext_len = sizeof(msg);
+            string input;
+            unsigned int inputSize;
 
-                ciphertext = (unsigned char*)malloc(plaintext_len+TAG_SIZE);
-                tag = (unsigned char*)malloc(TAG_SIZE);
-                ciphertext_len = c.encryptMessage(msg, 
-                                                plaintext_len, 
-                                                ciphertext, 
-                                                tag);
-                cout << "Ciphertext: " <<ciphertext_len<<endl;
-                BIO_dump_fp(stdout, (const char*)ciphertext, ciphertext_len);
-                cout << "Tag:" << endl;
-                BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
+            switch(value) {
+                case 1:
+                    break;
+                case 2:
+                    break;
+                case 3:
+                    cout << "> ";
+                    getline(cin, input);
+                    inputSize = input.length() + 1;
+                    sendMessage(OP_MESSAGE, (unsigned char*)input.c_str(), inputSize);
+                    cout << "Message sent." << endl;
+                    break;
+                case 0:
+                    cout << "Bye." << endl;
+                    return 0;
 
-                int msg_size = ciphertext_len + IV_SIZE + TAG_SIZE + 1;
-                unsigned char buffer[msg_size];
-                memcpy(buffer,"1", 1);
-                int start = 1;
-                memcpy(buffer+start, c.getIV(), IV_SIZE);
-                start += IV_SIZE;
-                memcpy(buffer+start,ciphertext,ciphertext_len);
-                start += ciphertext_len;
-                memcpy(buffer+start,tag,TAG_SIZE);
-                cout << "Message: " << endl;
-                BIO_dump_fp(stdout, (const char*)buffer, msg_size);
-                cout << "Message size: " << msg_size << endl;
-                socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_size);
-                unsigned int messageDecryptedLen;
-                unsigned char* message = socketClient.receiveMessage(socketClient.getMasterFD(), messageDecryptedLen);
-                cout << "Message Received: " << message << endl;
-            } else if(value == 2) {
-
-            } else {
-                cout << "Exit from the application." << endl;
-                return 0;
+                default:
+                    cout << "Insert a valid command." << endl;
             }
         }
-    } catch(const exception& e) {
+    }
+    catch (const exception &e) {
         cerr << e.what() << '\n';
     }
+
     return 0;
 }
 
 int showMenu() {
     cout << endl;
-    cout << "1. Send a message" << endl;
+    cout << "3. Send a message" << endl;
     cout << "0. Exit" << endl;
     cout << "--> ";
     size_t value;
     cin >> value;
+    cin.ignore();
     return value;
 }
 
@@ -88,7 +73,8 @@ string readFromStdout(string message) {
     cout << message << "\n --> ";
     string value;
     getline(cin, value);
-    while (value.length() == 0) {
+    while (value.length() == 0)
+    {
         cout << "Insert at least a character." << endl;
         cout << message << "\n --> ";
         getline(cin, value);
@@ -97,7 +83,8 @@ string readFromStdout(string message) {
 }
 
 void authentication(Crypto crypto, SocketClient s, Client c) {
-    try {
+    try
+    {
         string nonce_client = crypto.generateNonce();
         string helloMessage = "hello" + nonce_client;
         // s.sendMessage(helloMessage.c_str(), s.getMasterFD());
@@ -114,7 +101,34 @@ void authentication(Crypto crypto, SocketClient s, Client c) {
 
         // string certificate = s.receiveMessage(s.getMasterFD());
         // bool verification = c.verifyCertificate();
-    } catch(const std::exception& e) {
+    }
+    catch (const std::exception &e)
+    {
         throw runtime_error(e.what() + '\n');
     }
+}
+
+void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len) {
+    unsigned char *ciphertext;
+    unsigned char *tag;
+    unsigned int ciphr_len;
+
+    ciphertext = (unsigned char *)malloc(pln_len + TAG_SIZE);
+    if (ciphertext == NULL) {
+        throw "An error occurred during ciphertext allocation.";
+    }
+    tag = (unsigned char *)malloc(TAG_SIZE);
+    if (tag == NULL) {
+        free(ciphertext);
+        throw "An error occurred during tag allocation.";
+    }
+
+    ciphr_len = crypto.encryptMessage(msg,pln_len,ciphertext,tag);
+    unsigned int msg_len = 0;
+    unsigned char *buffer;
+    buffer = client.buildMessage(opCode, crypto.getIV(), ciphertext, ciphr_len, tag, msg_len);
+    socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_len);
+    
+    free(ciphertext);
+    free(tag);
 }
