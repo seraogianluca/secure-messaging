@@ -19,7 +19,7 @@ class Client {
         Client() {}; //Constructor
         ~Client() {}; //Distructor
 
-        unsigned char* buildMessage(unsigned char *opCode, unsigned char *iv, unsigned char *msg, unsigned int msg_size, unsigned char *tag, unsigned int &size);
+        void buildMessage(unsigned char *header, unsigned int header_len, unsigned char *iv, unsigned char *msg, unsigned int msg_size, unsigned char *tag, unsigned char *buffer);
 
         bool verifyCertificate();
         string extractClientNonce(string message, size_t clientNonceLen);

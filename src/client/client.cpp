@@ -1,25 +1,19 @@
 #include "include/client.h"
 
-unsigned char* Client::buildMessage(unsigned char *opCode, unsigned char *iv, unsigned char *msg, unsigned int msg_size, unsigned char *tag, unsigned int &size) {
-    unsigned int max_size = MAX_MESSAGE_SIZE + IV_SIZE + TAG_SIZE + 1;
+void Client::buildMessage(unsigned char *header, unsigned int header_len, unsigned char *iv, unsigned char *msg, unsigned int msg_size, unsigned char *tag, unsigned char *buffer) {
 
-    if (msg_size > max_size) {
+    if (msg_size > MAX_MESSAGE_SIZE) {
         throw runtime_error("Maximum message size exceeded");
     }
 
-    unsigned char buffer[MAX_MESSAGE_SIZE];
-    size = 0;
-
-    memcpy(buffer, opCode, 1);
-    size += 1;
-    memcpy(buffer+size, iv, IV_SIZE);
-    size += IV_SIZE;
-    memcpy(buffer+size, msg, msg_size);
-    size += msg_size;
-    memcpy(buffer+size, tag, TAG_SIZE);
-    size += TAG_SIZE;
-
-    return buffer;
+    int start = 0;
+    memcpy(buffer, header, header_len);
+    start += 1;
+    memcpy(buffer+start, iv, IV_SIZE);
+    start += IV_SIZE;
+    memcpy(buffer+start, msg, msg_size);
+    start += msg_size;
+    memcpy(buffer+start, tag, TAG_SIZE);
 }
 
 bool Client::verifyCertificate() {

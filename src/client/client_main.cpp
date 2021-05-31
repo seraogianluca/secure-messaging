@@ -17,7 +17,7 @@ int showMenu();
 string readFromStdout(string message);
 void authentication();
 void keyEstablishment();
-void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len);
+void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len);
 
 int main(int argc, char *const argv[]) {
     try {
@@ -29,7 +29,6 @@ int main(int argc, char *const argv[]) {
         while (true) {
             int value = showMenu();
             string input;
-            unsigned int inputSize;
 
             switch(value) {
                 case 1:
@@ -40,8 +39,7 @@ int main(int argc, char *const argv[]) {
                 case 3:
                     cout << "> ";
                     getline(cin, input);
-                    inputSize = input.length() + 1;
-                    sendMessage(OP_MESSAGE, (unsigned char*)input.c_str(), inputSize);
+                    sendMessage(OP_MESSAGE, 1, (unsigned char*)input.c_str(), input.length() + 1);
                     cout << "Message sent." << endl;
                     break;
                 case 0:
@@ -54,7 +52,7 @@ int main(int argc, char *const argv[]) {
         }
     }
     catch (const exception &e) {
-        cerr << e.what() << '\n';
+        cerr << e.what() << endl;
     }
 
     return 0;
@@ -110,34 +108,32 @@ void authentication(Crypto crypto, SocketClient s, Client c) {
     }
 }
 
-void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len) {
+void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len) {
     unsigned char *ciphertext;
     unsigned char *tag;
     unsigned char *buffer;
     unsigned int ciphr_len;
     unsigned int msg_len = 0;
-    ciphertext = (unsigned char *)malloc(pln_len + TAG_SIZE);
-    if (ciphertext == NULL) {
-        throw "An error occurred during ciphertext allocation.";
-    }
-    tag = (unsigned char *)malloc(TAG_SIZE);
-    if (tag == NULL) {
-        free(ciphertext);
-        throw "An error occurred during tag allocation.";
-    }
 
     try {
+        ciphertext = new unsigned char[pln_len + TAG_SIZE];
+        tag = new unsigned char[TAG_SIZE];
         ciphr_len = crypto.encryptMessage(msg,pln_len,ciphertext,tag);
-        buffer = client.buildMessage(opCode, crypto.getIV(), ciphertext, ciphr_len, tag, msg_len);
+
+        msg_len = head_len + IV_SIZE + ciphr_len + TAG_SIZE;
+        buffer = new unsigned char[msg_len];
+        client.buildMessage(header, head_len, crypto.getIV(), ciphertext, ciphr_len, tag, buffer);
         socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_len);
     } catch(const exception& e) {
-        free(ciphertext);
-        free(tag);
-        throw runtime_error(e.what() + '\n');
+        delete[] ciphertext;
+        delete[] tag;
+        delete[] buffer;
+        throw runtime_error(e.what());
     }
     
-    free(ciphertext);
-    free(tag);
+    delete[] ciphertext;
+    delete[] tag;
+    delete[] buffer;
 }
 
 void keyEstablishment() {
