@@ -148,7 +148,7 @@ void SocketServer::acceptNewConnection() {
     cout << "--------------------------------" << endl << endl;
     //send new connection greeting message 
     string message = "Hi, i'm the server";
-    if(send(new_socket, message.c_str(), message.length(), 0) != message.length()) {  
+    if(send(new_socket, message.c_str(), message.length(), 0) != (ssize_t)message.length()) {  
         throw runtime_error("Error sending the greeting message");
     }  
     cout << "Welcome message sent successfully to " << new_socket << endl;

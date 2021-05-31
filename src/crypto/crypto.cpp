@@ -175,9 +175,9 @@ int Crypto::decryptMessage(unsigned char *ciphr_msg, int ciphr_len,
     }
 }
 
-X509* Crypto::loadCertificate(){
-    X509 *cert = NULL;
-    FILE *file = fopen(CA_CERT_PATH,"r");
+void Crypto::loadCertificate(X509*& cert, string path){
+    string path_str = "./cert/"+path+".pem";
+    FILE *file = fopen(path_str.c_str(),"r");
     if(!file)
         throw runtime_error("An error occurred while opening the file.");
     cert = PEM_read_X509(file,NULL,NULL,NULL);
@@ -187,26 +187,23 @@ X509* Crypto::loadCertificate(){
     }
     if(fclose(file)!=0)
         throw runtime_error("An error occurred while closing the file.");
-    return cert;
 }
 
-int Crypto::sendCertificate(X509* cert, unsigned char* cert_buf){
+int Crypto::serializeCertificate(X509* cert, unsigned char* cert_buf){
     int cert_size = i2d_X509(cert,&cert_buf);
     if(cert_size<0)
         throw runtime_error("An error occurred during the writing of the certificate.");
     return cert_size;
 }
 
-X509* Crypto::receiveCertificate(int cert_len,unsigned char* cert_buff){
-    X509 *buff = d2i_X509(NULL,(const unsigned char**)&cert_buff,cert_len);
+void Crypto::deserializeCertificate(int cert_len,unsigned char* cert_buff, X509*& buff){
+    buff = d2i_X509(NULL,(const unsigned char**)&cert_buff,cert_len);
     if(!buff)
         throw runtime_error("An error occurred during the reading of the certificate.");
-    return buff;
 }
 
-X509_CRL* Crypto::loadCRL() {
-    X509_CRL* crl;
-    FILE* file = fopen("crl.pem", "r");
+void Crypto::loadCRL(X509_CRL*& crl){
+    FILE* file = fopen("./cert/crl.pem", "r");
     if(!file) { 
         throw runtime_error("An error occurred opening crl.pem.");
     }
@@ -216,26 +213,37 @@ X509_CRL* Crypto::loadCRL() {
         throw runtime_error("An error occurred reading the crl from file");
     }
     fclose(file);
-    return crl;
 }
 
-bool Crypto::verifyCertificate(unsigned char* cert_buff, int cert_len) {
+bool Crypto::verifyCertificate(X509* cert_to_verify) {
     X509_STORE_CTX* ctx = X509_STORE_CTX_new();
     X509* ca_cert;
     X509_STORE* store;
     X509_CRL* crl;
 
-    ca_cert = loadCertificate();
-    crl = loadCRL();
+    loadCertificate(ca_cert,CA_CERT_PATH);
+    loadCRL(crl);
 
     store = X509_STORE_new();
-    X509_STORE_add_cert(store, ca_cert);
-    X509_STORE_add_crl(store, crl);
-    X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK);
-
-    X509_STORE_CTX_init(ctx, store, ca_cert, NULL);
-    int ret = X509_verify_cert(ctx);
-    if(ret != 1) { 
+    if(store == NULL)
+        throw runtime_error("An error occured during the allocation of the store");
+    if(X509_STORE_add_cert(store, ca_cert)<1){
+        X509_STORE_free(store);
+        throw runtime_error("An error occurred adding the certification to the store");
+    }
+    if(X509_STORE_add_crl(store, crl)<1){
+        X509_STORE_free(store);
+        throw runtime_error("An error occurred adding the crl to the store");
+    }
+    if(X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK)<1){
+        X509_STORE_free(store);
+        throw runtime_error("An error occurred adding the flags to the store");
+    }
+    if(X509_STORE_CTX_init(ctx, store, cert_to_verify, NULL)==0){
+        X509_STORE_free(store);
+        throw runtime_error("An error occurred during the initialization of the context");
+    }
+    if(X509_verify_cert(ctx) != 1) { 
         X509_STORE_free(store);
         X509_STORE_CTX_free(ctx);
         return false;

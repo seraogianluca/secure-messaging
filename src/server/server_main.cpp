@@ -99,8 +99,11 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
     unsigned char *nonceClient = NULL;
     unsigned char *helloMessage = NULL;
     unsigned char *certificateRequest = NULL;
+    unsigned char *cert_buff = NULL;
+    X509 *cert = NULL;
     unsigned int start;
     unsigned int certificateRequestLen;
+    unsigned int cert_len;
 
     try {
         cout << "Hello Message from the client: " << endl;
@@ -152,12 +155,20 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
         }
 
         cout << "Freshness Confirmed" << endl;
+
+        //VERIFY CERTIFICATE
+        crypto.loadCertificate(cert,"server_cert");
+        cert_buff = new unsigned char[MAX_MESSAGE_SIZE];
+        cert_len = crypto.serializeCertificate(cert,cert_buff);
+        serverSocket.sendMessage(sd,cert_buff,cert_len);
+
     } catch(const exception& e) {
         delete[] nonceServer;
         delete[] nonceClient;
         delete[] helloMessage;
         delete[] certificateRequest;
         delete[] nonceServerReceived;
+        delete[] cert_buff;
         throw runtime_error(e.what());
     }
 
@@ -166,6 +177,7 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
     delete[] helloMessage;
     delete[] certificateRequest;
     delete[] nonceServerReceived; 
+    delete[] cert_buff;
 }
 
 void keyEstablishment(int sd){

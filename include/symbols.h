@@ -25,5 +25,5 @@
 #define DIGEST_LEN EVP_MD_size(HASH)
 
 //CERTIFICATE PATH
-#define CA_CERT_PATH "./cert/ca_cert.pem"
+#define CA_CERT_PATH "ca_cert"
 

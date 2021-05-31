@@ -24,10 +24,9 @@ int main(int argc, char *const argv[]) {
         string password = readFromStdout("Insert password: ");
         socketClient.makeConnection();
         
-        unsigned int greetingMessageLen;
         //TODO: to check
         unsigned char *greetingMessage = new unsigned char[MAX_MESSAGE_SIZE ];
-        greetingMessageLen = socketClient.receiveMessage(socketClient.getMasterFD(), greetingMessage);
+        socketClient.receiveMessage(socketClient.getMasterFD(), greetingMessage);
         cout << "Connection confirmed: " << greetingMessage << endl;
         delete[] greetingMessage;
 
@@ -98,8 +97,11 @@ void authentication() {
     unsigned char *receivedMessage = NULL;
     unsigned char *nonceServerReceived = NULL;
     unsigned char *certificateRequestMessage = NULL;
+    unsigned char *cert_buff = NULL;
+    X509 *cert = NULL;
     unsigned int messageReceivedLen;
     unsigned int start;
+    unsigned int cert_len;
 
     try {
         // Generate nonce
@@ -156,9 +158,14 @@ void authentication() {
         cout << "Certificate Request: " << endl;
         BIO_dump_fp(stdout, (const char*)certificateRequestMessage, (2*NONCE_SIZE));
         socketClient.sendMessage(socketClient.getMasterFD(), certificateRequestMessage, (2*NONCE_SIZE));
-
-        // string certificate = s.receiveMessage(s.getMasterFD());
-        // bool verification = c.verifyCertificate();
+        
+        //VERIFY CERTIFICATE
+        cert_buff = new unsigned char[MAX_MESSAGE_SIZE];        
+        cert_len = socketClient.receiveMessage(socketClient.getMasterFD(),cert_buff);
+        crypto.deserializeCertificate(cert_len, cert_buff,cert);
+        if(!crypto.verifyCertificate(cert))
+            throw runtime_error("Pay attention, server is not authenticated.");
+        cout << "Server authenticated." << endl;
     } catch (const exception &e) {
         delete[] nonceClient;
         delete[] helloMessage;
@@ -166,6 +173,7 @@ void authentication() {
         delete[] nonceClientReceived;
         delete[] nonceServerReceived;
         delete[] certificateRequestMessage;
+        delete[] cert_buff;
         throw runtime_error(e.what());
     }
 
@@ -175,6 +183,7 @@ void authentication() {
     delete[] nonceClientReceived;
     delete[] nonceServerReceived;
     delete[] certificateRequestMessage;
+    delete[] cert_buff;
 }
 
 void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len) {

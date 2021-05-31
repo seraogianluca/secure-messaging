@@ -38,11 +38,11 @@ class Crypto {
         int decryptMessage(unsigned char *ciphr_msg, int ciphr_len, unsigned char *iv_src, unsigned char* tag, unsigned char *msg);
        
         // Certificates
-        X509* loadCertificate();
-        int sendCertificate(X509* cert, unsigned char* cert_buf);
-        X509* receiveCertificate(int cert_len,unsigned char* cert_buff);
-        X509_CRL* loadCRL();
-        bool verifyCertificate(unsigned char* cert_buff, int cert_len);
+        void loadCertificate(X509*& cert, string path);
+        int serializeCertificate(X509* cert, unsigned char* cert_buf);
+        void deserializeCertificate(int cert_len,unsigned char* cert_buff, X509*& buff);
+        void loadCRL(X509_CRL*& crl);
+        bool verifyCertificate(X509* cert_to_verify);
 
         // Public Key handling
         int serializePublicKey(EVP_PKEY *prv_key, unsigned char *pubkey_buf);
