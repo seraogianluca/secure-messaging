@@ -205,6 +205,48 @@ X509* Crypto::receiveCertificate(int cert_len,unsigned char* cert_buff){
     return buff;
 }
 
+X509_CRL* Crypto::loadCRL() {
+    X509_CRL* crl;
+    FILE* file = fopen("crl.pem", "r");
+    if(!file) { 
+        throw runtime_error("An error occurred opening crl.pem.");
+    }
+    crl = PEM_read_X509_CRL(file, NULL, NULL, NULL); 
+    if(!crl) { 
+        fclose(file);
+        throw runtime_error("An error occurred reading the crl from file");
+    }
+    fclose(file);
+    return crl;
+}
+
+bool Crypto::verifyCertificate(unsigned char* cert_buff, int cert_len) {
+    X509_STORE_CTX* ctx = X509_STORE_CTX_new();
+    X509* ca_cert;
+    X509_STORE* store;
+    X509_CRL* crl;
+
+    ca_cert = loadCertificate();
+    crl = loadCRL();
+
+    store = X509_STORE_new();
+    X509_STORE_add_cert(store, ca_cert);
+    X509_STORE_add_crl(store, crl);
+    X509_STORE_set_flags(store, X509_V_FLAG_CRL_CHECK);
+
+    X509_STORE_CTX_init(ctx, store, ca_cert, NULL);
+    int ret = X509_verify_cert(ctx);
+    if(ret != 1) { 
+        X509_STORE_free(store);
+        X509_STORE_CTX_free(ctx);
+        return false;
+    }
+    X509_STORE_free(store);
+    X509_STORE_CTX_free(ctx);
+    return true;
+}
+
+
 int Crypto::serializePublicKey(EVP_PKEY* prv_key, unsigned char* pubkey_buf){
     unsigned char* buffer; 
     BIO *mbio = BIO_new(BIO_s_mem());

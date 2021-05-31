@@ -47,7 +47,7 @@ void SocketClient::sendMessage(int sd, unsigned char* message, unsigned int mess
 unsigned char* SocketClient::receiveMessage(int sd, unsigned int& message_len) {
     unsigned char buffer[MAX_MESSAGE_SIZE];
     // ssize_t recv(int sockfd, const void *buf, size_t len, int flags);
-    if ((message_len = recv(sd, buffer, MAX_MESSAGE_SIZE-1, 0)) <= 0) {
+    if ((message_len = recv(sd, buffer, MAX_MESSAGE_SIZE-1, 0)) < 0) {
         perror("Receive Error");
         throw runtime_error("Receive failed");
     }

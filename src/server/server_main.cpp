@@ -25,7 +25,7 @@ int main(int argc, char* const argv[]) {
                         //incoming message                         
                         unsigned int message_len;
                         unsigned char* messageReceived = serverSocket.receiveMessage(sd, message_len);
-                        cout << "Message received: " << message_len << endl;
+                        cout << "Message received length: " << message_len << endl;
                         if (message_len == 0)  { 
                             //Somebody disconnected , get his details and print 
                             serverSocket.disconnectHost(sd, i);
