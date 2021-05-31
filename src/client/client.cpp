@@ -1,21 +1,5 @@
 #include "include/client.h"
 
-void Client::buildMessage(unsigned char *header, unsigned int header_len, unsigned char *iv, unsigned char *msg, unsigned int msg_size, unsigned char *tag, unsigned char *buffer) {
-
-    if (msg_size > MAX_MESSAGE_SIZE) {
-        throw runtime_error("Maximum message size exceeded");
-    }
-
-    int start = 0;
-    memcpy(buffer, header, header_len);
-    start += 1;
-    memcpy(buffer+start, iv, IV_SIZE);
-    start += IV_SIZE;
-    memcpy(buffer+start, msg, msg_size);
-    start += msg_size;
-    memcpy(buffer+start, tag, TAG_SIZE);
-}
-
 bool Client::verifyCertificate() {
     //TODO: implement
     return true;

@@ -74,7 +74,7 @@ int main(int argc, char* const argv[]) {
             }
         }
     } catch(const exception& e) {
-        cerr << e.what() << '\n';
+        cerr << e.what() << endl;
     }
     return 0;
 }

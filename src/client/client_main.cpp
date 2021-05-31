@@ -111,9 +111,10 @@ void authentication(Crypto crypto, SocketClient s, Client c) {
 void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len) {
     unsigned char *ciphertext;
     unsigned char *tag;
-    unsigned char *buffer;
+    unsigned char *buffer = NULL;
     unsigned int ciphr_len;
     unsigned int msg_len = 0;
+    int start = 0;
 
     try {
         ciphertext = new unsigned char[pln_len + TAG_SIZE];
@@ -121,8 +122,19 @@ void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *ms
         ciphr_len = crypto.encryptMessage(msg,pln_len,ciphertext,tag);
 
         msg_len = head_len + IV_SIZE + ciphr_len + TAG_SIZE;
+        if (msg_len > MAX_MESSAGE_SIZE) {
+            throw runtime_error("Maximum message size exceeded");
+        }
+
         buffer = new unsigned char[msg_len];
-        client.buildMessage(header, head_len, crypto.getIV(), ciphertext, ciphr_len, tag, buffer);
+        memcpy(buffer, header, head_len);
+        start += 1;
+        memcpy(buffer+start, crypto.getIV(), IV_SIZE);
+        start += IV_SIZE;
+        memcpy(buffer+start, ciphertext, ciphr_len);
+        start += ciphr_len;
+        memcpy(buffer+start, tag, TAG_SIZE);
+
         socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_len);
     } catch(const exception& e) {
         delete[] ciphertext;
