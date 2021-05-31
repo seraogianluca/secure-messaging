@@ -56,6 +56,8 @@ class Crypto {
         X509* loadCertificate();
         int sendCertificate(X509* cert, unsigned char* cert_buf);
         X509* receiveCertificate(int cert_len,unsigned char* cert_buff);
+        X509_CRL* loadCRL();
+        bool verifyCertificate(unsigned char* cert_buff, int cert_len);
 
         // Public Key handling
         int serializePublicKey(EVP_PKEY* prv_key, unsigned char* pubkey_buf);
