@@ -29,19 +29,14 @@ void Crypto::setSessionKey(unsigned char *secret) {
     }
 }
 
-string Crypto::generateNonce() { 
-    unsigned char nonce_buf[16];
-    string nonce;
-
+void Crypto::generateNonce(unsigned char* nonce, unsigned int nonceLen) {
+    if (nonceLen < 16) {
+        throw runtime_error("An error");
+    }
     if(RAND_poll() != 1)
         throw runtime_error("An error occurred in RAND_poll."); 
-    if(RAND_bytes(nonce_buf, 16) != 1)
+    if(RAND_bytes(nonce, nonceLen) != 1)
         throw runtime_error("An error occurred in RAND_bytes.");
-    
-    for (size_t i = 0; i < 16; i++) {
-        nonce.append(1, static_cast<char>(nonce_buf[i]));
-    }
-    return nonce;
 }
 
 void Crypto::generateIV() {
