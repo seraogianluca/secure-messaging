@@ -19,6 +19,8 @@ void authentication();
 void keyEstablishment();
 void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len);
 
+bool isNonceEquivalent(unsigned char* clientNonceReceived, unsigned char* clientNonce, unsigned int clientNonceLen);
+
 int main(int argc, char *const argv[]) {
     try {
         string password = readFromStdout("Insert password: ");
@@ -35,6 +37,9 @@ int main(int argc, char *const argv[]) {
                     keyEstablishment();
                     break;
                 case 2:
+                    cout << "\n-------Authentication-------" << endl;
+                    authentication();
+                    cout << "-----------------------------" << endl << endl;
                     break;
                 case 3:
                     cout << "> ";
@@ -60,6 +65,7 @@ int main(int argc, char *const argv[]) {
 
 int showMenu() {
     cout << endl;
+    cout << "2. Authentication" << endl;
     cout << "3. Send a message" << endl;
     cout << "0. Exit" << endl;
     cout << "--> ";
@@ -82,30 +88,87 @@ string readFromStdout(string message) {
     return value;
 }
 
-void authentication(Crypto crypto, SocketClient s, Client c) {
-    try
-    {
-        string nonce_client = crypto.generateNonce();
-        string helloMessage = "hello" + nonce_client;
-        // s.sendMessage(helloMessage.c_str(), s.getMasterFD());
+void authentication() {
+    unsigned int nonceClientLen;
+    unsigned char* nonceClient;
+    unsigned char* nonceClientReceived;
+    unsigned char* helloMessage;
+    unsigned int helloMessageLen;
+    unsigned char* receivedMessage;
+    unsigned int messageReceivedLen;
+    unsigned char* nonceServerReceived;
+    unsigned int nonceServerReceivedLen;
+    unsigned int certificateRequestLen;
+    unsigned char* certificateRequestMessage;
+    try {
+        nonceClientLen = 16;
+        helloMessageLen = nonceClientLen + 6;
+        nonceClient = new unsigned char[nonceClientLen];
+        crypto.generateNonce(nonceClient, nonceClientLen);
+        cout << "Generated Nonce: " << endl;
+        BIO_dump_fp(stdout, (const char*) nonceClient, nonceClientLen);
 
-        // unsigned char* receivedMessage =  s.receiveMessage(s.getMasterFD());
-        // string nonce_received = c.extractClientNonce(receivedMessage, nonce_client.length());
-        // string nonce_server = c.extractServerNonce(receivedMessage, nonce_client.length());
-        // if(nonce_client.compare(nonce_received) != 0) {
-        //     throw runtime_error("Login Error: The freshness of the message is not confirmed");
-        // }
-        // cout << "Freshness Confirmed" << endl;
-        // string requestCertificateMessage = (char)OP_CERTIFICATE_REQUEST + nonce_server + nonce_client;
-        // s.sendMessage(requestCertificateMessage, s.getMasterFD());
+        helloMessage = new unsigned char[nonceClientLen + 6];
+        memcpy(helloMessage, OP_LOGIN, 1);
+        memcpy(&helloMessage[1], (unsigned char*)"hello", 6);
+        memcpy(&helloMessage[6], nonceClient, helloMessageLen);
+        
+        cout << "Hello Message: " << endl;
+        BIO_dump_fp(stdout, (const char*) helloMessage, helloMessageLen);
+
+        socketClient.sendMessage(socketClient.getMasterFD(), helloMessage, helloMessageLen);
+
+        receivedMessage = socketClient.receiveMessage(socketClient.getMasterFD(), messageReceivedLen); //REFACTOR
+
+        cout << "Message Received: " << endl;
+        BIO_dump_fp(stdout, (const char*) receivedMessage, messageReceivedLen);
+
+        nonceClientReceived = new unsigned char[nonceClientLen];
+        if (messageReceivedLen < 5 + nonceClientLen) { throw runtime_error("Uncorrect format of the message received");}
+        memcpy(nonceClientReceived, &receivedMessage[5], 5 + nonceClientLen);
+
+        cout << "Client Nonce: " << endl;
+        BIO_dump_fp(stdout, (const char*) nonceClientReceived, nonceClientLen);
+
+        if(!isNonceEquivalent(nonceClientReceived, nonceClient, nonceClientLen)) {
+            throw runtime_error("Login Error: The freshness of the message is not confirmed");
+        }
+        cout << "Freshness Confirmed" << endl;
+
+        nonceServerReceivedLen = messageReceivedLen - nonceClientLen - 5;
+        nonceServerReceived = new unsigned char[nonceServerReceivedLen];
+        memcpy(nonceServerReceived, &receivedMessage[5 + nonceClientLen], messageReceivedLen); // Estract the server nonce
+        
+        cout << "Server Nonce: " << endl;
+        BIO_dump_fp(stdout, (const char*) nonceServerReceived, nonceServerReceivedLen);
+
+        certificateRequestLen = 1 + nonceServerReceivedLen + nonceClientLen;
+        certificateRequestMessage = new unsigned char[certificateRequestLen];
+        memcpy(certificateRequestMessage, OP_CERTIFICATE_REQUEST, 1);
+        memcpy(&certificateRequestMessage[1], nonceServerReceived, nonceServerReceivedLen);
+        memcpy(&certificateRequestMessage[nonceServerReceivedLen + 1], nonceClient, certificateRequestLen);
+
+        cout << "Certificate Request: " << endl;
+        BIO_dump_fp(stdout, (const char*) certificateRequestMessage, certificateRequestLen);
+        socketClient.sendMessage(socketClient.getMasterFD(), certificateRequestMessage, certificateRequestLen);
 
         // string certificate = s.receiveMessage(s.getMasterFD());
         // bool verification = c.verifyCertificate();
-    }
-    catch (const std::exception &e)
-    {
+    } catch (const std::exception &e) {
+        //FARE LE DELETE
+        delete[] nonceClient;
+        delete[] helloMessage;
+        delete[] receivedMessage;
+        delete[] nonceClientReceived;
+        delete[] nonceServerReceived;
+        delete[] certificateRequestMessage;
         throw runtime_error(e.what());
     }
+}
+
+bool isNonceEquivalent(unsigned char* clientNonceReceived, unsigned char* clientNonce, unsigned int clientNonceLen) {
+    int ret = memcmp(clientNonceReceived, clientNonce, clientNonceLen);
+    return ret == 0;
 }
 
 void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len) {

@@ -42,10 +42,10 @@ class Crypto {
 
         unsigned char* stringToChar(string str);
         string charToString(unsigned char* value);
+        void generateNonce(unsigned char* nonce, unsigned int nonceLen);
 
         EVP_PKEY* readPrivateKey(string pwd);
         EVP_PKEY* readPublicKey(string user);
-        string generateNonce();
         unsigned char* getIV();
 
         // Authenticated encryption
