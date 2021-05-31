@@ -159,7 +159,7 @@ void authentication() {
 
         // string certificate = s.receiveMessage(s.getMasterFD());
         // bool verification = c.verifyCertificate();
-    } catch (const std::exception &e) {
+    } catch (const exception &e) {
         delete[] nonceClient;
         delete[] helloMessage;
         delete[] receivedMessage;
