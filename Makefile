@@ -22,16 +22,16 @@ endif
 
 all: $(TARGET)
 server_main.out: socket.o crypto.o server_main.o
-	$(CC) server.o crypto.o socket.o server_main.o -o server_main.out -I$(CURRENT_DIR) $(CFLAGS)
+	$(CC) crypto.o socket.o server_main.o -o server_main.out -I$(CURRENT_DIR) $(CFLAGS)
 client_main.out: socket.o crypto.o client_main.o
-	$(CC) client.o socket.o crypto.o client_main.o -o client_main.out -I$(CURRENT_DIR) $(CFLAGS)
+	$(CC) socket.o crypto.o client_main.o -o client_main.out -I$(CURRENT_DIR) $(CFLAGS)
 crypto.o:
 	$(CC) -c $(CRYPTO_PATH)crypto.cpp -I$(CURRENT_DIR) $(CFLAGS)
 socket.o: 
 	$(CC) -c $(SOCKET_PATH)socket.cpp -I$(CURRENT_DIR) $(CFLAGS)
 server_main.o:
-	$(CC) -c $(SERVER_PATH)server_main.cpp $(SERVER_PATH)server.cpp -I$(CURRENT_DIR) $(CFLAGS)
+	$(CC) -c $(SERVER_PATH)server_main.cpp -I$(CURRENT_DIR) $(CFLAGS)
 client_main.o:
-	$(CC) -c $(CLIENT_PATH)client_main.cpp $(CLIENT_PATH)client.cpp -I$(CURRENT_DIR) $(CFLAGS)
+	$(CC) -c $(CLIENT_PATH)client_main.cpp -I$(CURRENT_DIR) $(CFLAGS)
 clean:
 	$(RM) -rf *.o
