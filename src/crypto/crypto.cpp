@@ -1,21 +1,58 @@
 #include "include/crypto.h"
 
-void Crypto::setSessionKey(unsigned char* secret, unsigned int size) {
-    session_key = new unsigned char[size];
-    for(int i = 0; i < size; i++) {
+Crypto::Crypto(unsigned char *sk) {
+    try {
+            iv = new unsigned char[IV_SIZE];
+            for(int i = 0; i < IV_SIZE; i++) {
+                iv[i] = 0;
+            }
+
+            session_key = new unsigned char[DIGEST_LEN];
+            for(int i = 0; i < DIGEST_LEN; i++) {
+                    session_key[i] = sk[i];
+            }
+    } catch(const exception& e) {
+            delete[] iv;
+            delete[] session_key;
+            cerr << e.what() << endl;
+    }          
+}
+
+Crypto::~Crypto() {
+            delete[] iv;
+            delete[] session_key;
+}
+
+void Crypto::setSessionKey(unsigned char *secret) {
+    for(int i = 0; i < DIGEST_LEN; i++) {
         session_key[i] = secret[i];
     }
 }
 
-unsigned char* Crypto::stringToChar(string str) {
-    size_t buf_size = str.length();
-    unsigned char ret[buf_size+1];
-    strncpy((char*)ret,str.c_str(),buf_size+1);
-    return ret;
+string Crypto::generateNonce() { 
+    unsigned char nonce_buf[16];
+    string nonce;
+
+    if(RAND_poll() != 1)
+        throw runtime_error("An error occurred in RAND_poll."); 
+    if(RAND_bytes(nonce_buf, 16) != 1)
+        throw runtime_error("An error occurred in RAND_bytes.");
+    
+    for (size_t i = 0; i < 16; i++) {
+        nonce.append(1, static_cast<char>(nonce_buf[i]));
+    }
+    return nonce;
 }
 
-string Crypto::charToString(unsigned char* str) {
-    return string((char*)str);
+void Crypto::generateIV() {
+    if(RAND_poll() != 1)
+        throw runtime_error("An error occurred in RAND_poll."); 
+    if(RAND_bytes(iv, IV_SIZE) != 1)
+        throw runtime_error("An error occurred in RAND_bytes.");
+}
+
+unsigned char* Crypto::getIV() {
+    return iv;
 }
 
 EVP_PKEY* Crypto::readPrivateKey(string pwd) {
@@ -51,36 +88,6 @@ EVP_PKEY* Crypto::readPublicKey(string user) {
     if(fclose(file)!=0)
         throw runtime_error("An error occurred while closing the file.");
     return pubKey;
-}
-
-string Crypto::generateNonce() { 
-    unsigned char nonce_buf[16];
-    string nonce;
-
-    if(RAND_poll() != 1)
-        throw runtime_error("An error occurred in RAND_poll."); 
-    if(RAND_bytes(nonce_buf, 16) != 1)
-        throw runtime_error("An error occurred in RAND_bytes.");
-    
-    for (size_t i = 0; i < 16; i++) {
-        nonce.append(1, static_cast<char>(nonce_buf[i]));
-    }
-    return nonce;
-}
-
-int Crypto::generateIV() {
-    iv = new unsigned char[IV_SIZE];
-
-    if(RAND_poll() != 1)
-        throw runtime_error("An error occurred in RAND_poll."); 
-    if(RAND_bytes(iv, IV_SIZE) != 1)
-        throw runtime_error("An error occurred in RAND_bytes.");
-
-    return 0;
-}
-
-unsigned char* Crypto::getIV() {
-    return iv;
 }
 
 int Crypto::encryptMessage(unsigned char *msg, int msg_len,
@@ -246,127 +253,163 @@ bool Crypto::verifyCertificate(unsigned char* cert_buff, int cert_len) {
     return true;
 }
 
+int Crypto::serializePublicKey(EVP_PKEY *prv_key, unsigned char *pubkey_buf){
+    BIO *mbio;
+    unsigned char *buffer;
+    long pubkey_size; 
 
-int Crypto::serializePublicKey(EVP_PKEY* prv_key, unsigned char* pubkey_buf){
-    unsigned char* buffer; 
-    BIO *mbio = BIO_new(BIO_s_mem());
-    if(mbio==NULL)
+    mbio = BIO_new(BIO_s_mem());
+
+    if(!mbio)
         throw runtime_error("An error occurred during the creation of the bio.");
-    if(PEM_write_bio_PUBKEY(mbio,prv_key)!=1){
+
+    if(PEM_write_bio_PUBKEY(mbio,prv_key) != 1){
         BIO_free(mbio);
         throw runtime_error("An error occurred during the writing of the public key into the bio.");
     }
-    long pubkey_size = BIO_get_mem_data(mbio, &buffer);
+
+    pubkey_size = BIO_get_mem_data(mbio, &buffer);
     memcpy(pubkey_buf, buffer, pubkey_size);
-    if(pubkey_size<0){
+
+    if(pubkey_size < 0){
         BIO_free(mbio);
         throw runtime_error("An error occurred during the reading of the public key.");
     }
+
     BIO_free(mbio);
+
     return pubkey_size;
 }
 
-EVP_PKEY* Crypto::deserializePublicKey(unsigned char* pubkey_buf, int pubkey_size){
-    BIO *mbio = BIO_new(BIO_s_mem());
-    EVP_PKEY *pubkey;
-    if(mbio==NULL)
+void Crypto::deserializePublicKey(unsigned char* pubkey_buf, unsigned int pubkey_size, EVP_PKEY *&pubkey){
+    BIO *mbio;
+
+    mbio = BIO_new(BIO_s_mem());
+
+    if(!mbio)
         throw runtime_error("An error occurred during the creation of the bio.");
-    if(BIO_write(mbio,pubkey_buf,pubkey_size)<=0)
+
+    if(BIO_write(mbio,pubkey_buf,pubkey_size) <= 0)
         throw runtime_error("An error occurred during the writing of the bio.");
+
     pubkey = PEM_read_bio_PUBKEY(mbio, NULL, NULL, NULL);
-    if(pubkey == NULL){
+
+    if(!pubkey){
         BIO_free(mbio);
-        // ERR_print_errors_fp(stderr);
         throw runtime_error("An error occurred during the reading of the public key from the bio.");
     }
+
     BIO_free(mbio);
-    return pubkey;
 }
 
-unsigned char* Crypto::computeHash(unsigned char* msg, unsigned int msg_size) {
-    unsigned char digest[DIGEST_LEN];
-    unsigned int digestlen;
-    EVP_MD_CTX* ctx;
+void Crypto::computeHash(unsigned char *msg, unsigned int msg_size, unsigned char *digest) {
+    unsigned int len;
+    EVP_MD_CTX *ctx;
 
     ctx = EVP_MD_CTX_new();
-    if(EVP_DigestInit(ctx, HASH)<1){
+
+    if(EVP_DigestInit(ctx, HASH) < 1){
         EVP_MD_CTX_free(ctx);
         throw runtime_error("An error occurred during the initialization of the digest.");
     }
-    if(EVP_DigestUpdate(ctx, msg, msg_size)<1){
+
+    if(EVP_DigestUpdate(ctx, msg, msg_size) < 1){
         EVP_MD_CTX_free(ctx);
         throw runtime_error("An error occurred during the creation of the digest.");
     } 
-    if(EVP_DigestFinal(ctx, digest, &digestlen)<1){
+
+    if(EVP_DigestFinal(ctx, digest, &len) < 1){
         EVP_MD_CTX_free(ctx);
         throw runtime_error("An error occurred during the conclusion of the digest.");
     }
+
     EVP_MD_CTX_free(ctx);
-    return digest;
 }
 
-EVP_PKEY* Crypto::buildParameters(){
-    EVP_PKEY* dh_params = EVP_PKEY_new();
-    DH* temp = DH_get_2048_224();
-    if( EVP_PKEY_set1_DH(dh_params,temp)==0){
+void Crypto::buildParameters(EVP_PKEY *&dh_params) {
+    DH *temp;
+    dh_params = EVP_PKEY_new();
+
+    if(!dh_params) {
+        throw runtime_error("An error occurred during the allocation of parameters.");
+    }
+
+    temp = DH_get_2048_224();
+
+    if(EVP_PKEY_set1_DH(dh_params,temp) == 0){
         DH_free(temp);
-        throw runtime_error("An error occurred during the generation of parameters");
+        //malloc: *** error for object 0x102bc0260: pointer being freed was not allocated
+        throw runtime_error("An error occurred during the generation of parameters.");
     }
+
     DH_free(temp);
-    return dh_params;
 }
 
-EVP_PKEY* Crypto::keyGeneration(EVP_PKEY* dh_params){
-    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(dh_params,NULL);
-    if(ctx == NULL)
+void Crypto::keyGeneration(EVP_PKEY *&my_prvkey){
+    EVP_PKEY *dh_params = NULL;
+    EVP_PKEY_CTX *ctx;
+
+    buildParameters(dh_params);
+    ctx = EVP_PKEY_CTX_new(dh_params,NULL);
+
+    if(!ctx)
         throw runtime_error("An error occurred during the creation of the context");
-    EVP_PKEY* my_prvkey = NULL;
-    if(EVP_PKEY_keygen_init(ctx)<1){
+    
+    if(EVP_PKEY_keygen_init(ctx) < 1) {
         EVP_PKEY_CTX_free(ctx);
         throw runtime_error("An error occurred during the intialization of the context");
     }
-    if(EVP_PKEY_keygen(ctx, &my_prvkey)<1){
+
+    if(EVP_PKEY_keygen(ctx, &my_prvkey) < 1) {
         EVP_PKEY_CTX_free(ctx);
         throw runtime_error("An error occurred during the intialization of the context");
     }
+
     EVP_PKEY_CTX_free(ctx);
-    return my_prvkey;
 }
 
-unsigned char* Crypto::secretDerivation(EVP_PKEY* my_prvkey, EVP_PKEY* peer_pubkey, size_t &secretlen){
+void Crypto::secretDerivation(EVP_PKEY *my_prvkey, EVP_PKEY *peer_pubkey, unsigned char *buffer) {
+    EVP_PKEY_CTX *ctx_drv;
+    size_t secretlen;
+    unsigned char *secret;
+
     if(!peer_pubkey)
-        throw runtime_error("An error occurred reading the public key");    
-    EVP_PKEY_CTX* ctx_drv = EVP_PKEY_CTX_new(my_prvkey,NULL);
-    if(ctx_drv == NULL)
-        throw runtime_error("An error occurred during the creation of the context");
-    if(EVP_PKEY_derive_init(ctx_drv)<1){
+        throw runtime_error("An error occurred reading the public key.");
+
+    ctx_drv = EVP_PKEY_CTX_new(my_prvkey,NULL);
+
+    if(!ctx_drv)
+        throw runtime_error("An error occurred during the creation of the context.");
+
+    if(EVP_PKEY_derive_init(ctx_drv) < 1) {
         EVP_PKEY_CTX_free(ctx_drv);
-        EVP_PKEY_free(peer_pubkey);
-        throw runtime_error("An error occurred during the intialization of the context");
+        throw runtime_error("An error occurred during the intialization of the context.");
     }
-    if(EVP_PKEY_derive_set_peer(ctx_drv, peer_pubkey)<1){
+
+    if(EVP_PKEY_derive_set_peer(ctx_drv, peer_pubkey) < 1) {
         EVP_PKEY_CTX_free(ctx_drv);
-        EVP_PKEY_free(peer_pubkey);
-        throw runtime_error("An error occurred setting the peer's public key");
+        throw runtime_error("An error occurred setting the peer's public key.");
     }
-    if(EVP_PKEY_derive(ctx_drv, NULL, &secretlen)<1){
+
+    if(EVP_PKEY_derive(ctx_drv, NULL, &secretlen) < 1) {
         EVP_PKEY_CTX_free(ctx_drv);
-        EVP_PKEY_free(peer_pubkey);
-        throw runtime_error("An error occurred retrieving the secret length");
+        throw runtime_error("An error occurred retrieving the secret length.");
     }
-    unsigned char* secret = (unsigned char*)OPENSSL_malloc(secretlen);
+
+    secret = (unsigned char*)OPENSSL_malloc(secretlen);
+
     if(!secret) {
         EVP_PKEY_CTX_free(ctx_drv);
-        EVP_PKEY_free(peer_pubkey);
-        throw runtime_error("An error occurred allocating the unsigned char array");
+        throw runtime_error("An error occurred allocating the unsigned char array.");
     }
-    if(EVP_PKEY_derive(ctx_drv, secret, &secretlen)<1){
+
+    if(EVP_PKEY_derive(ctx_drv, secret, &secretlen) < 1) {
         EVP_PKEY_CTX_free(ctx_drv);
-        EVP_PKEY_free(peer_pubkey);
         OPENSSL_free(secret);
-        throw runtime_error("An error occurred during the derivation of the secret");
+        throw runtime_error("An error occurred during the derivation of the secret.");
     }
+
     EVP_PKEY_CTX_free(ctx_drv);
-    EVP_PKEY_free(peer_pubkey);
-    return secret;
+    computeHash(secret, secretlen, buffer);
+    OPENSSL_free(secret);
 }

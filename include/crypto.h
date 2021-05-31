@@ -18,35 +18,20 @@ class Crypto {
         unsigned char *session_key;
         unsigned char *iv;
 
-        int generateIV();
+        void generateIV();
+
+        // Diffie-Hellman
+        void buildParameters(EVP_PKEY *&dh_params);
     public:
-        Crypto(unsigned char *sk) {
-            session_key = new unsigned char[KEY_SIZE];
-            iv = new unsigned char[IV_SIZE];
+        Crypto(unsigned char *sk);
+        ~Crypto();
 
-            for(int i = 0; i < KEY_SIZE; i++) {
-                session_key[i] = sk[i];
-            }
-
-            for(int i = 0; i < IV_SIZE; i++) {
-                iv[i] = 0;
-            }
-        }
-
-        ~Crypto() {
-            delete session_key;
-            delete iv;
-        }
-
-        void setSessionKey(unsigned char* secret, unsigned int size);
-
-        unsigned char* stringToChar(string str);
-        string charToString(unsigned char* value);
+        void setSessionKey(unsigned char *secret);
+        string generateNonce();
+        unsigned char* getIV();
 
         EVP_PKEY* readPrivateKey(string pwd);
         EVP_PKEY* readPublicKey(string user);
-        string generateNonce();
-        unsigned char* getIV();
 
         // Authenticated encryption
         int encryptMessage(unsigned char *msg, int msg_len, unsigned char *ciphr_msg, unsigned char *tag);
@@ -60,14 +45,14 @@ class Crypto {
         bool verifyCertificate(unsigned char* cert_buff, int cert_len);
 
         // Public Key handling
-        int serializePublicKey(EVP_PKEY* prv_key, unsigned char* pubkey_buf);
-        EVP_PKEY* deserializePublicKey(unsigned char* pubkey_buf, int pubkey_size);
+        int serializePublicKey(EVP_PKEY *prv_key, unsigned char *pubkey_buf);
+        void deserializePublicKey(unsigned char *pubkey_buf, unsigned int pubkey_size, EVP_PKEY *&pubkey);
 
         // Hash
-        unsigned char* computeHash(unsigned char* msg, unsigned int msg_size);
+        //TODO: may be private
+        void computeHash(unsigned char *msg, unsigned int msg_size, unsigned char *digest);
 
         //Diffie-Hellmann
-        EVP_PKEY* buildParameters();
-        EVP_PKEY* keyGeneration(EVP_PKEY* dh_params);
-        unsigned char* secretDerivation(EVP_PKEY* my_pubkey, EVP_PKEY* peer_pubkey, size_t &secretlen);
+        void keyGeneration(EVP_PKEY *&my_prvkey);
+        void secretDerivation(EVP_PKEY *my_pubkey, EVP_PKEY *peer_pubkey, unsigned char *buffer);
 };

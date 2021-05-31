@@ -23,8 +23,9 @@ int main(int argc, char* const argv[]) {
                     if (serverSocket.isFDSet(sd)) {
                         //Check if it was for closing , and also read the 
                         //incoming message                         
-                        unsigned int message_len;
-                        unsigned char* messageReceived = serverSocket.receiveMessage(sd, message_len);
+                        unsigned int message_len;    
+                        unsigned char *messageReceived = new unsigned char[MAX_MESSAGE_SIZE];
+                        message_len = serverSocket.receiveMessage(sd, messageReceived);
                         cout << "Message received length: " << message_len << endl;
                         if (message_len == 0)  { 
                             //Somebody disconnected , get his details and print 
@@ -89,37 +90,35 @@ void logout() {
 }
 
 void keyEstablishment(int sd){
-    unsigned char buffer[2048] = {0};
-    unsigned char* bufferRecvd;
-    unsigned char* secret;
-    unsigned char* hashedSecret;
-    size_t secretlen;
-    unsigned int buffer_rcvd_len;
-    EVP_PKEY* params;
-    EVP_PKEY* prv_key_a;
-    EVP_PKEY* pub_key_b;
+    unsigned char *buffer = NULL;
+    unsigned char *secret = NULL;
+    unsigned int key_len;
+    EVP_PKEY *prv_key_a = NULL;
+    EVP_PKEY *pub_key_b = NULL;
 
-    params = crypto.buildParameters();
-    prv_key_a = crypto.keyGeneration(params);
+    try {
+        // Generate public key
+        crypto.keyGeneration(prv_key_a);
+        
+        // Receive peer's public key
+        buffer = new unsigned char[MAX_MESSAGE_SIZE];
+        key_len = serverSocket.receiveMessage(sd, buffer);
+        crypto.deserializePublicKey(buffer, key_len, pub_key_b);
+
+        // Send public key to peer
+        key_len = crypto.serializePublicKey(prv_key_a, buffer);
+        serverSocket.sendMessage(sd, buffer, key_len);
+
+        // Secret derivation
+        secret = new unsigned char[DIGEST_LEN];
+        crypto.secretDerivation(prv_key_a, pub_key_b, secret);
+        crypto.setSessionKey(secret);
+    } catch(const exception& e) {
+        delete[] buffer;
+        delete[] secret;
+        throw runtime_error(e.what());
+    }
     
-
-    //send g^b mod p
-    bufferRecvd = serverSocket.receiveMessage(sd, buffer_rcvd_len);
-    pub_key_b = crypto.deserializePublicKey(bufferRecvd, buffer_rcvd_len);
-    cout << "pub_key_b: " << endl;
-    BIO_dump_fp(stdout, (const char*)bufferRecvd, buffer_rcvd_len);
-    //receive g^a mod p
-    unsigned int pubKeyLen = crypto.serializePublicKey(prv_key_a, buffer); // Estrae la chiave pubblica e la mette in buffer
-    serverSocket.sendMessage(sd, buffer, pubKeyLen);
-    cout << "pub_key_a: " << endl;
-    BIO_dump_fp(stdout, (const char*)buffer, pubKeyLen);
-
-    secret = crypto.secretDerivation(prv_key_a, pub_key_b, secretlen);
-    hashedSecret = crypto.computeHash(secret, secretlen); //128 bit digest
-    cout << "Secret: " << endl;
-    BIO_dump_fp(stdout, (const char*)secret, secretlen);
-    cout << "Hash: " << endl;
-    BIO_dump_fp(stdout, (const char*)hashedSecret, DIGEST_LEN);
-
-    crypto.setSessionKey(hashedSecret, DIGEST_LEN);
+    delete[] buffer;
+    delete[] secret;
 }
