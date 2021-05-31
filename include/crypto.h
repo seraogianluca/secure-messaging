@@ -27,7 +27,7 @@ class Crypto {
         ~Crypto();
 
         void setSessionKey(unsigned char *secret);
-        void generateNonce(unsigned char* nonce, unsigned int nonceLen);
+        void generateNonce(unsigned char* nonce);
         unsigned char* getIV();
 
         EVP_PKEY* readPrivateKey(string pwd);

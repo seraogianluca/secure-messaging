@@ -9,9 +9,6 @@ void login();
 void logout();
 void keyEstablishment(int sd);
 void authentication(int sd, unsigned char* messageReceived, unsigned int message_len);
-bool isNonceEquivalent(unsigned char* nonceReceived, unsigned char* clientNonce, unsigned int nonceLen);
-void extractClientNonce(unsigned char* clientNonce, unsigned int clientNonceLen, unsigned char* msg, unsigned int msgLen, unsigned int serverNonceLen);
-void extractServerNonce(unsigned char* serverNonce, unsigned int serverNonceLen, unsigned char* msg, unsigned int msgLen);
 
 int main(int argc, char* const argv[]) {
     try {
@@ -96,80 +93,79 @@ void logout() {
 
 }
 
-void authentication(int sd, unsigned char* messageReceived, unsigned int message_len) {
-    unsigned char* nonceServer;
-    unsigned char* nonceServerReceived;
-    unsigned char* nonceClient;
-    unsigned char* helloMessage;
-    unsigned int nonceServerLen;
-    unsigned int nonceClientLen;
-    unsigned int helloMessageLen;
-
-    unsigned char* certificateRequest;
+void authentication(int sd, unsigned char *messageReceived, unsigned int message_len) {
+    unsigned char *nonceServer = NULL;
+    unsigned char *nonceServerReceived = NULL;
+    unsigned char *nonceClient = NULL;
+    unsigned char *helloMessage = NULL;
+    unsigned char *certificateRequest = NULL;
+    unsigned int start;
     unsigned int certificateRequestLen;
 
-    cout << "Hello Message from the client: " << endl;
-    BIO_dump_fp(stdout, (const char*) messageReceived, message_len);
+    try {
+        cout << "Hello Message from the client: " << endl;
+        BIO_dump_fp(stdout, (const char*) messageReceived, message_len);
 
-    nonceServerLen = 16;
-    nonceServer = new unsigned char[nonceServerLen];
-    crypto.generateNonce(nonceServer, nonceServerLen);
+        // Generate nonce
+        nonceServer = new unsigned char[NONCE_SIZE];
+        crypto.generateNonce(nonceServer);
+        cout << "Nonce Server: " << endl;
+        BIO_dump_fp(stdout, (const char*) nonceServer, NONCE_SIZE);
 
-    cout << "Nonce Server: " << endl;
-    BIO_dump_fp(stdout, (const char*) nonceServer, nonceServerLen);
+        // Get peer nonce
+        nonceClient = new unsigned char[NONCE_SIZE];
+        memcpy(nonceClient, messageReceived+6, NONCE_SIZE);
+        cout << "Client Nonce: " << endl;
+        BIO_dump_fp(stdout, (const char*) nonceClient, NONCE_SIZE);
 
-    nonceClientLen = message_len - 6;
-    cout << "Nonce Client Len: " << nonceClientLen << endl;
-    nonceClient = new unsigned char[nonceClientLen];
-    extractClientNonce(nonceClient, nonceClientLen, messageReceived, message_len, nonceServerLen);
+        // Build hello message
+        helloMessage = new unsigned char[5 + 2*NONCE_SIZE];
+        start = 0;
+        memcpy(helloMessage, "hello", 5);
+        start += 5;
+        memcpy(helloMessage+start, nonceClient, NONCE_SIZE);
+        start += NONCE_SIZE;
+        memcpy(helloMessage+start, nonceServer, NONCE_SIZE);
+        cout << "Server Hello Message: " << endl;
+        BIO_dump_fp(stdout, (const char*) helloMessage, (5 + 2*NONCE_SIZE));
+        serverSocket.sendMessage(sd, helloMessage, (5 + 2*NONCE_SIZE));
+        cout << "Hello message sent" << endl;
 
-    cout << "Client Nonce: " << endl;
-    BIO_dump_fp(stdout, (const char*) nonceClient, nonceClientLen);
+        // Receive certificate request
+        certificateRequest = new unsigned char[MAX_MESSAGE_SIZE];
+        certificateRequestLen = serverSocket.receiveMessage(sd, certificateRequest);
+        cout << "Certificate Request Received: " << endl;
+        BIO_dump_fp(stdout, (const char*) certificateRequest, certificateRequestLen);
 
-    helloMessageLen = 5 + nonceClientLen + nonceServerLen;
-    helloMessage = new unsigned char[helloMessageLen];
-    memcpy(helloMessage, "hello", 5);
-    memcpy(&helloMessage[5], nonceClient, 5 + nonceClientLen);
-    memcpy(&helloMessage[5 + nonceClientLen], nonceServer, helloMessageLen);
-    
-    cout << "Server Hello Message: " << endl;
-    BIO_dump_fp(stdout, (const char*) helloMessage, helloMessageLen);
+        // Check nonce
+        if (certificateRequestLen != (2*NONCE_SIZE)) { 
+            throw runtime_error("Uncorrect format of the message received");
+        }
 
-    serverSocket.sendMessage(sd, helloMessage, helloMessageLen);
-    cout << "Hello message sent" << endl;
+        nonceServerReceived = new unsigned char[NONCE_SIZE];
+        memcpy(nonceServerReceived, certificateRequest, NONCE_SIZE);
+        cout << "Nonce Server Received: " << endl;
+        BIO_dump_fp(stdout, (const char*) nonceServerReceived, NONCE_SIZE);
 
-    certificateRequest = serverSocket.receiveMessage(sd, certificateRequestLen);
+        if(memcmp(nonceServerReceived, nonceServer, NONCE_SIZE) != 0) {
+            throw runtime_error("Login Error: The freshness of the message is not confirmed");
+        }
 
-    cout << "Certificate Request Received: " << endl;
-    BIO_dump_fp(stdout, (const char*) certificateRequest, certificateRequestLen);
-
-    nonceServerReceived = new unsigned char[nonceServerLen];
-    if (certificateRequestLen < 1 + nonceServerLen) { throw runtime_error("Uncorrect format of the message received");}
-    memcpy(nonceServerReceived, &certificateRequest[1], nonceServerLen);
-
-    cout << "Nonce Server Received: " << endl;
-    BIO_dump_fp(stdout, (const char*) nonceServerReceived, nonceServerLen);
-
-    if(!isNonceEquivalent(nonceServer, nonceServerReceived, nonceServerLen)) {
-        throw runtime_error("Login Error: The freshness of the message is not confirmed");
+        cout << "Freshness Confirmed" << endl;
+    } catch(const exception& e) {
+        delete[] nonceServer;
+        delete[] nonceClient;
+        delete[] helloMessage;
+        delete[] certificateRequest;
+        delete[] nonceServerReceived;
+        throw runtime_error(e.what());
     }
-    cout << "Freshness Confirmed" << endl;
-}
 
-void extractClientNonce(unsigned char* clientNonce, unsigned int clientNonceLen, unsigned char* msg, unsigned int msgLen, unsigned int serverNonceLen) {
-    if (msgLen < 6) { throw runtime_error("Uncorrect format of the message received");}
-    memcpy(clientNonce, &msg[6], 6 + clientNonceLen); // 6 perchè dobbiamo togliere l'OP code
-}
-
-void extractServerNonce(unsigned char* serverNonce, unsigned int serverNonceLen, unsigned char* msg, unsigned int msgLen) {
-    if (msgLen < 5 + serverNonceLen) { throw runtime_error("Uncorrect format of the message received");}
-    int clientNonceLen = msgLen - 5 - serverNonceLen;
-    memcpy(serverNonce, &msg[5 + clientNonceLen], serverNonceLen);
-}
-
-bool isNonceEquivalent(unsigned char* clientNonceReceived, unsigned char* clientNonce, unsigned int clientNonceLen) {
-    int ret = memcmp(clientNonceReceived, clientNonce, clientNonceLen);
-    return ret == 0;
+    delete[] nonceServer;
+    delete[] nonceClient;   
+    delete[] helloMessage;
+    delete[] certificateRequest;
+    delete[] nonceServerReceived; 
 }
 
 void keyEstablishment(int sd){
