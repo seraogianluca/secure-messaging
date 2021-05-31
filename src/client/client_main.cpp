@@ -54,7 +54,7 @@ int main(int argc, char *const argv[]) {
         }
     }
     catch (const exception &e) {
-        cerr << e.what() << '\n';
+        cerr << e.what() << endl;
     }
 
     return 0;
@@ -133,7 +133,7 @@ void sendMessage(unsigned char *opCode, unsigned char *msg, unsigned int pln_len
     } catch(const exception& e) {
         free(ciphertext);
         free(tag);
-        throw runtime_error(e.what() + '\n');
+        throw runtime_error(e.what());
     }
     
     free(ciphertext);

@@ -312,10 +312,16 @@ unsigned char* Crypto::secretDerivation(EVP_PKEY* my_prvkey, EVP_PKEY* peer_pubk
         EVP_PKEY_free(peer_pubkey);
         throw runtime_error("An error occurred retrieving the secret length");
     }
-    unsigned char secret[secretlen];
+    unsigned char* secret = (unsigned char*)OPENSSL_malloc(secretlen);
+    if(!secret) {
+        EVP_PKEY_CTX_free(ctx_drv);
+        EVP_PKEY_free(peer_pubkey);
+        throw runtime_error("An error occurred allocating the unsigned char array");
+    }
     if(EVP_PKEY_derive(ctx_drv, secret, &secretlen)<1){
         EVP_PKEY_CTX_free(ctx_drv);
         EVP_PKEY_free(peer_pubkey);
+        OPENSSL_free(secret);
         throw runtime_error("An error occurred during the derivation of the secret");
     }
     EVP_PKEY_CTX_free(ctx_drv);
