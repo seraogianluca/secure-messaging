@@ -160,42 +160,32 @@ void authentication() {
 }
 
 void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len) {
-    unsigned char *ciphertext = NULL;
-    unsigned char *tag = NULL;
+    unsigned char *msg_cipher = NULL;
     unsigned char *buffer = NULL;
     unsigned int ciphr_len;
     unsigned int msg_len = 0;
     int start = 0;
 
     try {
-        ciphertext = new unsigned char[pln_len + TAG_SIZE];
-        tag = new unsigned char[TAG_SIZE];
-        ciphr_len = crypto.encryptMessage(msg,pln_len,ciphertext,tag);
+        msg_cipher = new unsigned char[pln_len + TAG_SIZE + IV_SIZE];
+        ciphr_len = crypto.encryptMessage(msg,pln_len,msg_cipher);
 
-        msg_len = head_len + IV_SIZE + ciphr_len + TAG_SIZE;
+        msg_len = head_len + ciphr_len;
         if (msg_len > MAX_MESSAGE_SIZE) {
             throw runtime_error("Maximum message size exceeded");
         }
 
         buffer = new unsigned char[msg_len];
         memcpy(buffer, header, head_len);
-        start += 1;
-        memcpy(buffer+start, crypto.getIV(), IV_SIZE);
-        start += IV_SIZE;
-        memcpy(buffer+start, ciphertext, ciphr_len);
+        start += head_len;
+        memcpy(buffer+start, msg_cipher, ciphr_len);
         start += ciphr_len;
-        memcpy(buffer+start, tag, TAG_SIZE);
 
         socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_len);
     } catch(const exception& e) {
-        delete[] ciphertext;
-        delete[] tag;
         delete[] buffer;
         throw runtime_error(e.what());
     }
-    
-    delete[] ciphertext;
-    delete[] tag;
     delete[] buffer;
 }
 

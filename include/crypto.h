@@ -28,15 +28,14 @@ class Crypto {
 
         void setSessionKey(unsigned char *secret);
         void generateNonce(unsigned char* nonce);
-        unsigned char* getIV();
 
         void readPrivateKey(string usr, string pwd, EVP_PKEY *&prvKey);
         void readPrivateKey(EVP_PKEY *&prvKey);
         void readPublicKey(string user, EVP_PKEY *&pubKey);
 
         // Authenticated encryption
-        int encryptMessage(unsigned char *msg, int msg_len, unsigned char *ciphr_msg, unsigned char *tag);
-        int decryptMessage(unsigned char *ciphr_msg, int ciphr_len, unsigned char *iv_src, unsigned char* tag, unsigned char *msg);
+        int encryptMessage(unsigned char *msg, int msg_len, unsigned char *buffer);
+        int decryptMessage(unsigned char *msg, int msg_len, unsigned char *buffer);
        
         // Certificates
         void loadCertificate(X509*& cert, string path);

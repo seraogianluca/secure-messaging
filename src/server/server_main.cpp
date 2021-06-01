@@ -33,25 +33,17 @@ int main(int argc, char* const argv[]) {
                                 cout << "-----------------------------" << endl << endl;
                                 // keyEstablishment(sd);
                             } else if (operationCode == 3) {
-                                unsigned char iv[IV_SIZE];
-                                unsigned char tag[TAG_SIZE];
-                                int start;
-                                int ciphertext_len;
+                                //CHECK HEADER SIZE
+                                int ciphertext_len = message_len-1;
+                                unsigned char ciphertext[ciphertext_len];
+                                unsigned char plaintext[ciphertext_len];
 
-                                start = 1;
-                                memcpy(iv, messageReceived+start, IV_SIZE);
-                                start += IV_SIZE;
-
-                                ciphertext_len = message_len-IV_SIZE-TAG_SIZE-1;
-                                unsigned char encMessage[ciphertext_len];
-                                memcpy(encMessage, messageReceived+start, ciphertext_len);
-                                memcpy(tag, messageReceived+message_len-TAG_SIZE, TAG_SIZE);
-                                unsigned char dec_msg[ciphertext_len];
-                                int plaintext_len = crypto.decryptMessage(encMessage,ciphertext_len,iv,tag,dec_msg);
+                                memcpy(ciphertext, messageReceived+1, ciphertext_len);
+                                int plaintext_len = crypto.decryptMessage(ciphertext,ciphertext_len,plaintext);
                                 if(plaintext_len == -1)
                                     cout << "Not corresponding tag." << endl;
                                 else {
-                                    cout << "Plaintext: " << dec_msg << endl;
+                                    cout << "Plaintext: " << plaintext << endl;
                                 }
                             }
                             if (operationCode == 2) {
@@ -64,6 +56,8 @@ int main(int argc, char* const argv[]) {
                                 // Certificate Request
                             }
                         }
+
+                        delete[] messageReceived;
                     }  
                 }
             }
