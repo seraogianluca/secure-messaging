@@ -48,10 +48,13 @@ void checkNonce(unsigned char *certificateRequest, unsigned char *nonceServer){
 void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, unsigned char *nonceClient, unsigned char *nonceServer){
     unsigned char *cert_buff = NULL;
     unsigned char *buffer = NULL;
+    unsigned char *encrypt_msg = NULL;
     X509 *cert = NULL;
+    EVP_PKEY *user_pubkey = NULL;
     unsigned int cert_len;
     unsigned int start = 0;
     unsigned int bufferLen = 0;
+    unsigned int encrypted_msg_len;
     try{
         crypto.loadCertificate(cert,"server_cert");
         cert_buff = new unsigned char[MAX_MESSAGE_SIZE];
@@ -59,6 +62,7 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
 
         bufferLen = usernameLen + cert_len + 2*NONCE_SIZE;
         buffer = new unsigned char[bufferLen];
+        encrypt_msg = new unsigned char[MAX_MESSAGE_SIZE];
         memcpy(buffer, username, usernameLen);
         start += usernameLen;
         memcpy(buffer+start, cert_buff, cert_len);
@@ -67,23 +71,30 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
         start+=NONCE_SIZE;
         memcpy(buffer+start, nonceServer, NONCE_SIZE);
         //TODO: Encryption
-        serverSocket.sendMessage(sd,buffer,bufferLen);
+        crypto.readPublicKey((const char*)username, user_pubkey);
+        encrypted_msg_len = crypto.publicKeyEncryption(buffer,bufferLen,encrypt_msg,user_pubkey);
+        serverSocket.sendMessage(sd,encrypt_msg,encrypted_msg_len);
     }catch(const exception& e) {
         delete[] cert_buff;
         delete[] buffer;
+        delete[] encrypt_msg;
         throw runtime_error(e.what());
     }
     delete[] cert_buff;
     delete[] buffer;
+    delete[] encrypt_msg;
 }
 
 void authentication(int sd, unsigned char *messageReceived, unsigned int message_len) {
     unsigned char *nonceServer = NULL;
     unsigned char *nonceClient = NULL;
-    unsigned char *username;
-    unsigned char *buffer;
+    unsigned char *username = NULL;
+    unsigned char *buffer = NULL;
+    unsigned char *plaintext = NULL;
+    EVP_PKEY *prvkey = NULL;
     unsigned int bufferLen;
     unsigned int usernameLen;
+    unsigned int plainlen;
 
     try {
         // Generate nonce
@@ -106,19 +117,22 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
         //Receive hashed passwords
         buffer = new unsigned char[MAX_MESSAGE_SIZE];
         bufferLen = serverSocket.receiveMessage(sd, buffer);
-
-        cout << "Hashed Password: " << endl;
-        BIO_dump_fp(stdout, (const char*) buffer, bufferLen);
-
+        plaintext = new unsigned char[bufferLen];
+        crypto.readPrivateKey(prvkey);
+        plainlen = crypto.publicKeyDecryption(buffer, bufferLen,plaintext,prvkey);
     } catch(const exception& e) {
         delete[] nonceServer;
         delete[] nonceClient;
         delete[] username;
+        delete[] buffer;
+        delete[] plaintext;
         throw runtime_error(e.what());
     }
     delete[] nonceServer;
-    delete[] nonceClient;   
+    delete[] nonceClient;
     delete[] username;
+    delete[] buffer;
+    delete[] plaintext;
 }
 
 void keyEstablishment(int sd){

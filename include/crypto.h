@@ -30,8 +30,9 @@ class Crypto {
         void generateNonce(unsigned char* nonce);
         unsigned char* getIV();
 
-        void readPrivateKey(string usr, string pwd, EVP_PKEY *& prvKey);
-        void readPublicKey(string user, EVP_PKEY* pubKey);
+        void readPrivateKey(string usr, string pwd, EVP_PKEY *&prvKey);
+        void readPrivateKey(EVP_PKEY *&prvKey);
+        void readPublicKey(string user, EVP_PKEY *&pubKey);
 
         // Authenticated encryption
         int encryptMessage(unsigned char *msg, int msg_len, unsigned char *ciphr_msg, unsigned char *tag);
@@ -47,7 +48,10 @@ class Crypto {
         // Public Key handling
         int serializePublicKey(EVP_PKEY *prv_key, unsigned char *pubkey_buf);
         void deserializePublicKey(unsigned char *pubkey_buf, unsigned int pubkey_size, EVP_PKEY *&pubkey);
-
+        int publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *pubkey);
+        int publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *prvkey);
+        void getPublicKeyFromCertificate(X509 *cert, EVP_PKEY *&pubkey);
+        
         // Hash
         //TODO: may be private
         void computeHash(unsigned char *msg, unsigned int msg_size, unsigned char *digest);

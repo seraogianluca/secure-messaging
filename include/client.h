@@ -39,7 +39,7 @@ void sendHelloMessage(unsigned char* username, unsigned int usernameLen, unsigne
 
 void extractNonce(unsigned char *clientNonce, unsigned char *serverNonce, unsigned char *receivedMessage, unsigned int messageLen) {
     unsigned char *nonceReceived = NULL;
-    unsigned int start = messageLen - NONCE_SIZE - NONCE_SIZE;
+    unsigned int start = messageLen - 2*NONCE_SIZE;
     try {
         nonceReceived = new unsigned char[NONCE_SIZE];
         memcpy(nonceReceived, receivedMessage+start, NONCE_SIZE);
@@ -54,12 +54,12 @@ void extractNonce(unsigned char *clientNonce, unsigned char *serverNonce, unsign
     }
 }
 
-void sendPassword(unsigned char *nonce, string password) {
+void sendPassword(unsigned char *nonce, string password, string username, X509 *cert) {
     unsigned char *buffer = NULL;
     unsigned char *pwdDigest = NULL;
     unsigned char *finalDigest = NULL;
     unsigned char *ciphertext = NULL;
-    unsigned int bufferLen = 0;
+    EVP_PKEY *server_pubkey = NULL;
     unsigned int start = 0;
     unsigned int ciphertextLen = 0;
     try {
@@ -72,8 +72,10 @@ void sendPassword(unsigned char *nonce, string password) {
         finalDigest = new unsigned char[DIGEST_LEN];
         crypto.computeHash(buffer, DIGEST_LEN, finalDigest);
         //TODO: Encrypt
+        crypto.getPublicKeyFromCertificate(cert,server_pubkey);
         ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
-        socketClient.sendMessage(socketClient.getMasterFD(), finalDigest, DIGEST_LEN);
+        ciphertextLen = crypto.publicKeyEncryption(finalDigest, DIGEST_LEN, ciphertext, server_pubkey);
+        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
     } catch(const std::exception& e) {
         delete[] buffer;
         delete[] pwdDigest;
@@ -86,11 +88,10 @@ void sendPassword(unsigned char *nonce, string password) {
 
 }
 
-void verifyServerCertificate(unsigned char *message, unsigned int messageLen, unsigned int usernameLen) {
+void verifyServerCertificate(unsigned char *message, unsigned int messageLen, unsigned int usernameLen, X509 *&cert) {
     unsigned char *cert_buff = NULL;
     unsigned int start = usernameLen;
     unsigned int cert_len = messageLen - 2*NONCE_SIZE - usernameLen;
-    X509 *cert = NULL;
     try {
         cert_buff = new unsigned char[cert_len];        
         memcpy(cert_buff, message+start, cert_len);
@@ -109,10 +110,11 @@ void authentication() {
     unsigned char *nonceClient = NULL;
     unsigned char *nonceServer = NULL;
     unsigned char *buffer = NULL;
-    unsigned char *tag = NULL;
-    unsigned char *messageDecrypted = NULL;
+    unsigned char *plaintext = NULL;
+    EVP_PKEY *prvkey = NULL;
+    X509 *cert;
     unsigned int messageReceivedLen;
-
+    unsigned int plainlen;
     try {
         // Get Username
         string username = readFromStdout("Insert username: ");
@@ -127,33 +129,34 @@ void authentication() {
         // Receive server hello
         buffer = new unsigned char[MAX_MESSAGE_SIZE];
         messageReceivedLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
-        tag = new unsigned char[TAG_SIZE];
-        messageDecrypted = new unsigned char[messageReceivedLen];
+        plaintext = new unsigned char[messageReceivedLen];
         
         //TODO: Decrypt
+        string password = readFromStdout("Insert password: ");
+        crypto.readPrivateKey(username,password,prvkey);
+        plainlen = crypto.publicKeyDecryption(buffer, messageReceivedLen,plaintext,prvkey);
 
         // Check and extract nonce
         nonceServer = new unsigned char[NONCE_SIZE];
-        extractNonce(nonceClient, nonceServer, buffer, messageReceivedLen);
+        extractNonce(nonceClient, nonceServer, buffer, plainlen);
                 
         // Verify certificate
-        verifyServerCertificate(buffer, messageReceivedLen, usernameLen);
+        verifyServerCertificate(plaintext, plainlen, usernameLen, cert);
 
         // Send pwd
-        string password = readFromStdout("Insert password: ");
-        sendPassword(nonceServer, password);
+        sendPassword(nonceServer, password, username, cert);
         
     } catch (const exception &e) {
         delete[] nonceClient;
-        delete[] nonceServer;
         delete[] buffer;
-        delete[] tag;
+        delete[] plaintext;
+        delete[] nonceServer;
         throw runtime_error(e.what());
     }
     delete[] nonceClient;
-    delete[] nonceServer;
     delete[] buffer;
-    delete[] tag;
+    delete[] plaintext;
+    delete[] nonceServer;
 }
 
 void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len) {

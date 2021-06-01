@@ -47,6 +47,21 @@ unsigned char* Crypto::getIV() {
     return iv;
 }
 
+void Crypto::readPrivateKey(EVP_PKEY *&prvKey){
+    FILE* file;
+    file = fopen("./keys/server_prv_key.pem", "r");
+    if(!file)
+        throw runtime_error("An error occurred, the file doesn't exist.");
+    prvKey = PEM_read_PrivateKey(file, NULL, NULL, NULL);
+    if(!prvKey){
+        fclose(file);
+        throw runtime_error("An error occurred while reading the private key.");
+    }
+    if(fclose(file)!=0)
+        throw runtime_error("An error occurred while closing the file.");
+   
+}
+
 void Crypto::readPrivateKey(string usr, string pwd, EVP_PKEY *& prvKey) {
     FILE* file;
     string path;
@@ -63,7 +78,7 @@ void Crypto::readPrivateKey(string usr, string pwd, EVP_PKEY *& prvKey) {
         throw runtime_error("An error occurred while closing the file.");
 }
 
-void Crypto::readPublicKey(string user, EVP_PKEY* pubKey) {
+void Crypto::readPublicKey(string user, EVP_PKEY *&pubKey) {
     //QUESTION: necessario controllo su user tramite white/black list??
     FILE* file;
     string path = "./keys/" + user + "_pubkey.pem";
@@ -77,6 +92,113 @@ void Crypto::readPublicKey(string user, EVP_PKEY* pubKey) {
     }
     if(fclose(file)!=0)
         throw runtime_error("An error occurred while closing the file.");
+}
+
+int Crypto::publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *pubkey){
+    unsigned char *ciphertext = NULL;
+    unsigned char *encrypted_key = NULL;
+    unsigned char *iv = NULL;
+    EVP_CIPHER_CTX *ctx = NULL;
+    int encrypted_key_len;
+    int outlen;
+    int cipherlen;
+    int start = 0;
+    try{
+        //IV||ENC_KEY||CIPHERTEXT
+        encrypted_key = new unsigned char[EVP_PKEY_size(pubkey)];
+        ciphertext = new unsigned char[msg_len + 16];
+        ctx = EVP_CIPHER_CTX_new();
+        if(ctx == NULL){
+            throw runtime_error("An error occurred creating the context during the public key encryption");
+        }
+        iv = new unsigned char[EVP_CIPHER_iv_length(CIPHER)];
+        if(EVP_SealInit(ctx, CIPHER, &encrypted_key, &encrypted_key_len, iv, &pubkey, 1)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred initializing the envelope.");
+        }
+        if(EVP_SealUpdate(ctx, ciphertext, &outlen, (unsigned char *)msg, msg_len)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred updating the envelope.");
+        }
+        cipherlen = outlen; 
+        if(EVP_SealFinal(ctx, ciphertext+cipherlen, &outlen)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred finishing the envelop.");
+        }
+        cipherlen+=outlen;
+        memcpy(buff, iv, EVP_CIPHER_iv_length(CIPHER));
+        start+=EVP_CIPHER_iv_length(CIPHER);
+        memcpy(buff+start,encrypted_key,encrypted_key_len);
+        start+=encrypted_key_len;
+        memcpy(buff+start, ciphertext, cipherlen);
+        start+=cipherlen;
+        EVP_CIPHER_CTX_free(ctx);
+    }catch (const exception &e) {
+        delete[] encrypted_key;
+        delete[] ciphertext;
+        delete[] iv;
+        throw runtime_error(e.what());
+    }
+    delete[] encrypted_key;
+    delete[] ciphertext;
+    delete[] iv;
+    return start;
+}
+
+int Crypto::publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *prvkey){
+    unsigned char *plaintext = NULL;
+    unsigned char *encrypted_key = NULL;
+    unsigned char *ciphertext = NULL;
+    unsigned char *iv = NULL;
+    EVP_CIPHER_CTX *ctx = NULL;
+    int start = 0;
+    int outlen, plainlen;
+    try{
+        plaintext = new unsigned char[msg_len];
+        iv = new unsigned char[EVP_CIPHER_iv_length(CIPHER)];
+        encrypted_key = new unsigned char[EVP_PKEY_size(prvkey)];
+        ciphertext = new unsigned char[msg_len-EVP_CIPHER_iv_length(CIPHER)-EVP_PKEY_size(prvkey)];
+        memcpy(iv,msg,EVP_CIPHER_iv_length(CIPHER));
+        start+=EVP_CIPHER_iv_length(CIPHER);
+        memcpy(encrypted_key,msg+start,EVP_PKEY_size(prvkey));
+        start+=EVP_PKEY_size(prvkey);
+        memcpy(ciphertext, msg+start,msg_len-start);
+        ctx = EVP_CIPHER_CTX_new();
+        if(ctx == NULL){
+            throw runtime_error("An error occurred initializing the context");
+        }
+        if(EVP_OpenInit(ctx, CIPHER, encrypted_key, EVP_PKEY_size(prvkey), iv, prvkey)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred initializing the envelope.");
+        }
+        if(EVP_OpenUpdate(ctx,plaintext, &outlen, ciphertext, msg_len-start)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred updating the envelope.");
+        }
+        plainlen = outlen;
+        if(EVP_OpenFinal(ctx,plaintext+plainlen,&outlen)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred finishing the envelope.");
+        }
+        plainlen+=outlen;
+        memcpy(buff,plaintext,plainlen);
+        EVP_CIPHER_CTX_free(ctx);
+    }catch (const exception &e) {
+        delete[] plaintext;
+        delete[] iv;
+        delete[] encrypted_key;
+        delete[] ciphertext;
+        throw runtime_error(e.what());
+    }
+    delete[] plaintext;
+    delete[] iv;
+    delete[] encrypted_key;
+    delete[] ciphertext;
+    return plainlen;
+}
+
+void Crypto::getPublicKeyFromCertificate(X509 *cert, EVP_PKEY *&pubkey){
+    pubkey = X509_get_pubkey(cert);
 }
 
 int Crypto::encryptMessage(unsigned char *msg, int msg_len,
