@@ -45,27 +45,45 @@ void checkNonce(unsigned char *certificateRequest, unsigned char *nonceServer){
     delete[] nonceServerReceived;
 }
 
-void sendCertificate(int sd){
+void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, unsigned char *nonceClient, unsigned char *nonceServer){
     unsigned char *cert_buff = NULL;
+    unsigned char *buffer = NULL;
     X509 *cert = NULL;
     unsigned int cert_len;
+    unsigned int start = 0;
+    unsigned int bufferLen = 0;
     try{
         crypto.loadCertificate(cert,"server_cert");
         cert_buff = new unsigned char[MAX_MESSAGE_SIZE];
         cert_len = crypto.serializeCertificate(cert,cert_buff);
-        serverSocket.sendMessage(sd,cert_buff,cert_len);
+
+        bufferLen = usernameLen + cert_len + 2*NONCE_SIZE;
+        buffer = new unsigned char[bufferLen];
+        memcpy(buffer, username, usernameLen);
+        start += usernameLen;
+        memcpy(buffer+start, cert_buff, cert_len);
+        start+=cert_len;
+        memcpy(buffer+start, nonceClient, NONCE_SIZE);
+        start+=NONCE_SIZE;
+        memcpy(buffer+start, nonceServer, NONCE_SIZE);
+        //TODO: Encryption
+        serverSocket.sendMessage(sd,buffer,bufferLen);
     }catch(const exception& e) {
         delete[] cert_buff;
+        delete[] buffer;
         throw runtime_error(e.what());
     }
     delete[] cert_buff;
+    delete[] buffer;
 }
 
 void authentication(int sd, unsigned char *messageReceived, unsigned int message_len) {
     unsigned char *nonceServer = NULL;
     unsigned char *nonceClient = NULL;
-    unsigned char *certificateRequest = NULL;
-    unsigned int certificateRequestLen;
+    unsigned char *username;
+    unsigned char *buffer;
+    unsigned int bufferLen;
+    unsigned int usernameLen;
 
     try {
         // Generate nonce
@@ -74,34 +92,33 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
 
         // Get peer nonce
         nonceClient = new unsigned char[NONCE_SIZE];
-        memcpy(nonceClient, messageReceived+6, NONCE_SIZE);
+        memcpy(nonceClient, messageReceived+message_len-NONCE_SIZE, NONCE_SIZE);
+        // Get peer username
+        usernameLen = message_len-NONCE_SIZE-1;
+        username = new unsigned char[usernameLen];
+        memcpy(username, messageReceived+1, usernameLen);
+        cout << "Username: " << endl;
+        BIO_dump_fp(stdout, (const char*)username, usernameLen);
 
-        // Build hello message
-        buildHelloMessage(sd, nonceClient, nonceServer);
+        //Send Certificate
+        sendCertificate(sd, username, usernameLen, nonceClient, nonceServer);
 
-        // Receive certificate request
-        certificateRequest = new unsigned char[MAX_MESSAGE_SIZE];
-        certificateRequestLen = serverSocket.receiveMessage(sd, certificateRequest);
+        //Receive hashed passwords
+        buffer = new unsigned char[MAX_MESSAGE_SIZE];
+        bufferLen = serverSocket.receiveMessage(sd, buffer);
 
-        // Check nonce
-        if (certificateRequestLen != (2*NONCE_SIZE)) { 
-            throw runtime_error("Uncorrect format of the message received");
-        }
-        checkNonce(certificateRequest, nonceServer);
-
-        //VERIFY CERTIFICATE
-        sendCertificate(sd);
-        cout<< "Client "<<sd<<" authenticated."<<endl;
+        cout << "Hashed Password: " << endl;
+        BIO_dump_fp(stdout, (const char*) buffer, bufferLen);
 
     } catch(const exception& e) {
         delete[] nonceServer;
         delete[] nonceClient;
-        delete[] certificateRequest;
+        delete[] username;
         throw runtime_error(e.what());
     }
     delete[] nonceServer;
     delete[] nonceClient;   
-    delete[] certificateRequest;
+    delete[] username;
 }
 
 void keyEstablishment(int sd){
