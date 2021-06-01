@@ -43,6 +43,20 @@ void Crypto::generateIV() {
         throw runtime_error("An error occurred in RAND_bytes.");
 }
 
+void Crypto::readPrivateKey(EVP_PKEY *&prvKey) {
+    FILE* file;
+    file = fopen("./keys/server_prv_key.pem", "r");
+    if(!file)
+        throw runtime_error("An error occurred, the file doesn't exist.");
+    prvKey = PEM_read_PrivateKey(file, NULL, NULL, NULL);
+    if(!prvKey){
+        fclose(file);
+        throw runtime_error("An error occurred while reading the private key.");
+    }
+    if(fclose(file)!=0)
+        throw runtime_error("An error occurred while closing the file.");
+}
+
 void Crypto::readPrivateKey(string usr, string pwd, EVP_PKEY *& prvKey) {
     FILE* file;
     string path;
@@ -85,7 +99,6 @@ int Crypto::publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsign
     int cipherlen;
     int start = 0;
     try{
-        //IV||ENC_KEY||CIPHERTEXT
         encrypted_key = new unsigned char[EVP_PKEY_size(pubkey)];
         ciphertext = new unsigned char[msg_len + 16];
         ctx = EVP_CIPHER_CTX_new();
@@ -118,7 +131,7 @@ int Crypto::publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsign
         delete[] encrypted_key;
         delete[] ciphertext;
         delete[] iv;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] encrypted_key;
     delete[] ciphertext;
@@ -169,7 +182,7 @@ int Crypto::publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsign
         delete[] iv;
         delete[] encrypted_key;
         delete[] ciphertext;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] plaintext;
     delete[] iv;
@@ -181,6 +194,7 @@ int Crypto::publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsign
 void Crypto::getPublicKeyFromCertificate(X509 *cert, EVP_PKEY *&pubkey){
     pubkey = X509_get_pubkey(cert);
 }
+
 int Crypto::encryptMessage(unsigned char *msg, int msg_len, unsigned char *buffer) {
     unsigned char *ciphertext = NULL;
     unsigned char *tag = NULL;
@@ -228,7 +242,7 @@ int Crypto::encryptMessage(unsigned char *msg, int msg_len, unsigned char *buffe
         delete[] ciphertext;
         delete[] tag;
         EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error(e.what());
+        throw;
     }
     
     delete[] ciphertext;
@@ -282,7 +296,7 @@ int Crypto::decryptMessage(unsigned char *msg, int msg_len, unsigned char *buffe
         //QUESTION: che differenza c'è tra free e cleanup?
         //EVP_CIPHER_CTX_cleanup(ctx);
         EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error(e.what());
+        throw;
     }
 
     delete[] recv_iv;

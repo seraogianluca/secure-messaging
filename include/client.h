@@ -32,7 +32,7 @@ void sendHelloMessage(unsigned char* username, unsigned int usernameLen, unsigne
         socketClient.sendMessage(socketClient.getMasterFD(), helloMessage, helloMessageLen);
     } catch(const exception& e) {
         delete[] helloMessage;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] helloMessage;
 }
@@ -50,8 +50,9 @@ void extractNonce(unsigned char *clientNonce, unsigned char *serverNonce, unsign
         memcpy(serverNonce, receivedMessage + start, NONCE_SIZE);
     } catch (const exception& e) {
         delete[] nonceReceived;
-        throw runtime_error(e.what());
+        throw;
     }
+    delete[] nonceReceived;
 }
 
 void sendPassword(unsigned char *nonce, string password, string username, X509 *cert) {
@@ -71,7 +72,6 @@ void sendPassword(unsigned char *nonce, string password, string username, X509 *
         memcpy(buffer+start, nonce, NONCE_SIZE);
         finalDigest = new unsigned char[DIGEST_LEN];
         crypto.computeHash(buffer, DIGEST_LEN, finalDigest);
-        //TODO: Encrypt
         crypto.getPublicKeyFromCertificate(cert,server_pubkey);
         ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
         ciphertextLen = crypto.publicKeyEncryption(finalDigest, DIGEST_LEN, ciphertext, server_pubkey);
@@ -80,12 +80,13 @@ void sendPassword(unsigned char *nonce, string password, string username, X509 *
         delete[] buffer;
         delete[] pwdDigest;
         delete[] finalDigest;
-        throw runtime_error(e.what());
+        delete[] ciphertext;
+        throw;
     }
     delete[] buffer;
     delete[] pwdDigest;
     delete[] finalDigest;
-
+    delete[] ciphertext;
 }
 
 void verifyServerCertificate(unsigned char *message, unsigned int messageLen, unsigned int usernameLen, X509 *&cert) {
@@ -101,7 +102,7 @@ void verifyServerCertificate(unsigned char *message, unsigned int messageLen, un
         cout << "Server authenticated." << endl;
     } catch(const exception& e) {
         delete[] cert_buff;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] cert_buff;
 }
@@ -131,14 +132,13 @@ void authentication() {
         messageReceivedLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
         plaintext = new unsigned char[messageReceivedLen];
         
-        //TODO: Decrypt
         string password = readFromStdout("Insert password: ");
         crypto.readPrivateKey(username,password,prvkey);
         plainlen = crypto.publicKeyDecryption(buffer, messageReceivedLen,plaintext,prvkey);
 
         // Check and extract nonce
         nonceServer = new unsigned char[NONCE_SIZE];
-        extractNonce(nonceClient, nonceServer, buffer, plainlen);
+        extractNonce(nonceClient, nonceServer, plaintext, plainlen);
                 
         // Verify certificate
         verifyServerCertificate(plaintext, plainlen, usernameLen, cert);
@@ -151,7 +151,7 @@ void authentication() {
         delete[] buffer;
         delete[] plaintext;
         delete[] nonceServer;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] nonceClient;
     delete[] buffer;
@@ -183,9 +183,11 @@ void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *ms
 
         socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_len);
     } catch(const exception& e) {
+        delete[] msg_cipher;
         delete[] buffer;
-        throw runtime_error(e.what());
+        throw;
     }
+    delete[] msg_cipher;
     delete[] buffer;
 }
 
@@ -219,7 +221,7 @@ void keyEstablishment() {
     } catch(const exception& e) {
         delete[] buffer;
         delete[] secret;
-        throw runtime_error(e.what());
+        throw;
     }
 
     delete[] buffer;

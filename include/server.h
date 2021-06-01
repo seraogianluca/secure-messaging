@@ -24,7 +24,7 @@ void buildHelloMessage(int sd, unsigned char *nonceClient, unsigned char *nonceS
         serverSocket.sendMessage(sd, helloMessage, (5 + 2*NONCE_SIZE));
     }catch(const exception& e) {
         delete[] helloMessage;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] helloMessage;
 }
@@ -40,7 +40,7 @@ void checkNonce(unsigned char *certificateRequest, unsigned char *nonceServer){
         }
     }catch(const exception& e) {
         delete[] nonceServerReceived;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] nonceServerReceived;
 }
@@ -70,7 +70,7 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
         memcpy(buffer+start, nonceClient, NONCE_SIZE);
         start+=NONCE_SIZE;
         memcpy(buffer+start, nonceServer, NONCE_SIZE);
-        //TODO: Encryption
+
         crypto.readPublicKey((const char*)username, user_pubkey);
         encrypted_msg_len = crypto.publicKeyEncryption(buffer,bufferLen,encrypt_msg,user_pubkey);
         serverSocket.sendMessage(sd,encrypt_msg,encrypted_msg_len);
@@ -78,7 +78,7 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
         delete[] cert_buff;
         delete[] buffer;
         delete[] encrypt_msg;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] cert_buff;
     delete[] buffer;
@@ -108,8 +108,7 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
         usernameLen = message_len-NONCE_SIZE-1;
         username = new unsigned char[usernameLen];
         memcpy(username, messageReceived+1, usernameLen);
-        cout << "Username: " << endl;
-        BIO_dump_fp(stdout, (const char*)username, usernameLen);
+        cout << "Client username: " << username << endl;
 
         //Send Certificate
         sendCertificate(sd, username, usernameLen, nonceClient, nonceServer);
@@ -120,13 +119,15 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
         plaintext = new unsigned char[bufferLen];
         crypto.readPrivateKey(prvkey);
         plainlen = crypto.publicKeyDecryption(buffer, bufferLen,plaintext,prvkey);
+
+        cout << "Client authenticated." << endl;
     } catch(const exception& e) {
         delete[] nonceServer;
         delete[] nonceClient;
         delete[] username;
         delete[] buffer;
         delete[] plaintext;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] nonceServer;
     delete[] nonceClient;
@@ -162,7 +163,7 @@ void keyEstablishment(int sd){
     } catch(const exception& e) {
         delete[] buffer;
         delete[] secret;
-        throw runtime_error(e.what());
+        throw;
     }
     
     delete[] buffer;
