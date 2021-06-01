@@ -43,8 +43,18 @@ void Crypto::generateIV() {
         throw runtime_error("An error occurred in RAND_bytes.");
 }
 
-unsigned char* Crypto::getIV() {
-    return iv;
+void Crypto::readPrivateKey(EVP_PKEY *&prvKey) {
+    FILE* file;
+    file = fopen("./keys/server_prv_key.pem", "r");
+    if(!file)
+        throw runtime_error("An error occurred, the file doesn't exist.");
+    prvKey = PEM_read_PrivateKey(file, NULL, NULL, NULL);
+    if(!prvKey){
+        fclose(file);
+        throw runtime_error("An error occurred while reading the private key.");
+    }
+    if(fclose(file)!=0)
+        throw runtime_error("An error occurred while closing the file.");
 }
 
 void Crypto::readPrivateKey(string usr, string pwd, EVP_PKEY *& prvKey) {
@@ -63,7 +73,7 @@ void Crypto::readPrivateKey(string usr, string pwd, EVP_PKEY *& prvKey) {
         throw runtime_error("An error occurred while closing the file.");
 }
 
-void Crypto::readPublicKey(string user, EVP_PKEY* pubKey) {
+void Crypto::readPublicKey(string user, EVP_PKEY *&pubKey) {
     //QUESTION: necessario controllo su user tramite white/black list??
     FILE* file;
     string path = "./keys/" + user + "_pubkey.pem";
@@ -79,97 +89,227 @@ void Crypto::readPublicKey(string user, EVP_PKEY* pubKey) {
         throw runtime_error("An error occurred while closing the file.");
 }
 
-int Crypto::encryptMessage(unsigned char *msg, int msg_len,
-                        unsigned char *ciphr_msg,
-                        unsigned char *tag) {
-    EVP_CIPHER_CTX *ctx;
-    int len = 0;
-    int ciphr_len = 0;
-    generateIV();
-
-    if(!(ctx = EVP_CIPHER_CTX_new()))
-        throw runtime_error("An error occurred while creating the context.");   
-
-    if(EVP_EncryptInit(ctx, AUTH_ENCR, session_key, iv) != 1) {
-        // QUESTION: Bisogna fare la free in questi casi di errore?
+int Crypto::publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *pubkey){
+    unsigned char *ciphertext = NULL;
+    unsigned char *encrypted_key = NULL;
+    unsigned char *iv = NULL;
+    EVP_CIPHER_CTX *ctx = NULL;
+    int encrypted_key_len;
+    int outlen;
+    int cipherlen;
+    int start = 0;
+    try{
+        encrypted_key = new unsigned char[EVP_PKEY_size(pubkey)];
+        ciphertext = new unsigned char[msg_len + 16];
+        ctx = EVP_CIPHER_CTX_new();
+        if(ctx == NULL){
+            throw runtime_error("An error occurred creating the context during the public key encryption");
+        }
+        iv = new unsigned char[EVP_CIPHER_iv_length(CIPHER)];
+        if(EVP_SealInit(ctx, CIPHER, &encrypted_key, &encrypted_key_len, iv, &pubkey, 1)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred initializing the envelope.");
+        }
+        if(EVP_SealUpdate(ctx, ciphertext, &outlen, (unsigned char *)msg, msg_len)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred updating the envelope.");
+        }
+        cipherlen = outlen; 
+        if(EVP_SealFinal(ctx, ciphertext+cipherlen, &outlen)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred finishing the envelop.");
+        }
+        cipherlen+=outlen;
+        memcpy(buff, iv, EVP_CIPHER_iv_length(CIPHER));
+        start+=EVP_CIPHER_iv_length(CIPHER);
+        memcpy(buff+start,encrypted_key,encrypted_key_len);
+        start+=encrypted_key_len;
+        memcpy(buff+start, ciphertext, cipherlen);
+        start+=cipherlen;
         EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("An error occurred while initializing the context.");
+    }catch (const exception &e) {
+        delete[] encrypted_key;
+        delete[] ciphertext;
+        delete[] iv;
+        throw;
     }
-         
-    //AAD: header in the clear that contains the IV
-    if(EVP_EncryptUpdate(ctx, NULL, &len, iv, IV_SIZE) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("An error occurred in adding AAD header.");
-    }
-        
-    // TODO: Controllare se server un for
-    if(EVP_EncryptUpdate(ctx, ciphr_msg, &len, msg, msg_len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("An error occurred while encrypting the message.");
-    }
-    ciphr_len = len;
-
-    if(EVP_EncryptFinal(ctx, ciphr_msg + len, &len) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("An error occurred while finalizing the ciphertext.");
-    }
-    ciphr_len += len;
-
-    //Get the tag
-    if(EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, TAG_SIZE, tag) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("An error occurred while getting the tag.");
-    }
-    
-    EVP_CIPHER_CTX_free(ctx);
-    return ciphr_len;
+    delete[] encrypted_key;
+    delete[] ciphertext;
+    delete[] iv;
+    return start;
 }
 
-int Crypto::decryptMessage(unsigned char *ciphr_msg, int ciphr_len,
-                        unsigned char* iv_src,
-                        unsigned char* tag, 
-                        unsigned char *msg) {
-    EVP_CIPHER_CTX *ctx;
-    int ret;
-    int len;
-    int pl_len;
-
-    if(!(ctx = EVP_CIPHER_CTX_new()))
-        throw runtime_error("An error occurred while creating the context.");
-
-    if(!EVP_DecryptInit(ctx, AUTH_ENCR, session_key, iv_src)) {
+int Crypto::publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *prvkey){
+    unsigned char *plaintext = NULL;
+    unsigned char *encrypted_key = NULL;
+    unsigned char *ciphertext = NULL;
+    unsigned char *iv = NULL;
+    EVP_CIPHER_CTX *ctx = NULL;
+    int start = 0;
+    int outlen, plainlen;
+    try{
+        plaintext = new unsigned char[msg_len];
+        iv = new unsigned char[EVP_CIPHER_iv_length(CIPHER)];
+        encrypted_key = new unsigned char[EVP_PKEY_size(prvkey)];
+        ciphertext = new unsigned char[msg_len-EVP_CIPHER_iv_length(CIPHER)-EVP_PKEY_size(prvkey)];
+        memcpy(iv,msg,EVP_CIPHER_iv_length(CIPHER));
+        start+=EVP_CIPHER_iv_length(CIPHER);
+        memcpy(encrypted_key,msg+start,EVP_PKEY_size(prvkey));
+        start+=EVP_PKEY_size(prvkey);
+        memcpy(ciphertext, msg+start,msg_len-start);
+        ctx = EVP_CIPHER_CTX_new();
+        if(ctx == NULL){
+            throw runtime_error("An error occurred initializing the context");
+        }
+        if(EVP_OpenInit(ctx, CIPHER, encrypted_key, EVP_PKEY_size(prvkey), iv, prvkey)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred initializing the envelope.");
+        }
+        if(EVP_OpenUpdate(ctx,plaintext, &outlen, ciphertext, msg_len-start)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred updating the envelope.");
+        }
+        plainlen = outlen;
+        if(EVP_OpenFinal(ctx,plaintext+plainlen,&outlen)==0){
+            EVP_CIPHER_CTX_free(ctx);
+            throw runtime_error("An error occurred finishing the envelope.");
+        }
+        plainlen+=outlen;
+        memcpy(buff,plaintext,plainlen);
         EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("An error occurred while initializing the context.");
+    }catch (const exception &e) {
+        delete[] plaintext;
+        delete[] iv;
+        delete[] encrypted_key;
+        delete[] ciphertext;
+        throw;
     }
-    
-    if(!EVP_DecryptUpdate(ctx, NULL, &len, iv_src, IV_SIZE)) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("An error occurred while getting AAD header.");
-    }
+    delete[] plaintext;
+    delete[] iv;
+    delete[] encrypted_key;
+    delete[] ciphertext;
+    return plainlen;
+}
+
+void Crypto::getPublicKeyFromCertificate(X509 *cert, EVP_PKEY *&pubkey){
+    pubkey = X509_get_pubkey(cert);
+}
+
+int Crypto::encryptMessage(unsigned char *msg, int msg_len, unsigned char *buffer) {
+    unsigned char *ciphertext = NULL;
+    unsigned char *tag = NULL;
+    EVP_CIPHER_CTX *ctx = NULL;
+    unsigned int start = 0;
+    int len = 0;
+    int ciphr_len = 0;
+
+    try {
+        generateIV();
+        ciphertext = new unsigned char[msg_len + TAG_SIZE];
+        tag = new unsigned char[TAG_SIZE];
+
+        ctx = ctx = EVP_CIPHER_CTX_new();
+        if(!ctx)
+            throw runtime_error("An error occurred while creating the context.");   
+
+        // QUESTION: Bisogna fare la free in questi casi di errore?
+        if(EVP_EncryptInit(ctx, AUTH_ENCR, session_key, iv) != 1)
+            throw runtime_error("An error occurred while initializing the context.");
+            
+        //AAD: header in the clear that contains the IV
+        if(EVP_EncryptUpdate(ctx, NULL, &len, iv, IV_SIZE) != 1)
+            throw runtime_error("An error occurred in adding AAD header.");
+            
+        if(EVP_EncryptUpdate(ctx, ciphertext, &len, msg, msg_len) != 1)
+            throw runtime_error("An error occurred while encrypting the message.");
+        ciphr_len = len;
+
+        if(EVP_EncryptFinal(ctx, ciphertext + len, &len) != 1)
+            throw runtime_error("An error occurred while finalizing the ciphertext.");
+        ciphr_len += len;
+
+        //Get the tag
+        if(EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, TAG_SIZE, tag) != 1)
+            throw runtime_error("An error occurred while getting the tag.");
         
-    if(!EVP_DecryptUpdate(ctx, msg, &len, ciphr_msg, ciphr_len)) {
+        memcpy(buffer+start, iv, IV_SIZE);
+        start += IV_SIZE;
+        memcpy(buffer+start, ciphertext, ciphr_len);
+        start += ciphr_len;
+        memcpy(buffer+start, tag, TAG_SIZE);
+        start += TAG_SIZE;
+    } catch(const exception& e) {
+        delete[] ciphertext;
+        delete[] tag;
         EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("An error occurred while decrypting the message");
-    }
-    pl_len = len;
-    
-    if(!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_SIZE, tag)) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw runtime_error("An error occurred while setting the expected tag.");
+        throw;
     }
     
-    ret = EVP_DecryptFinal(ctx, msg + len, &len);
-
-    //QUESTION: che differenza c'è tra free e cleanup?
-    //EVP_CIPHER_CTX_cleanup(ctx);
+    delete[] ciphertext;
+    delete[] tag;
     EVP_CIPHER_CTX_free(ctx);
+    return start;
+}
 
-    if(ret > 0) {
-        pl_len += len;
-        return pl_len;
-    } else {
-        return -1;
+int Crypto::decryptMessage(unsigned char *msg, int msg_len, unsigned char *buffer) {
+    unsigned char *recv_iv;
+    unsigned char *recv_tag;
+    unsigned char *ciphr_msg;
+    EVP_CIPHER_CTX *ctx;
+    unsigned int ciphr_len = 0;
+    int ret = 0;
+    int len = 0;
+    int pl_len = 0;
+
+    try
+    {
+        recv_iv = new unsigned char[IV_SIZE];
+        memcpy(recv_iv, msg, IV_SIZE);
+        recv_tag = new unsigned char[TAG_SIZE];
+        memcpy(recv_tag,msg+msg_len-TAG_SIZE, TAG_SIZE);
+        ciphr_len = msg_len - IV_SIZE - TAG_SIZE;
+        ciphr_msg = new unsigned char[ciphr_len];
+        memcpy(ciphr_msg, msg+IV_SIZE, ciphr_len);
+
+        ctx = EVP_CIPHER_CTX_new();
+        if(!ctx)
+            throw runtime_error("An error occurred while creating the context.");
+
+        if(!EVP_DecryptInit(ctx, AUTH_ENCR, session_key, recv_iv))
+            throw runtime_error("An error occurred while initializing the context.");
+        
+        if(!EVP_DecryptUpdate(ctx, NULL, &len, recv_iv, IV_SIZE))
+            throw runtime_error("An error occurred while getting AAD header.");
+            
+        if(!EVP_DecryptUpdate(ctx, buffer, &len, ciphr_msg, ciphr_len))
+            throw runtime_error("An error occurred while decrypting the message");
+        pl_len = len;
+        
+        if(!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_SIZE, recv_tag))
+            throw runtime_error("An error occurred while setting the expected tag.");
+        
+        ret = EVP_DecryptFinal(ctx, buffer + len, &len);
+    } catch(const exception& e) {
+        delete[] recv_iv;
+        delete[] recv_tag;
+        delete[] ciphr_msg;
+        //QUESTION: che differenza c'è tra free e cleanup?
+        //EVP_CIPHER_CTX_cleanup(ctx);
+        EVP_CIPHER_CTX_free(ctx);
+        throw;
     }
+
+    delete[] recv_iv;
+    delete[] recv_tag;
+    delete[] ciphr_msg;
+    EVP_CIPHER_CTX_free(ctx);
+    
+    if(ret > 0)
+        pl_len += len; 
+    else
+        pl_len = -1;
+
+    return pl_len;
 }
 
 void Crypto::loadCertificate(X509*& cert, string path){

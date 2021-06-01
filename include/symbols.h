@@ -27,3 +27,6 @@
 //CERTIFICATE PATH
 #define CA_CERT_PATH "ca_cert"
 
+//Public key criptography
+#define CIPHER EVP_aes_128_cbc()
+

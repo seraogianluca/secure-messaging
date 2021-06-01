@@ -32,14 +32,14 @@ void sendHelloMessage(unsigned char* username, unsigned int usernameLen, unsigne
         socketClient.sendMessage(socketClient.getMasterFD(), helloMessage, helloMessageLen);
     } catch(const exception& e) {
         delete[] helloMessage;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] helloMessage;
 }
 
 void extractNonce(unsigned char *clientNonce, unsigned char *serverNonce, unsigned char *receivedMessage, unsigned int messageLen) {
     unsigned char *nonceReceived = NULL;
-    unsigned int start = messageLen - NONCE_SIZE - NONCE_SIZE;
+    unsigned int start = messageLen - 2*NONCE_SIZE;
     try {
         nonceReceived = new unsigned char[NONCE_SIZE];
         memcpy(nonceReceived, receivedMessage+start, NONCE_SIZE);
@@ -50,16 +50,17 @@ void extractNonce(unsigned char *clientNonce, unsigned char *serverNonce, unsign
         memcpy(serverNonce, receivedMessage + start, NONCE_SIZE);
     } catch (const exception& e) {
         delete[] nonceReceived;
-        throw runtime_error(e.what());
+        throw;
     }
+    delete[] nonceReceived;
 }
 
-void sendPassword(unsigned char *nonce, string password) {
+void sendPassword(unsigned char *nonce, string password, string username, X509 *cert) {
     unsigned char *buffer = NULL;
     unsigned char *pwdDigest = NULL;
     unsigned char *finalDigest = NULL;
     unsigned char *ciphertext = NULL;
-    unsigned int bufferLen = 0;
+    EVP_PKEY *server_pubkey = NULL;
     unsigned int start = 0;
     unsigned int ciphertextLen = 0;
     try {
@@ -71,26 +72,27 @@ void sendPassword(unsigned char *nonce, string password) {
         memcpy(buffer+start, nonce, NONCE_SIZE);
         finalDigest = new unsigned char[DIGEST_LEN];
         crypto.computeHash(buffer, DIGEST_LEN, finalDigest);
-        //TODO: Encrypt
+        crypto.getPublicKeyFromCertificate(cert,server_pubkey);
         ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
-        socketClient.sendMessage(socketClient.getMasterFD(), finalDigest, DIGEST_LEN);
+        ciphertextLen = crypto.publicKeyEncryption(finalDigest, DIGEST_LEN, ciphertext, server_pubkey);
+        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
     } catch(const std::exception& e) {
         delete[] buffer;
         delete[] pwdDigest;
         delete[] finalDigest;
-        throw runtime_error(e.what());
+        delete[] ciphertext;
+        throw;
     }
     delete[] buffer;
     delete[] pwdDigest;
     delete[] finalDigest;
-
+    delete[] ciphertext;
 }
 
-void verifyServerCertificate(unsigned char *message, unsigned int messageLen, unsigned int usernameLen) {
+void verifyServerCertificate(unsigned char *message, unsigned int messageLen, unsigned int usernameLen, X509 *&cert) {
     unsigned char *cert_buff = NULL;
     unsigned int start = usernameLen;
     unsigned int cert_len = messageLen - 2*NONCE_SIZE - usernameLen;
-    X509 *cert = NULL;
     try {
         cert_buff = new unsigned char[cert_len];        
         memcpy(cert_buff, message+start, cert_len);
@@ -100,7 +102,7 @@ void verifyServerCertificate(unsigned char *message, unsigned int messageLen, un
         cout << "Server authenticated." << endl;
     } catch(const exception& e) {
         delete[] cert_buff;
-        throw runtime_error(e.what());
+        throw;
     }
     delete[] cert_buff;
 }
@@ -109,10 +111,11 @@ void authentication() {
     unsigned char *nonceClient = NULL;
     unsigned char *nonceServer = NULL;
     unsigned char *buffer = NULL;
-    unsigned char *tag = NULL;
-    unsigned char *messageDecrypted = NULL;
+    unsigned char *plaintext = NULL;
+    EVP_PKEY *prvkey = NULL;
+    X509 *cert;
     unsigned int messageReceivedLen;
-
+    unsigned int plainlen;
     try {
         // Get Username
         string username = readFromStdout("Insert username: ");
@@ -127,72 +130,64 @@ void authentication() {
         // Receive server hello
         buffer = new unsigned char[MAX_MESSAGE_SIZE];
         messageReceivedLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
-        tag = new unsigned char[TAG_SIZE];
-        messageDecrypted = new unsigned char[messageReceivedLen];
+        plaintext = new unsigned char[messageReceivedLen];
         
-        //TODO: Decrypt
+        string password = readFromStdout("Insert password: ");
+        crypto.readPrivateKey(username,password,prvkey);
+        plainlen = crypto.publicKeyDecryption(buffer, messageReceivedLen,plaintext,prvkey);
 
         // Check and extract nonce
         nonceServer = new unsigned char[NONCE_SIZE];
-        extractNonce(nonceClient, nonceServer, buffer, messageReceivedLen);
+        extractNonce(nonceClient, nonceServer, plaintext, plainlen);
                 
         // Verify certificate
-        verifyServerCertificate(buffer, messageReceivedLen, usernameLen);
+        verifyServerCertificate(plaintext, plainlen, usernameLen, cert);
 
         // Send pwd
-        string password = readFromStdout("Insert password: ");
-        sendPassword(nonceServer, password);
+        sendPassword(nonceServer, password, username, cert);
         
     } catch (const exception &e) {
         delete[] nonceClient;
-        delete[] nonceServer;
         delete[] buffer;
-        delete[] tag;
-        throw runtime_error(e.what());
+        delete[] plaintext;
+        delete[] nonceServer;
+        throw;
     }
     delete[] nonceClient;
-    delete[] nonceServer;
     delete[] buffer;
-    delete[] tag;
+    delete[] plaintext;
+    delete[] nonceServer;
 }
 
 void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len) {
-    unsigned char *ciphertext = NULL;
-    unsigned char *tag = NULL;
+    unsigned char *msg_cipher = NULL;
     unsigned char *buffer = NULL;
     unsigned int ciphr_len;
     unsigned int msg_len = 0;
     int start = 0;
 
     try {
-        ciphertext = new unsigned char[pln_len + TAG_SIZE];
-        tag = new unsigned char[TAG_SIZE];
-        ciphr_len = crypto.encryptMessage(msg,pln_len,ciphertext,tag);
+        msg_cipher = new unsigned char[pln_len + TAG_SIZE + IV_SIZE];
+        ciphr_len = crypto.encryptMessage(msg,pln_len,msg_cipher);
 
-        msg_len = head_len + IV_SIZE + ciphr_len + TAG_SIZE;
+        msg_len = head_len + ciphr_len;
         if (msg_len > MAX_MESSAGE_SIZE) {
             throw runtime_error("Maximum message size exceeded");
         }
 
         buffer = new unsigned char[msg_len];
         memcpy(buffer, header, head_len);
-        start += 1;
-        memcpy(buffer+start, crypto.getIV(), IV_SIZE);
-        start += IV_SIZE;
-        memcpy(buffer+start, ciphertext, ciphr_len);
+        start += head_len;
+        memcpy(buffer+start, msg_cipher, ciphr_len);
         start += ciphr_len;
-        memcpy(buffer+start, tag, TAG_SIZE);
 
         socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_len);
     } catch(const exception& e) {
-        delete[] ciphertext;
-        delete[] tag;
+        delete[] msg_cipher;
         delete[] buffer;
-        throw runtime_error(e.what());
+        throw;
     }
-    
-    delete[] ciphertext;
-    delete[] tag;
+    delete[] msg_cipher;
     delete[] buffer;
 }
 
@@ -226,7 +221,7 @@ void keyEstablishment() {
     } catch(const exception& e) {
         delete[] buffer;
         delete[] secret;
-        throw runtime_error(e.what());
+        throw;
     }
 
     delete[] buffer;
