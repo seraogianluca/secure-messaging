@@ -1,3 +1,4 @@
+#include <fstream>
 #include "crypto.h"
 #include "socket.h"
 
@@ -8,6 +9,26 @@ int getOperationCode(unsigned char* message) {
     int opCode = message[0] - '0';
     if (opCode < 0 || opCode > 4) { throw runtime_error("Operation Code not valid");}
     return opCode;
+}
+
+unsigned int readPassword(unsigned char* username, unsigned int usernameLen, unsigned char* password) {
+    ifstream file("./resources/credentials.txt");
+    string line;
+    string delimiter = " ";
+    string pwd;
+    string usn;
+    const char* usernameChar = (const char*) username;
+    while (getline(file, line)) {
+        cout << "Line: " << line << endl;
+        usn = line.substr(0, line.find(delimiter));
+        cout << usn.compare(usernameChar) << endl;
+        if(usn.compare(usernameChar) == 0) {
+            pwd = line.substr(line.find(delimiter) + 1);
+            password = (unsigned char*) pwd.c_str();
+            return pwd.length();
+        }
+    }
+    return 0;
 }
 
 void buildHelloMessage(int sd, unsigned char *nonceClient, unsigned char *nonceServer){
