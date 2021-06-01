@@ -47,11 +47,11 @@ unsigned char* Crypto::getIV() {
     return iv;
 }
 
-EVP_PKEY* Crypto::readPrivateKey(string pwd) {
-    //QUESTION: necessario controllo su pwd tramite white/black list??
-    EVP_PKEY* prvKey;
+void Crypto::readPrivateKey(string usr, string pwd, EVP_PKEY *& prvKey) {
     FILE* file;
-    file = fopen("prvkey.pem", "r");
+    string path;
+    path = "./keys/" + usr + "_prvkey.pem";
+    file = fopen(path.c_str(), "r");
     if(!file)
         throw runtime_error("An error occurred, the file doesn't exist.");
     prvKey = PEM_read_PrivateKey(file, NULL, NULL, (char*)pwd.c_str());
@@ -61,14 +61,12 @@ EVP_PKEY* Crypto::readPrivateKey(string pwd) {
     }
     if(fclose(file)!=0)
         throw runtime_error("An error occurred while closing the file.");
-    return prvKey;
 }
 
-EVP_PKEY* Crypto::readPublicKey(string user) {
+void Crypto::readPublicKey(string user, EVP_PKEY* pubKey) {
     //QUESTION: necessario controllo su user tramite white/black list??
-    EVP_PKEY* pubKey;
     FILE* file;
-    string path = user + "_pubkey.pem";
+    string path = "./keys/" + user + "_pubkey.pem";
     file = fopen(path.c_str(), "r");
     if(!file)
         throw runtime_error("An error occurred, the file doesn't exist.");
@@ -79,7 +77,6 @@ EVP_PKEY* Crypto::readPublicKey(string user) {
     }
     if(fclose(file)!=0)
         throw runtime_error("An error occurred while closing the file.");
-    return pubKey;
 }
 
 int Crypto::encryptMessage(unsigned char *msg, int msg_len,

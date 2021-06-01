@@ -30,8 +30,8 @@ class Crypto {
         void generateNonce(unsigned char* nonce);
         unsigned char* getIV();
 
-        EVP_PKEY* readPrivateKey(string pwd);
-        EVP_PKEY* readPublicKey(string user);
+        void readPrivateKey(string usr, string pwd, EVP_PKEY *& prvKey);
+        void readPublicKey(string user, EVP_PKEY* pubKey);
 
         // Authenticated encryption
         int encryptMessage(unsigned char *msg, int msg_len, unsigned char *ciphr_msg, unsigned char *tag);
