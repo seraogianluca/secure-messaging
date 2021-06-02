@@ -1,4 +1,8 @@
 #include <fstream>
+#include <sstream>
+#include <fstream>
+#include <iterator>
+#include <vector>
 #include "crypto.h"
 #include "socket.h"
 
@@ -12,20 +16,24 @@ int getOperationCode(unsigned char* message) {
 }
 
 unsigned int readPassword(unsigned char* username, unsigned int usernameLen, unsigned char* password) {
+
     ifstream file("./resources/credentials.txt");
     string line;
     string delimiter = " ";
     string pwd;
     string usn;
     const char* usernameChar = (const char*) username;
+    
     while (getline(file, line)) {
-        cout << "Line: " << line << endl;
         usn = line.substr(0, line.find(delimiter));
-        cout << usn.compare(usernameChar) << endl;
         if(usn.compare(usernameChar) == 0) {
             pwd = line.substr(line.find(delimiter) + 1);
-            password = (unsigned char*) pwd.c_str();
-            return pwd.length();
+            for (int i = 0; i < pwd.length()/2; i++) {
+                string substr = pwd.substr(i*2, 2);
+                unsigned char v = stoi(substr, 0, 16);
+                password[i] = v;
+            }
+            return pwd.length()/2;
         }
     }
     return 0;
@@ -112,10 +120,14 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
     unsigned char *username = NULL;
     unsigned char *buffer = NULL;
     unsigned char *plaintext = NULL;
+    unsigned char *password = NULL;
+    unsigned char *hashedPwd = NULL;
+    unsigned char *finalDigest = NULL;
     EVP_PKEY *prvkey = NULL;
     unsigned int bufferLen;
     unsigned int usernameLen;
     unsigned int plainlen;
+    unsigned int passwordLen;
 
     try {
         // Generate nonce
@@ -140,6 +152,20 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
         plaintext = new unsigned char[bufferLen];
         crypto.readPrivateKey(prvkey);
         plainlen = crypto.publicKeyDecryption(buffer, bufferLen,plaintext,prvkey);
+
+        password = new unsigned char[MAX_MESSAGE_SIZE];
+        passwordLen = readPassword(username, usernameLen, password);
+
+        hashedPwd = new unsigned char[passwordLen + NONCE_SIZE];
+        memcpy(hashedPwd, password, passwordLen);
+        memcpy(hashedPwd+passwordLen, nonceServer, NONCE_SIZE);
+
+        finalDigest = new unsigned char[DIGEST_LEN];
+        crypto.computeHash(hashedPwd, passwordLen + NONCE_SIZE, finalDigest);
+
+        if(memcmp(plaintext, finalDigest, DIGEST_LEN) != 0) {
+            throw runtime_error("Wrong Password");
+        }
 
         cout << "Client authenticated." << endl;
     } catch(const exception& e) {

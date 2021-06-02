@@ -64,14 +64,17 @@ void sendPassword(unsigned char *nonce, string password, string username, X509 *
     unsigned int start = 0;
     unsigned int ciphertextLen = 0;
     try {
-        buffer = new unsigned char[NONCE_SIZE];
+        buffer = new unsigned char[NONCE_SIZE + DIGEST_LEN];
         pwdDigest = new unsigned char[DIGEST_LEN];
         crypto.computeHash((unsigned char *) password.c_str(), password.length(), pwdDigest);
+
         memcpy(buffer, pwdDigest, DIGEST_LEN);
         start += DIGEST_LEN;
         memcpy(buffer+start, nonce, NONCE_SIZE);
+
         finalDigest = new unsigned char[DIGEST_LEN];
-        crypto.computeHash(buffer, DIGEST_LEN, finalDigest);
+        crypto.computeHash(buffer, DIGEST_LEN + NONCE_SIZE, finalDigest);
+
         crypto.getPublicKeyFromCertificate(cert,server_pubkey);
         ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
         ciphertextLen = crypto.publicKeyEncryption(finalDigest, DIGEST_LEN, ciphertext, server_pubkey);
