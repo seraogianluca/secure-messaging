@@ -1,86 +1,71 @@
 #include "include/crypto.h"
-#include <sstream>
-
-string str_to_hex(string str) {
-    stringstream ss; 
-    for (int i = 0; i < str.length(); i++)
-        ss << hex << (int)str[i] << " ";
-    return ss.str();
-}
-
-void nonce_test() {
-    Crypto c((unsigned char*)"1234567890123456");
-
-    // Nonce test
-    string nonce;
-
-    cout << "NONCE TEST:" << endl;
-
-    try {    
-        nonce = c.generateNonce();
-        cout << "Length: " << nonce.length() << endl;
-        cout << "Nonce: ";
-        cout << str_to_hex(nonce) << endl;
-    } catch(const char *msg) {
-        cerr << msg << endl;
-    }
-}
 
 void auth_encrypt_test() {
-    Crypto c((unsigned char*)"1234567890123456");
+    Crypto *crypto = NULL;
     unsigned char msg[] = "Test message";
     unsigned char *ciphertext;
-    unsigned char *tag;
-    unsigned char *iv;
     unsigned char *dec_msg; 
     int ciphertext_len;
-    int plaintext_len = sizeof(msg);
+    int plaintext_len;
+
+    crypto = new Crypto(1);
+    crypto->insertKey((unsigned char*)"1234567890123456", 0);
+    crypto->setSessionKey(0);
 
     cout << "ENCRYPTION TEST:" << endl;
+    plaintext_len = sizeof(msg);
+    ciphertext = new (nothrow) unsigned char[plaintext_len+TAG_SIZE];
+    if(!ciphertext){
+        delete crypto;
+        cerr << "Array not initialized";
+        return;
+    }
 
     try {
-        ciphertext = (unsigned char*)malloc(plaintext_len+TAG_SIZE);
-        tag = (unsigned char*)malloc(TAG_SIZE);
-        ciphertext_len = c.encryptMessage(msg, 
-                                        plaintext_len, 
-                                        ciphertext, 
-                                        tag);
+        ciphertext_len = crypto->encryptMessage(msg, plaintext_len, ciphertext);
         cout << "Ciphertext:" << endl;
         BIO_dump_fp(stdout, (const char*)ciphertext, ciphertext_len);
-        cout << "Tag:" << endl;
-        BIO_dump_fp(stdout, (const char*)tag, TAG_SIZE);
 
-    } catch(const char *msg) {
-        cerr << msg << endl;
+    } catch(const exception& e) {
+        delete crypto;
+        delete[] ciphertext;
+        cerr << e.what() << endl;
+        return;
     }
-    //iv = c.getIV();
-    try {
 
-        dec_msg = (unsigned char*)malloc(ciphertext_len);
-        plaintext_len = c.decryptMessage(ciphertext,
-                                        ciphertext_len,
-                                        iv,
-                                        tag,
-                                        dec_msg);
+    cout << "DECRYPTION TEST:" << endl;
+    dec_msg = new (nothrow) unsigned char[ciphertext_len];
+    if(!dec_msg){
+        delete crypto;
+        delete[] ciphertext;
+        cerr << "Array not initialized";
+        return;
+    }
+
+    try {
+        plaintext_len = crypto->decryptMessage(ciphertext, ciphertext_len, dec_msg);
         if(plaintext_len == -1)
             cout << "Not corresponding tag." << endl;
         else {
             cout<<"Plaintext:"<<endl;
 	        BIO_dump_fp (stdout, (const char *)dec_msg, plaintext_len);
         }
-    } catch(const char* msg) {
-        cerr << msg << endl;
+    } catch(const exception& e) {
+        delete crypto;
+        delete[] ciphertext;
+        delete[] dec_msg;
+        cerr << e.what() << endl;
+        return;
     }
 
-    free(ciphertext);
-    free(tag);
-    free(dec_msg);
+    delete crypto;
+    delete[] ciphertext;
+    delete[] dec_msg;
 }
 
 int main() {
+    cout << "<-- TEST UNIT --->" << endl;
+    auth_encrypt_test();
 
-    // Encryption test
-    
-
-    
+    return 0;
 }

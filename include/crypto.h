@@ -37,8 +37,8 @@ class Crypto {
         void readPublicKey(string user, EVP_PKEY *&pubKey);
 
         // Authenticated encryption
-        int encryptMessage(unsigned char *msg, int msg_len, unsigned char *buffer);
-        int decryptMessage(unsigned char *msg, int msg_len, unsigned char *buffer);
+        int encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned char *buffer);
+        int decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned char *buffer);
        
         // Certificates
         void loadCertificate(X509*& cert, string path);
@@ -48,7 +48,7 @@ class Crypto {
         bool verifyCertificate(X509* cert_to_verify);
 
         // Public Key handling
-        int serializePublicKey(EVP_PKEY *prv_key, unsigned char *pubkey_buf);
+        int serializePublicKey(EVP_PKEY *pub_key, unsigned char *pubkey_buf);
         void deserializePublicKey(unsigned char *pubkey_buf, unsigned int pubkey_size, EVP_PKEY *&pubkey);
         int publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *pubkey);
         int publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *prvkey);
