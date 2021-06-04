@@ -10,7 +10,7 @@ int main(int argc, char* const argv[]) {
                 serverSocket.acceptNewConnection();
             } else {
                 for (unsigned int i = 0; i < MAX_CLIENTS; i++)  {  
-                    int sd = serverSocket.getClient(i); 
+                    int sd = serverSocket.getClient(i);
                     if (serverSocket.isFDSet(sd)) {
                         //Check if it was for closing , and also read the 
                         //incoming message                         
@@ -30,6 +30,7 @@ int main(int argc, char* const argv[]) {
                                 // Login
                                 cout << "\n-------Authentication-------" << endl;
                                 authentication(sd, messageReceived, message_len);
+                                keyEstablishment(sd, i);
                                 cout << "-----------------------------" << endl << endl;
                                 // keyEstablishment(sd);
                             } else if (operationCode == 3) {

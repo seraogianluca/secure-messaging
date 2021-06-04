@@ -3,28 +3,32 @@
 int showMenu();
 
 int main(int argc, char *const argv[]) {
+    unsigned char *greetingMessage;
+    int menuOption;
+    string input;
+
     try {
-        string password = readFromStdout("Insert password: ");
-        socketClient.makeConnection();
         
-        //TODO: to check
-        unsigned char *greetingMessage = new unsigned char[MAX_MESSAGE_SIZE ];
+        cout << "\n-------Authentication-------" << endl;
+        socketClient.makeConnection();
+
+        greetingMessage = new unsigned char[MAX_MESSAGE_SIZE ];
         socketClient.receiveMessage(socketClient.getMasterFD(), greetingMessage);
         cout << "Connection confirmed: " << greetingMessage << endl;
         delete[] greetingMessage;
 
+        authentication();
+        keyEstablishment(0);
+        crypto.setSessionKey(0);
+        cout << "-----------------------------" << endl << endl;
+        
         while (true) {
-            int value = showMenu();
-            string input;
+            menuOption = showMenu();
 
-            switch(value) {
+            switch(menuOption) {
                 case 1:
-                    keyEstablishment();
                     break;
                 case 2:
-                    cout << "\n-------Authentication-------" << endl;
-                    authentication();
-                    cout << "-----------------------------" << endl << endl;
                     break;
                 case 3:
                     cout << "> ";
@@ -42,6 +46,7 @@ int main(int argc, char *const argv[]) {
         }
     }
     catch (const exception &e) {
+        delete[] greetingMessage;
         cerr << e.what() << endl;
     }
 
@@ -49,12 +54,14 @@ int main(int argc, char *const argv[]) {
 }
 
 int showMenu() {
+    size_t value;
+
     cout << endl;
-    cout << "2. Authentication" << endl;
+    cout << "1. Online users" << endl;
+    cout << "2. Request to talk" << endl;
     cout << "3. Send a message" << endl;
     cout << "0. Exit" << endl;
-    cout << "--> ";
-    size_t value;
+    cout << "> ";
     cin >> value;
     cin.ignore();
     return value;

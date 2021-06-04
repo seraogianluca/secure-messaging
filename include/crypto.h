@@ -15,18 +15,21 @@ using namespace std;
 class Crypto {
     private:
         // Controllare che non restino salvate da qualche parte altrimenti non è sicura!!
+        unsigned char **keys;
         unsigned char *session_key;
         unsigned char *iv;
+        unsigned int max_keys;
 
         void generateIV();
 
         // Diffie-Hellman
         void buildParameters(EVP_PKEY *&dh_params);
     public:
-        Crypto(unsigned char *sk);
+        Crypto(int num_keys);
         ~Crypto();
 
-        void setSessionKey(unsigned char *secret);
+        void insertKey(unsigned char *key, unsigned int pos);
+        void setSessionKey(unsigned int key);
         void generateNonce(unsigned char* nonce);
 
         void readPrivateKey(string usr, string pwd, EVP_PKEY *&prvKey);

@@ -1,18 +1,42 @@
 #include "socket.h"
 #include "crypto.h"
 #include <cstring>
+#include <termios.h>
 
 //TODO: serve costruttore con parametri di default per fare solo dichiarazione
-Crypto crypto = Crypto((unsigned char *)"1234567890123456");
-SocketClient socketClient = SocketClient(SOCK_STREAM);
+Crypto crypto(2);
+SocketClient socketClient(SOCK_STREAM);
+
+void setStdinEcho(bool enable = true) {
+    struct termios tty;
+    tcgetattr(STDIN_FILENO, &tty);
+    if(!enable)
+        tty.c_lflag &= ~ECHO;
+    else
+        tty.c_lflag |= ECHO;
+    (void)tcsetattr(STDIN_FILENO, TCSANOW, &tty);
+}
+
+string readPassword() {
+    string password;
+
+    cout << "Insert password: ";
+    setStdinEcho(false);
+    cin >> password;
+    setStdinEcho(true);
+    cout << endl;
+
+    return password;
+}
 
 string readFromStdout(string message) {
-    cout << message << "\n --> ";
     string value;
+
+    cout << message;
     getline(cin, value);
     while (value.length() == 0) {
         cout << "Insert at least a character." << endl;
-        cout << message << "\n --> ";
+        cout << message;
         getline(cin, value);
     }
     return value;
@@ -123,6 +147,10 @@ void authentication() {
         // Get Username
         string username = readFromStdout("Insert username: ");
         unsigned int usernameLen = username.length();
+
+        string password = readPassword();
+        crypto.readPrivateKey(username,password,prvkey);
+
         // Generate nonce
         nonceClient = new unsigned char[NONCE_SIZE];
         crypto.generateNonce(nonceClient);
@@ -133,22 +161,19 @@ void authentication() {
         // Receive server hello
         buffer = new unsigned char[MAX_MESSAGE_SIZE];
         messageReceivedLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
+
         plaintext = new unsigned char[messageReceivedLen];
-        
-        string password = readFromStdout("Insert password: ");
-        crypto.readPrivateKey(username,password,prvkey);
         plainlen = crypto.publicKeyDecryption(buffer, messageReceivedLen,plaintext,prvkey);
 
         // Check and extract nonce
         nonceServer = new unsigned char[NONCE_SIZE];
         extractNonce(nonceClient, nonceServer, plaintext, plainlen);
-                
+
         // Verify certificate
         verifyServerCertificate(plaintext, plainlen, usernameLen, cert);
 
         // Send pwd
         sendPassword(nonceServer, password, username, cert);
-        
     } catch (const exception &e) {
         delete[] nonceClient;
         delete[] buffer;
@@ -194,7 +219,7 @@ void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *ms
     delete[] buffer;
 }
 
-void keyEstablishment() {
+void keyEstablishment(unsigned int key_pos) {
     unsigned char *buffer = NULL;
     unsigned char *secret = NULL;
     unsigned int key_len;
@@ -203,7 +228,7 @@ void keyEstablishment() {
 
     try {
         // TODO: check where put the login request
-        socketClient.sendMessage(socketClient.getMasterFD(), OP_LOGIN, 1);
+        //socketClient.sendMessage(socketClient.getMasterFD(), OP_LOGIN, 1);
         
         // Generate public key
         crypto.keyGeneration(prv_key_a);
@@ -220,7 +245,11 @@ void keyEstablishment() {
         // Secret derivation
         secret = new unsigned char[DIGEST_LEN];
         crypto.secretDerivation(prv_key_a, pub_key_b, secret);
-        crypto.setSessionKey(secret);
+
+        cout << "O' secret: " << endl;
+        BIO_dump_fp(stdout, (const char*)secret, DIGEST_LEN);
+
+        crypto.insertKey(secret, key_pos);
     } catch(const exception& e) {
         delete[] buffer;
         delete[] secret;

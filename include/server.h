@@ -6,8 +6,8 @@
 #include "crypto.h"
 #include "socket.h"
 
-SocketServer serverSocket = SocketServer(SOCK_STREAM); //TCP
-Crypto crypto((unsigned char*)"1234567890123456");
+SocketServer serverSocket(SOCK_STREAM); //TCP
+Crypto crypto(MAX_CLIENTS);
 
 int getOperationCode(unsigned char* message) {
     int opCode = message[0] - '0';
@@ -183,7 +183,7 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
     delete[] plaintext;
 }
 
-void keyEstablishment(int sd){
+void keyEstablishment(int sd, unsigned int key_pos){
     unsigned char *buffer = NULL;
     unsigned char *secret = NULL;
     unsigned int key_len;
@@ -206,7 +206,11 @@ void keyEstablishment(int sd){
         // Secret derivation
         secret = new unsigned char[DIGEST_LEN];
         crypto.secretDerivation(prv_key_a, pub_key_b, secret);
-        crypto.setSessionKey(secret);
+
+        cout << "O' secret: " << endl;
+        BIO_dump_fp(stdout, (const char*)secret, DIGEST_LEN);
+
+        crypto.insertKey(secret, key_pos);
     } catch(const exception& e) {
         delete[] buffer;
         delete[] secret;
