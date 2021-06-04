@@ -2,6 +2,7 @@
 
 int main(int argc, char* const argv[]) {
     vector<onlineUser> onlineUsers;
+    vector<activeChat> activeChats;
     try {
         while(true) {
             serverSocket.initSet();
@@ -37,7 +38,7 @@ int main(int argc, char* const argv[]) {
                                 user.username = username;
                                 user.sd = sd;
                                 onlineUsers.push_back(user);
-                                sendOnlineUsers(onlineUsers, sd, i);
+                                sendOnlineUsers(onlineUsers, username, sd, i);
                             } else if (operationCode == 3) {
                                 //CHECK HEADER SIZE
                                 int ciphertext_len = message_len-1;
@@ -54,6 +55,7 @@ int main(int argc, char* const argv[]) {
                             }
                             if (operationCode == 2) {
                                 // Request to talk
+                                // Riceve messaggio ed elimina l'OP
                             }
                             if (operationCode == 3) {
                                 // Message

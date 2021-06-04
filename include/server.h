@@ -233,13 +233,13 @@ void keyEstablishment(int sd, unsigned int key_pos){
     delete[] secret;
 }
 
-void sendOnlineUsers(vector<onlineUser> onlineUsers, int sd, int keyPos) {
+void sendOnlineUsers(vector<onlineUser> onlineUsers, string username, int sd, int keyPos) {
     unsigned char *encryptedMessage;
     unsigned int encryptedMessageLen;
     string message = "";
     try {
         for (onlineUser user : onlineUsers) {
-            if(sd != user.sd) {
+            if(username != user.username) {
                 message.append(user.username);
                 message.append("\n");
             }
@@ -255,4 +255,27 @@ void sendOnlineUsers(vector<onlineUser> onlineUsers, int sd, int keyPos) {
         delete[] encryptedMessage;
         throw;
     }
+}
+
+void requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, unsigned int key_a_pos, unsigned int key_b_pos, unsigned int sd_a, unsigned int sd_b, string username) {
+    unsigned char *buffer_a;
+    unsigned char *nonce_a;
+    unsigned char *buffer_b;
+    unsigned char *nonce_b;
+    unsigned char *pubkey_a_stream;
+    EVP_PKEY *pubkey_a;
+    unsigned int buffer_a_len;
+    unsigned int buffer_b_len;
+    unsigned int start = 0;
+    try {
+        // Decrypt Message M1
+        buffer_a = new unsigned char[MAX_MESSAGE_SIZE];
+        crypto.setSessionKey(key_a_pos);
+        buffer_a_len = crypto.decryptMessage(msg, msgLen, buffer_a);
+
+
+    } catch(const std::exception& e) {
+        throw;
+    }
+    
 }

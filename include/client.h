@@ -270,10 +270,57 @@ void receiveOnlineUsersList() {
         bufferLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
         plaintext = new unsigned char[MAX_MESSAGE_SIZE];
         plaintextLen = crypto.decryptMessage(buffer, bufferLen, plaintext);
+        plaintext[plaintextLen] = '\0';
         cout << "Online users: " << endl << plaintext << endl;
     } catch(const exception& e) {
         delete[] buffer;
         delete[] plaintext;
         throw;
     }
+}
+
+void sendRequestToTalk(string username) {
+    unsigned char *encryptedMessage;
+    unsigned char *message;
+    unsigned char *nonce;
+    unsigned char *okBuffer;
+    unsigned int encryptedMessageLen;
+    unsigned int messageLen;
+    unsigned int start = 0;
+    try {
+
+        // Send Message M1
+        message = new unsigned char[MAX_MESSAGE_SIZE];
+        crypto.generateNonce(nonce);
+        memcpy(message, (const char *)username.c_str(), username.length());
+        start += username.length();
+        memcpy(message + start, nonce, NONCE_SIZE);
+        
+        encryptedMessage = new unsigned char[MAX_MESSAGE_SIZE];
+        crypto.setSessionKey(0);
+        encryptedMessageLen = crypto.encryptMessage(message, messageLen, encryptedMessage);
+        memcpy(message, OP_REQUEST_TO_TALK, 1);
+        start = 1;
+        memcpy(message + start, encryptedMessage, encryptedMessageLen);
+        messageLen = encryptedMessageLen + 1;
+
+        socketClient.sendMessage(socketClient.getMasterFD(), message, messageLen);
+
+        // Receive Message M4:
+        encryptedMessageLen = socketClient.receiveMessage(socketClient.getMasterFD(), encryptedMessage);
+        messageLen = crypto.decryptMessage(encryptedMessage, encryptedMessageLen, message);
+
+        if(memcmp(message, "OK", 2) != 0) {
+            throw runtime_error("Request to talk failed.");
+        }
+        
+        
+    } catch(const exception& e) {
+        throw;
+    }
+    
+}
+
+void receiveRequestToTalk() {
+
 }
