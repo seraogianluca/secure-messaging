@@ -20,7 +20,6 @@ class SocketClient {
         struct sockaddr_in address;
         int master_fd;
         int port;
-        void createSocket();
 
     public:
         SocketClient(int socketType);
@@ -30,9 +29,6 @@ class SocketClient {
         int receiveMessage(int sd, unsigned char *buffer);
         void makeConnection();
 };
-
-
-
 
 class SocketServer: public SocketClient {
     
