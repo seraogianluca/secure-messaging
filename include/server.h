@@ -260,20 +260,50 @@ void sendOnlineUsers(vector<onlineUser> onlineUsers, string username, int sd, in
 void requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, unsigned int key_a_pos, unsigned int key_b_pos, unsigned int sd_a, unsigned int sd_b, string username) {
     unsigned char *buffer_a;
     unsigned char *nonce_a;
+    unsigned char *username_b;
     unsigned char *buffer_b;
     unsigned char *nonce_b;
     unsigned char *pubkey_a_stream;
+    unsigned char *encrypt_msg_to_b;
     EVP_PKEY *pubkey_a;
     unsigned int buffer_a_len;
+    unsigned int pubkey_size;
     unsigned int buffer_b_len;
+    unsigned int username_b_len;
+    unsigned int encrypted_msg_to_b_len;
     unsigned int start = 0;
     try {
-        // Decrypt Message M1
-        buffer_a = new unsigned char[MAX_MESSAGE_SIZE];
+        // Decrypt Message M1 OPCODE||{USR_B||Na}SA
+        //msgLen = serverSocket.receiveMessage(sd_a,msg);
+        if(memcmp(msg, OP_REQUEST_TO_TALK, 1) != 0) {
+            throw runtime_error("Request to talk failed.");
+        }
+        buffer_b = new unsigned char[msgLen];
         crypto.setSessionKey(key_a_pos);
-        buffer_a_len = crypto.decryptMessage(msg, msgLen, buffer_a);
+        buffer_b_len = crypto.decryptMessage(msg+1, msgLen-1, buffer_b);
+        username_b_len = buffer_b_len-NONCE_SIZE;
+        username_b = new unsigned char[username_b_len];
+        memcpy(username_b,buffer_b,username_b_len);
+        nonce_a = new unsigned char[NONCE_SIZE];
+        memcpy(nonce_a,buffer_b+username_b_len,NONCE_SIZE);
 
+        // Encrypt Message M2 OPCODE||{PKa||Na}SB
+        /*buffer_a = new unsigned char[MAX_MESSAGE_SIZE];
+        crypto.readPublicKey(username,pubkey_a);
+        pubkey_a_stream = new unsigned char[MAX_MESSAGE_SIZE];
+        pubkey_size = crypto.serializePublicKey(pubkey_a,pubkey_a_stream);
+        memcpy(buffer_a,pubkey_a_stream,pubkey_size);
+        start += pubkey_size;
+        memcpy(buffer_a + start, nonce_a, NONCE_SIZE);
+        buffer_a_len = pubkey_size + NONCE_SIZE + 1;
+        encrypt_msg_to_b = new unsigned char[MAX_MESSAGE_SIZE];
+        crypto.setSessionKey(key_b_pos);
+        encrypted_msg_to_b_len =  crypto.encryptMessage(buffer_a,buffer_a_len,encrypt_msg_to_b);
 
+        // Append OPCODE as clear text
+        memcpy(buffer_a, OP_REQUEST_TO_TALK, 1);
+        memcpy(buffer_a+1,encrypt_msg_to_b,encrypted_msg_to_b_len);
+        serverSocket.sendMessage(sd_b,buffer_a,encrypted_msg_to_b_len+1);*/
     } catch(const std::exception& e) {
         throw;
     }

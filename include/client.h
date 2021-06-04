@@ -298,12 +298,11 @@ void sendRequestToTalk(string username) {
         memcpy(message + start, nonce, NONCE_SIZE);
         messageLen = NONCE_SIZE + username.length();
         
-        cout << "Message: " << endl;
-        BIO_dump_fp(stdout, (const char *)message, messageLen);
 
         encryptedMessage = new unsigned char[MAX_MESSAGE_SIZE];
         crypto.setSessionKey(0);
         encryptedMessageLen = crypto.encryptMessage(message, messageLen, encryptedMessage);
+
         memcpy(message, OP_REQUEST_TO_TALK, 1);
         start = 1;
         memcpy(message + start, encryptedMessage, encryptedMessageLen);
@@ -312,12 +311,12 @@ void sendRequestToTalk(string username) {
         socketClient.sendMessage(socketClient.getMasterFD(), message, messageLen);
 
         // Receive Message M4:
-        encryptedMessageLen = socketClient.receiveMessage(socketClient.getMasterFD(), encryptedMessage);
+        /*encryptedMessageLen = socketClient.receiveMessage(socketClient.getMasterFD(), encryptedMessage);
         messageLen = crypto.decryptMessage(encryptedMessage, encryptedMessageLen, message);
 
         if(memcmp(message, "OK", 2) != 0) {
             throw runtime_error("Request to talk failed.");
-        }
+        }*/
         
         
     } catch(const exception& e) {

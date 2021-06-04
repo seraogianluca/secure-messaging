@@ -55,7 +55,7 @@ int main(int argc, char* const argv[]) {
                             }
                             if (operationCode == 2) {
                                 // Request to talk
-                                // Riceve messaggio ed elimina l'OP
+                                requestToTalkProtocol(messageReceived, message_len, i, 3,sd,4,"lore");
                             }
                             if (operationCode == 3) {
                                 // Message
