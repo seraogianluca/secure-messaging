@@ -259,3 +259,21 @@ void keyEstablishment(unsigned int key_pos) {
     delete[] buffer;
     delete[] secret;
 }
+
+void receiveOnlineUsersList() {
+    unsigned char *buffer;
+    unsigned char *plaintext;
+    unsigned int bufferLen;
+    unsigned int plaintextLen;
+    try {
+        buffer = new unsigned char[MAX_MESSAGE_SIZE];
+        bufferLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
+        plaintext = new unsigned char[MAX_MESSAGE_SIZE];
+        plaintextLen = crypto.decryptMessage(buffer, bufferLen, plaintext);
+        cout << "Online users: " << endl << plaintext << endl;
+    } catch(const exception& e) {
+        delete[] buffer;
+        delete[] plaintext;
+        throw;
+    }
+}

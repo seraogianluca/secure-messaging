@@ -6,6 +6,17 @@
 #include "crypto.h"
 #include "socket.h"
 
+
+struct onlineUser {
+    string username;
+    int sd;
+};
+
+struct activeChat {
+    onlineUser a;
+    onlineUser b;
+};
+
 SocketServer serverSocket(SOCK_STREAM); //TCP
 Crypto crypto(MAX_CLIENTS);
 
@@ -114,7 +125,7 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
     delete[] encrypt_msg;
 }
 
-void authentication(int sd, unsigned char *messageReceived, unsigned int message_len) {
+string authentication(int sd, unsigned char *messageReceived, unsigned int message_len) {
     unsigned char *nonceServer = NULL;
     unsigned char *nonceClient = NULL;
     unsigned char *username = NULL;
@@ -128,7 +139,7 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
     unsigned int usernameLen;
     unsigned int plainlen;
     unsigned int passwordLen;
-
+    string usernameStr;
     try {
         // Generate nonce
         nonceServer = new unsigned char[NONCE_SIZE];
@@ -166,8 +177,8 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
         if(memcmp(plaintext, finalDigest, DIGEST_LEN) != 0) {
             throw runtime_error("Wrong Password");
         }
-
-        cout << "Client authenticated." << endl;
+        usernameStr = string((const char *)username);
+        cout << "Client " << usernameStr << " authenticated." << endl;
     } catch(const exception& e) {
         delete[] nonceServer;
         delete[] nonceClient;
@@ -181,6 +192,7 @@ void authentication(int sd, unsigned char *messageReceived, unsigned int message
     delete[] username;
     delete[] buffer;
     delete[] plaintext;
+    return usernameStr;
 }
 
 void keyEstablishment(int sd, unsigned int key_pos){
@@ -219,4 +231,28 @@ void keyEstablishment(int sd, unsigned int key_pos){
     
     delete[] buffer;
     delete[] secret;
+}
+
+void sendOnlineUsers(vector<onlineUser> onlineUsers, int sd, int keyPos) {
+    unsigned char *encryptedMessage;
+    unsigned int encryptedMessageLen;
+    string message = "";
+    try {
+        for (onlineUser user : onlineUsers) {
+            if(sd != user.sd) {
+                message.append(user.username);
+                message.append("\n");
+            }
+        }
+        if(message.length() == 0) {
+            message.append("You are the only online user");
+        }
+        crypto.setSessionKey(keyPos);
+        encryptedMessage = new unsigned char[MAX_MESSAGE_SIZE];
+        encryptedMessageLen = crypto.encryptMessage((unsigned char *)message.c_str(), message.length(), encryptedMessage);
+        serverSocket.sendMessage(sd, encryptedMessage, encryptedMessageLen);
+    } catch(const exception& e) {
+        delete[] encryptedMessage;
+        throw;
+    }
 }

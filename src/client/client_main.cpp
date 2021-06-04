@@ -21,6 +21,7 @@ int main(int argc, char *const argv[]) {
         keyEstablishment(0);
         crypto.setSessionKey(0);
         cout << "-----------------------------" << endl << endl;
+        receiveOnlineUsersList();
         
         while (true) {
             menuOption = showMenu();

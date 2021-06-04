@@ -1,6 +1,7 @@
 #include "include/server.h"
 
 int main(int argc, char* const argv[]) {
+    vector<onlineUser> onlineUsers;
     try {
         while(true) {
             serverSocket.initSet();
@@ -29,10 +30,14 @@ int main(int argc, char* const argv[]) {
                             if (operationCode == 0) {
                                 // Login
                                 cout << "\n-------Authentication-------" << endl;
-                                authentication(sd, messageReceived, message_len);
+                                string username = authentication(sd, messageReceived, message_len);
                                 keyEstablishment(sd, i);
                                 cout << "-----------------------------" << endl << endl;
-                                // keyEstablishment(sd);
+                                onlineUser user = onlineUser();
+                                user.username = username;
+                                user.sd = sd;
+                                onlineUsers.push_back(user);
+                                sendOnlineUsers(onlineUsers, sd, i);
                             } else if (operationCode == 3) {
                                 //CHECK HEADER SIZE
                                 int ciphertext_len = message_len-1;
