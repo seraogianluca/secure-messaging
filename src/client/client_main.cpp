@@ -6,6 +6,7 @@ int main(int argc, char *const argv[]) {
     unsigned char *greetingMessage;
     int menuOption;
     string input;
+    string user;
 
     try {
         
@@ -30,6 +31,8 @@ int main(int argc, char *const argv[]) {
                 case 1:
                     break;
                 case 2:
+                    user = readFromStdout("Insert username: ");
+                    sendRequestToTalk(user);
                     break;
                 case 3:
                     cout << "> ";

@@ -291,11 +291,16 @@ void sendRequestToTalk(string username) {
 
         // Send Message M1
         message = new unsigned char[MAX_MESSAGE_SIZE];
+        nonce = new unsigned char[NONCE_SIZE];
         crypto.generateNonce(nonce);
         memcpy(message, (const char *)username.c_str(), username.length());
         start += username.length();
         memcpy(message + start, nonce, NONCE_SIZE);
+        messageLen = NONCE_SIZE + username.length();
         
+        cout << "Message: " << endl;
+        BIO_dump_fp(stdout, (const char *)message, messageLen);
+
         encryptedMessage = new unsigned char[MAX_MESSAGE_SIZE];
         crypto.setSessionKey(0);
         encryptedMessageLen = crypto.encryptMessage(message, messageLen, encryptedMessage);
