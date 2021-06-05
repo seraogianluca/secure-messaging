@@ -1,63 +1,47 @@
 #include "include/crypto.h"
 
 Crypto::Crypto(int num_keys) {
-    keys = NULL;
-    session_key = NULL;
-    iv = NULL;
-    max_keys = 0;
 
-    try {
-        iv = new unsigned char[IV_SIZE];
-        for(int i = 0; i < IV_SIZE; i++) {
-            iv[i] = 0;
-        }
+    iv = new (nothrow) unsigned char[IV_SIZE];
 
-        session_key = new unsigned char[DIGEST_LEN];
-        for(int i = 0; i < DIGEST_LEN; i++) {
-            session_key[i] = 0;
-        }
+    if(!iv)
+        throw runtime_error("An error occurred while allocating iv.");
 
-        keys = new unsigned char*[num_keys];
-        for(int i = 0; i < num_keys; i++) {
-            keys[i] = NULL;    
-        }
+    for(int i = 0; i < IV_SIZE; i++) {
+        iv[i] = 0;
+    }
 
-        max_keys = num_keys;
-    } catch(const exception& e) {
+    session_key = new (nothrow) unsigned char[DIGEST_LEN];
+
+    if(!session_key) {
         delete[] iv;
-        delete[] session_key;
-        delete[] keys;
-        cerr << e.what() << endl;
-    }          
+        throw runtime_error("An error occurred while allocating session key.");
+    }
+
+    for(int i = 0; i < DIGEST_LEN; i++) {
+        session_key[i] = 0;
+    }        
 }
 
 Crypto::~Crypto() {
     delete[] iv;
     delete[] session_key;
-    delete[] keys;
 }
 
 void Crypto::insertKey(unsigned char *key, unsigned int pos) {
-    if(pos > max_keys)
-        throw runtime_error("Position exceeds keys array.");
-    
-    try {
-        keys[pos] = new unsigned char[DIGEST_LEN];
-        for(int i = 0; i < DIGEST_LEN; i++) {
-            keys[pos][i] = key[i];
-        }
-    } catch(const exception& e) {
-        delete[] keys[pos];
-        throw;
-    }
+    vector<unsigned char> temp(key, key + DIGEST_LEN);
+    keys.insert(keys.begin() + pos, temp);
 }
 
 void Crypto::setSessionKey(unsigned int key) {
-    if(!keys[key])
-        throw runtime_error("Key not exists.");
+    try {
+        vector<unsigned char> temp = keys.at(key);
 
-    for(int i = 0; i < DIGEST_LEN; i++) {
-        session_key[i] = keys[key][i];
+        for(int i = 0; i < DIGEST_LEN; i++) {
+            session_key[i] = temp.at(i);
+        }
+    } catch(const exception& e) {
+        throw;
     }
 }
 
