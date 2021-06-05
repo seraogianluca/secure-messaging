@@ -37,8 +37,9 @@ int main(int argc, char* const argv[]) {
                                 onlineUser user = onlineUser();
                                 user.username = username;
                                 user.sd = sd;
+                                user.key_pos = i;
                                 onlineUsers.push_back(user);
-                                sendOnlineUsers(onlineUsers, username, sd, i);
+                                sendOnlineUsers(onlineUsers, user);
                             } else if (operationCode == 3) {
                                 //CHECK HEADER SIZE
                                 int ciphertext_len = message_len-1;
@@ -55,7 +56,7 @@ int main(int argc, char* const argv[]) {
                             }
                             if (operationCode == 2) {
                                 // Request to talk
-                                requestToTalkProtocol(messageReceived, message_len, i, 3,sd,4,"lore");
+                                requestToTalkProtocol(messageReceived, message_len, onlineUsers.at(i), onlineUsers);
                             }
                             if (operationCode == 3) {
                                 // Message

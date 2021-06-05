@@ -10,6 +10,7 @@
 struct onlineUser {
     string username;
     int sd;
+    unsigned int key_pos;
 };
 
 struct activeChat {
@@ -233,13 +234,16 @@ void keyEstablishment(int sd, unsigned int key_pos){
     delete[] secret;
 }
 
-void sendOnlineUsers(vector<onlineUser> onlineUsers, string username, int sd, int keyPos) {
+void sendOnlineUsers(vector<onlineUser> onlineUsers, onlineUser user) {
     unsigned char *encryptedMessage;
     unsigned int encryptedMessageLen;
     string message = "";
+    string username = user.username;
+    unsigned int keyPos = user.key_pos;
+    int sd = user.sd;
     try {
         for (onlineUser user : onlineUsers) {
-            if(username != user.username) {
+            if(username.compare(user.username) != 0) {
                 message.append(user.username);
                 message.append("\n");
             }
@@ -257,55 +261,149 @@ void sendOnlineUsers(vector<onlineUser> onlineUsers, string username, int sd, in
     }
 }
 
-void requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, unsigned int key_a_pos, unsigned int key_b_pos, unsigned int sd_a, unsigned int sd_b, string username) {
+onlineUser getUser(vector<onlineUser> onlineUsers, string username){
+    for (onlineUser user : onlineUsers) {
+        if(username.compare(user.username) == 0) {
+            return user;
+        }
+    }
+    throw runtime_error("The user is not online");
+}
+
+void requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peer_a, vector<onlineUser> onlineUsers) {
     unsigned char *buffer_a;
     unsigned char *nonce_a;
     unsigned char *username_b;
     unsigned char *buffer_b;
     unsigned char *nonce_b;
+    unsigned char *nonces;
     unsigned char *pubkey_a_stream;
+    unsigned char *pubkey_b_stream;
     unsigned char *encrypt_msg_to_b;
-    EVP_PKEY *pubkey_a;
+    unsigned char *encrypt_msg_to_a;
     unsigned int buffer_a_len;
-    unsigned int pubkey_size;
+    unsigned int pubkey_a_size;
+    unsigned int pubkey_b_size;
     unsigned int buffer_b_len;
     unsigned int username_b_len;
     unsigned int encrypted_msg_to_b_len;
+    unsigned int encrypted_msg_to_a_len;
     unsigned int start = 0;
+    onlineUser peer_b;
+    EVP_PKEY *pubkey_a;
+    EVP_PKEY *pubkey_b;
+    uint64_t nonces_len;
     try {
         // Decrypt Message M1 OPCODE||{USR_B||Na}SA
-        //msgLen = serverSocket.receiveMessage(sd_a,msg);
         if(memcmp(msg, OP_REQUEST_TO_TALK, 1) != 0) {
             throw runtime_error("Request to talk failed.");
         }
         buffer_b = new unsigned char[msgLen];
-        crypto.setSessionKey(key_a_pos);
-        buffer_b_len = crypto.decryptMessage(msg+1, msgLen-1, buffer_b);
+        crypto.setSessionKey(peer_a.key_pos);
+        buffer_b_len = crypto.decryptMessage(msg+1, msgLen-1, buffer_b); //Not consider the OPCODE
         username_b_len = buffer_b_len-NONCE_SIZE;
         username_b = new unsigned char[username_b_len];
         memcpy(username_b,buffer_b,username_b_len);
         nonce_a = new unsigned char[NONCE_SIZE];
         memcpy(nonce_a,buffer_b+username_b_len,NONCE_SIZE);
 
+        peer_b = getUser(onlineUsers,string((const char*)username_b));
+
         // Encrypt Message M2 OPCODE||{PKa||Na}SB
-        /*buffer_a = new unsigned char[MAX_MESSAGE_SIZE];
-        crypto.readPublicKey(username,pubkey_a);
+        buffer_a = new unsigned char[MAX_MESSAGE_SIZE];
+        crypto.readPublicKey(peer_a.username,pubkey_a);
         pubkey_a_stream = new unsigned char[MAX_MESSAGE_SIZE];
-        pubkey_size = crypto.serializePublicKey(pubkey_a,pubkey_a_stream);
-        memcpy(buffer_a,pubkey_a_stream,pubkey_size);
-        start += pubkey_size;
+        pubkey_a_size = crypto.serializePublicKey(pubkey_a,pubkey_a_stream);
+        memcpy(buffer_a,pubkey_a_stream,pubkey_a_size);
+        start += pubkey_a_size;
         memcpy(buffer_a + start, nonce_a, NONCE_SIZE);
-        buffer_a_len = pubkey_size + NONCE_SIZE + 1;
+        buffer_a_len = pubkey_a_size + NONCE_SIZE + 1;
         encrypt_msg_to_b = new unsigned char[MAX_MESSAGE_SIZE];
-        crypto.setSessionKey(key_b_pos);
+        crypto.setSessionKey(peer_b.key_pos);
         encrypted_msg_to_b_len =  crypto.encryptMessage(buffer_a,buffer_a_len,encrypt_msg_to_b);
 
         // Append OPCODE as clear text
         memcpy(buffer_a, OP_REQUEST_TO_TALK, 1);
         memcpy(buffer_a+1,encrypt_msg_to_b,encrypted_msg_to_b_len);
-        serverSocket.sendMessage(sd_b,buffer_a,encrypted_msg_to_b_len+1);*/
+        serverSocket.sendMessage(peer_b.sd,buffer_a,encrypted_msg_to_b_len+1);
+
+        // Decrypt Message M3 {OK||{Na||Nb}PKa}SB
+        msgLen = serverSocket.receiveMessage(peer_b.sd, msg);
+        crypto.setSessionKey(peer_b.key_pos);
+        buffer_b_len = crypto.decryptMessage(msg, msgLen, buffer_b);
+        if(memcmp(buffer_b, "OK", 2) != 0){
+            throw runtime_error("Request to talk failed.");
+        }
+        nonces_len = msgLen - 2;
+        nonces = new unsigned char[nonces_len];
+        memcpy(nonces,msg+2,nonces_len);
+
+        // Encrypt Message M4 {nonLen||OK||{Na||Nb}PKa||PKb} --> nonLen = 64 bits
+        buffer_a = new unsigned char[MAX_MESSAGE_SIZE];
+        memset(buffer_a,0,MAX_MESSAGE_SIZE);
+        start = 0;
+        memcpy(buffer_a,(const void*)nonces_len,8);
+        start += 8;
+        memcpy(buffer_a + start, "OK", 2);
+        start += 2;
+        memcpy(buffer_a + start, nonces, nonces_len);
+        start += nonces_len;
+        crypto.readPublicKey((string)peer_a.username,pubkey_b);
+        pubkey_b_stream = new unsigned char[MAX_MESSAGE_SIZE];
+        pubkey_b_size = crypto.serializePublicKey(pubkey_b,pubkey_b_stream);
+        memcpy(buffer_a + start,pubkey_b_stream,pubkey_b_size);
+        start += pubkey_b_size;
+        encrypt_msg_to_a = new unsigned char[MAX_MESSAGE_SIZE];
+        crypto.setSessionKey(peer_a.key_pos);
+        encrypted_msg_to_a_len =  crypto.encryptMessage(buffer_a,start,encrypt_msg_to_a);
+        serverSocket.sendMessage(peer_a.sd,encrypt_msg_to_a,encrypted_msg_to_a_len);
+
+        // Decrypt Message M5
+        msgLen = serverSocket.receiveMessage(peer_a.sd, msg);
+        crypto.setSessionKey(peer_a.key_pos);
+        buffer_b_len = crypto.decryptMessage(msg, msgLen, buffer_b);
+        if(memcmp(buffer_b, "OK", 2) != 0){
+            throw runtime_error("Request to talk failed.");
+        }
+
+        // Encrypt Message M6
+        crypto.setSessionKey(peer_b.key_pos);
+        encrypted_msg_to_b_len =  crypto.encryptMessage(buffer_b,buffer_b_len,encrypt_msg_to_b);
+        serverSocket.sendMessage(peer_b.sd,encrypt_msg_to_b,encrypted_msg_to_b_len);
+
+        // Decrypt Message M7
+        msgLen = serverSocket.receiveMessage(peer_b.sd, msg);
+        crypto.setSessionKey(peer_b.key_pos);
+        buffer_a_len = crypto.decryptMessage(msg, msgLen, buffer_a);
+        if(memcmp(buffer_a, "OK", 2) != 0){
+            throw runtime_error("Request to talk failed.");
+        }
+
+        // Encrypt Message M8
+        crypto.setSessionKey(peer_a.key_pos);
+        encrypted_msg_to_a_len =  crypto.encryptMessage(buffer_a,buffer_a_len,encrypt_msg_to_a);
+        serverSocket.sendMessage(peer_a.sd,encrypt_msg_to_a,encrypted_msg_to_a_len);
     } catch(const std::exception& e) {
+        delete[] buffer_b;
+        delete[] username_b;
+        delete[] nonce_a;
+        delete[] buffer_a;
+        delete[] pubkey_a_stream;
+        delete[] encrypt_msg_to_b;
+        delete[] nonces;
+        delete[] buffer_a;
+        delete[] pubkey_b_stream;
+        delete[] encrypt_msg_to_a;
         throw;
     }
-    
+    delete[] buffer_b;
+    delete[] username_b;
+    delete[] nonce_a;
+    delete[] buffer_a;
+    delete[] pubkey_a_stream;
+    delete[] encrypt_msg_to_b;
+    delete[] nonces;
+    delete[] buffer_a;
+    delete[] pubkey_b_stream;
+    delete[] encrypt_msg_to_a;
 }
