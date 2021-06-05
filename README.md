@@ -1,4 +1,7 @@
-# secure-messagging
+# Secure messaging
+Secure messaging is a chatting application that offers confidentiality, integrity and reliability. It achieves confidentiality and integrity through authenticated encryption, whereas reliability with TCP communications. 
+
+Secure messaging works on Unix-like systems; we tested it on x86_64 Linux and intel/apple-silicon Mac. 
 
 ## Design Choices
 
