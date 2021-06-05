@@ -1,24 +1,22 @@
 #include <iostream>
 #include <string>
+#include <vector>
 #include <string.h>
-#include "symbols.h"
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/x509.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include "symbols.h"
 
 using namespace std;
-//TODO: mettere il throw runtime_exception
 //TODO: mettere una funzione per stampare gli errori
 class Crypto {
     private:
-        // Controllare che non restino salvate da qualche parte altrimenti non è sicura!!
-        unsigned char **keys;
+        vector< vector<unsigned char> > keys;
         unsigned char *session_key;
         unsigned char *iv;
-        unsigned int max_keys;
 
         void generateIV();
 
