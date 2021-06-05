@@ -395,10 +395,8 @@ void sendNoncesToB(EVP_PKEY* pubKeyB, unsigned char *nonce, unsigned char *nonce
 }
 
 void finalizeRequestToTalk() {
-    unsigned char *ciphertext;
-    unsigned char *plaintext;
-    unsigned int plaintextLen;
-    unsigned int ciphertextLen;
+    unsigned char *ciphertext, *plaintext;
+    unsigned int plaintextLen, ciphertextLen;
     try {
         ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
         ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
@@ -412,7 +410,6 @@ void finalizeRequestToTalk() {
         delete[] plaintext;
         throw;
     }
-    
 }
 
 void sendRequestToTalk(string username) {
@@ -444,7 +441,139 @@ void sendRequestToTalk(string username) {
     
 }
 
-void receiveRequestToTalk() {
+void extractPubKeyB(unsigned char *nonceA, EVP_PKEY *&pubKeyA) {
+    unsigned char *ciphertext, *plaintext, keyBuffer;
+    unsigned int ciphertextLen, plaintextLen, keyBufferLen;
 
+    try {
+        
+        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
+
+        plaintext = new unsigned char[ciphertextLen]; //|pt| <= |ct|
+        plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
+
+        if(memcmp(plaintext, OP_REQUEST_TO_TALK, 1) != 0) {
+            throw runtime_error("Request to talk operation not successful: wrong OP");
+        }
+
+        nonceA = new unsigned char[NONCE_SIZE];
+
+        keyBufferLen = plaintextLen - NONCE_SIZE;
+        keyBuffer = new unsigned char[keyBufferLen];
+
+        memcpy(keyBuffer, plaintext+1, keyBufferLen);
+        memcpy(nonceA, plaintext+keyBufferLen+1, NONCE_SIZE);
     
+    } catch(const exception& e) {
+        throw;
+    }
+}
+
+void sendNoncesToA(unsigned char *nonce, unsigned char *nonceA, EVP_PKEY *pubKeyA) {
+    unsigned char *plaintext, *ciphertext, *noncesCT, noncesPT;
+    unsigned int plaintextLen, ciphertextLen, noncesCTLen, noncesPTLen = 2*NONCE_SIZE;
+
+    try {
+        crypto.generateNonce(nonce);
+        noncesPT = new unsigned char[noncesPTLen];
+        memcpy(noncesPT, nonce, NONCE_SIZE);
+        memccpy(noncesPT+NONCE_SIZE, nonceA, NONCE_SIZE);
+        noncesCT = new unsigned char[MAX_MESSAGE_SIZE];
+        noncesCTLen = crypto.publicKeyEncryption(noncesPT, noncesPTLen, noncesCT, pubKeyA);
+
+        plaintextLen = noncesCTLen + 2;
+        plaintext = new unsigned char[plaintextLen];
+        memcpy(plaintext, "OK", 2);
+        memcpy(plaintext + 2, noncesCT, noncesCTLen);
+        
+        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        crypto.setSessionKey(0);
+        ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
+
+        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
+
+    } catch(const exception& e) {
+        cerr << e.what() << '\n';
+    }
+    
+}
+
+void validateFreshness(unsigned char* nonce, string username) {
+    unsigned char *plaintext, *ciphertext, *noncesPT, *noncesCT, nonceReceivedB;
+    unsigned int plaintextLen, ciphertextLen, noncesPTLen, noncesCTLen;
+    EVP_PKEY *pubKeyB;
+    EVP_PKEY *prvKeyB;
+    try {
+        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
+
+        plaintext = new unsigned char[ciphertextLen]; //|pt| <= |ct|
+        crypto.setSessionKey(0);
+        plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
+
+        if(memcmp(plaintext, "OK", 2) != 0) {
+            throw runtime_error("Request to talk operation not successful: wrong OP (error occurred receiving M6)");
+        }
+
+        readPublicKey(username, pubKeyB);
+
+        noncesCTLen = plaintextLen-2;
+        noncesCT = new unsigned char[noncesCTLen];
+        memcpy(nonceCT, plaintext+2, noncesCTLen);
+
+        noncesPT = new unsigned char[NONCE_SIZE * 2];
+        noncesPTLen = crypto.decryptMessage(noncesCT, noncesCTLen, noncesPT);
+
+        nonceReceivedB = new unsigned char[NONCE_SIZE];
+        memcpy(nonceReceivedB, noncesPT, NONCE_SIZE);
+
+        if(memcmp(nonceReceivedB, nonce, NONCE_SIZE) != 0) {
+            throw runtime_error("Request to talk operation not successful: nonce are different, the message is not fresh (error occurred receiving M6).");
+        }
+        cout << "Freshness confirmend" << endl;
+    } catch(const exception& e) {
+        delete[] plaintext;
+        delete[] ciphertext;
+        delete[] noncesPT;
+        delete[] noncesCT;
+        throw;
+    }
+    
+}
+
+void sendOkMessage() {
+    unsigned char *ciphertext, *plaintext = "OK";
+    unsigned int ciphertextLen, plaintextLen = 2;
+    try {
+        crypto.setSessionKey(0);
+        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphetextLen = crypto.encryptMessage(plaintext, 2, ciphertext);
+        socketClient.sendMessage(socketClient.getMasterFD, ciphertext, ciphertextLen);
+    } catch(const std::exception& e) {
+        delete[] ciphertext;
+        delete[] plaintext;
+        throw;
+    }
+}
+
+void receiveRequestToTalk(string username) {
+    unsigned char *nonce, *nonceA;
+    EVP_PKEY *pubKeyA;
+    try {
+        // Receive M2:
+        nonceA = new unsigned char[NONCE_SIZE];
+        extractPubKeyB(nonceA, pubKeyA);
+        // Send M3:
+        nonce = new unsigned char[NONCE_SIZE];
+        sendNoncesToA(nonce, nonceA, pubKeyA);
+        // Receive M6:
+        validateFreshness(nonce, username);
+        // Send M7:
+        sendOkMessage();
+    } catch(const exception& e) {
+        delete[] nonceA;
+        delete[] nonce;
+        throw;
+    }
 }
