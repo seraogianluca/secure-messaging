@@ -56,7 +56,9 @@ int main(int argc, char* const argv[]) {
                             }
                             if (operationCode == 2) {
                                 // Request to talk
+                                cout << "\n-------Request to Talk-------" << endl;
                                 requestToTalkProtocol(messageReceived, message_len, onlineUsers.at(i), onlineUsers);
+                                cout << "------------------------------" << endl;
                             }
                             if (operationCode == 3) {
                                 // Message

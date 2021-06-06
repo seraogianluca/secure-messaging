@@ -7,6 +7,7 @@ int main(int argc, char *const argv[]) {
     int menuOption;
     string input;
     string user;
+    string username;
 
     try {
         
@@ -17,8 +18,8 @@ int main(int argc, char *const argv[]) {
         socketClient.receiveMessage(socketClient.getMasterFD(), greetingMessage);
         cout << "Connection confirmed: " << greetingMessage << endl;
         delete[] greetingMessage;
-
-        authentication();
+        username = readFromStdout("Insert username: ");
+        authentication(username);
         keyEstablishment(0);
         crypto.setSessionKey(0);
         cout << "-----------------------------" << endl << endl;
@@ -32,13 +33,17 @@ int main(int argc, char *const argv[]) {
                     break;
                 case 2:
                     user = readFromStdout("Insert username: ");
-                    sendRequestToTalk(user);
+                    sendRequestToTalk(user, username, username);
                     break;
                 case 3:
                     cout << "> ";
                     getline(cin, input);
                     sendMessage(OP_MESSAGE, 1, (unsigned char*)input.c_str(), input.length() + 1);
                     cout << "Message sent." << endl;
+                    break;
+                case 4:
+                    cout << "Waiting for request to talk" << endl;
+                    receiveRequestToTalk(username, username); //REFACTOR
                     break;
                 case 0:
                     cout << "Bye." << endl;
@@ -64,6 +69,7 @@ int showMenu() {
     cout << "1. Online users" << endl;
     cout << "2. Request to talk" << endl;
     cout << "3. Send a message" << endl;
+    cout << "4. Wait for Request for Talk" << endl;
     cout << "0. Exit" << endl;
     cout << "> ";
     cin >> value;

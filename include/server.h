@@ -270,140 +270,205 @@ onlineUser getUser(vector<onlineUser> onlineUsers, string username){
     throw runtime_error("The user is not online");
 }
 
-void requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peer_a, vector<onlineUser> onlineUsers) {
-    unsigned char *buffer_a;
-    unsigned char *nonce_a;
-    unsigned char *username_b;
-    unsigned char *buffer_b;
-    unsigned char *nonce_b;
-    unsigned char *nonces;
-    unsigned char *pubkey_a_stream;
-    unsigned char *pubkey_b_stream;
-    unsigned char *encrypt_msg_to_b;
-    unsigned char *encrypt_msg_to_a;
-    unsigned int buffer_a_len;
-    unsigned int pubkey_a_size;
-    unsigned int pubkey_b_size;
-    unsigned int buffer_b_len;
-    unsigned int username_b_len;
-    unsigned int encrypted_msg_to_b_len;
-    unsigned int encrypted_msg_to_a_len;
-    unsigned int start = 0;
-    onlineUser peer_b;
-    EVP_PKEY *pubkey_a;
-    EVP_PKEY *pubkey_b;
-    uint64_t nonces_len;
+string extractUsernameReceiver(unsigned char *msg, unsigned int msgLen, unsigned char *nonceA, onlineUser peer_a) {
+    unsigned char *buffer_b = NULL, *username_b = NULL;
+    unsigned int buffer_b_len, username_b_len;
     try {
-        // Decrypt Message M1 OPCODE||{USR_B||Na}SA
         if(memcmp(msg, OP_REQUEST_TO_TALK, 1) != 0) {
             throw runtime_error("Request to talk failed.");
         }
+        cout << "Request to talk coming from user " << peer_a.username << endl;
         buffer_b = new unsigned char[msgLen];
         crypto.setSessionKey(peer_a.key_pos);
         buffer_b_len = crypto.decryptMessage(msg+1, msgLen-1, buffer_b); //Not consider the OPCODE
         username_b_len = buffer_b_len-NONCE_SIZE;
         username_b = new unsigned char[username_b_len];
         memcpy(username_b,buffer_b,username_b_len);
-        nonce_a = new unsigned char[NONCE_SIZE];
-        memcpy(nonce_a,buffer_b+username_b_len,NONCE_SIZE);
+        memcpy(nonceA,buffer_b+username_b_len,NONCE_SIZE);
+            
+        cout << "Nonce A" << endl;
+        BIO_dump_fp(stdout, (const char *) nonceA, NONCE_SIZE);
 
-        peer_b = getUser(onlineUsers,string((const char*)username_b));
-
-        // Encrypt Message M2 OPCODE||{PKa||Na}SB
-        buffer_a = new unsigned char[MAX_MESSAGE_SIZE];
-        crypto.readPublicKey(peer_a.username,pubkey_a);
-        pubkey_a_stream = new unsigned char[MAX_MESSAGE_SIZE];
-        pubkey_a_size = crypto.serializePublicKey(pubkey_a,pubkey_a_stream);
-        memcpy(buffer_a,pubkey_a_stream,pubkey_a_size);
-        start += pubkey_a_size;
-        memcpy(buffer_a + start, nonce_a, NONCE_SIZE);
-        buffer_a_len = pubkey_a_size + NONCE_SIZE + 1;
-        encrypt_msg_to_b = new unsigned char[MAX_MESSAGE_SIZE];
-        crypto.setSessionKey(peer_b.key_pos);
-        encrypted_msg_to_b_len =  crypto.encryptMessage(buffer_a,buffer_a_len,encrypt_msg_to_b);
-
-        // Append OPCODE as clear text
-        memcpy(buffer_a, OP_REQUEST_TO_TALK, 1);
-        memcpy(buffer_a+1,encrypt_msg_to_b,encrypted_msg_to_b_len);
-        serverSocket.sendMessage(peer_b.sd,buffer_a,encrypted_msg_to_b_len+1);
-
-        // Decrypt Message M3 {OK||{Na||Nb}PKa}SB
-        msgLen = serverSocket.receiveMessage(peer_b.sd, msg);
-        crypto.setSessionKey(peer_b.key_pos);
-        buffer_b_len = crypto.decryptMessage(msg, msgLen, buffer_b);
-        if(memcmp(buffer_b, "OK", 2) != 0){
-            throw runtime_error("Request to talk failed.");
-        }
-        nonces_len = msgLen - 2;
-        nonces = new unsigned char[nonces_len];
-        memcpy(nonces,msg+2,nonces_len);
-
-        // Encrypt Message M4 {nonLen||OK||{Na||Nb}PKa||PKb} --> nonLen = 64 bits
-        buffer_a = new unsigned char[MAX_MESSAGE_SIZE];
-        memset(buffer_a,0,MAX_MESSAGE_SIZE);
-        start = 0;
-        memcpy(buffer_a,(const void*)nonces_len,8);
-        start += 8;
-        memcpy(buffer_a + start, "OK", 2);
-        start += 2;
-        memcpy(buffer_a + start, nonces, nonces_len);
-        start += nonces_len;
-        crypto.readPublicKey((string)peer_a.username,pubkey_b);
-        pubkey_b_stream = new unsigned char[MAX_MESSAGE_SIZE];
-        pubkey_b_size = crypto.serializePublicKey(pubkey_b,pubkey_b_stream);
-        memcpy(buffer_a + start,pubkey_b_stream,pubkey_b_size);
-        start += pubkey_b_size;
-        encrypt_msg_to_a = new unsigned char[MAX_MESSAGE_SIZE];
-        crypto.setSessionKey(peer_a.key_pos);
-        encrypted_msg_to_a_len =  crypto.encryptMessage(buffer_a,start,encrypt_msg_to_a);
-        serverSocket.sendMessage(peer_a.sd,encrypt_msg_to_a,encrypted_msg_to_a_len);
-
-        // Decrypt Message M5
-        msgLen = serverSocket.receiveMessage(peer_a.sd, msg);
-        crypto.setSessionKey(peer_a.key_pos);
-        buffer_b_len = crypto.decryptMessage(msg, msgLen, buffer_b);
-        if(memcmp(buffer_b, "OK", 2) != 0){
-            throw runtime_error("Request to talk failed.");
-        }
-
-        // Encrypt Message M6
-        crypto.setSessionKey(peer_b.key_pos);
-        encrypted_msg_to_b_len =  crypto.encryptMessage(buffer_b,buffer_b_len,encrypt_msg_to_b);
-        serverSocket.sendMessage(peer_b.sd,encrypt_msg_to_b,encrypted_msg_to_b_len);
-
-        // Decrypt Message M7
-        msgLen = serverSocket.receiveMessage(peer_b.sd, msg);
-        crypto.setSessionKey(peer_b.key_pos);
-        buffer_a_len = crypto.decryptMessage(msg, msgLen, buffer_a);
-        if(memcmp(buffer_a, "OK", 2) != 0){
-            throw runtime_error("Request to talk failed.");
-        }
-
-        // Encrypt Message M8
-        crypto.setSessionKey(peer_a.key_pos);
-        encrypted_msg_to_a_len =  crypto.encryptMessage(buffer_a,buffer_a_len,encrypt_msg_to_a);
-        serverSocket.sendMessage(peer_a.sd,encrypt_msg_to_a,encrypted_msg_to_a_len);
-    } catch(const std::exception& e) {
+        cout << "Request from " << peer_a.username << " to " << username_b << endl;
         delete[] buffer_b;
         delete[] username_b;
-        delete[] nonce_a;
-        delete[] buffer_a;
-        delete[] pubkey_a_stream;
-        delete[] encrypt_msg_to_b;
-        delete[] nonces;
-        delete[] buffer_a;
-        delete[] pubkey_b_stream;
-        delete[] encrypt_msg_to_a;
+        return string((const char *)username_b);
+    } catch(const exception& e) {
+        cout << "Error in extractUsernameReceiver(): " << e.what() << endl; 
+        delete[] buffer_b;
+        delete[] username_b;
         throw;
     }
-    delete[] buffer_b;
-    delete[] username_b;
-    delete[] nonce_a;
-    delete[] buffer_a;
-    delete[] pubkey_a_stream;
-    delete[] encrypt_msg_to_b;
-    delete[] nonces;
-    delete[] buffer_a;
-    delete[] pubkey_b_stream;
-    delete[] encrypt_msg_to_a;
+}
+
+void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, unsigned char *nonceA) {
+    unsigned char *buffer, *pubkeyBuffer, *ciphertext;
+    unsigned int bufferLen, pubkeyBufferLen, ciphertextLen;
+    EVP_PKEY *pubkey_a;
+    unsigned int start = 0;
+    try {
+        buffer = new unsigned char[MAX_MESSAGE_SIZE];
+
+        crypto.readPublicKey(peerA.username,pubkey_a);
+        pubkeyBuffer = new unsigned char[MAX_MESSAGE_SIZE];
+        pubkeyBufferLen = crypto.serializePublicKey(pubkey_a,pubkeyBuffer);
+        memcpy(buffer,pubkeyBuffer,pubkeyBufferLen);
+
+        start += pubkeyBufferLen;
+        memcpy(buffer + start, nonceA, NONCE_SIZE);
+        bufferLen = pubkeyBufferLen + NONCE_SIZE;
+        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+
+        crypto.setSessionKey(peerB.key_pos);
+        ciphertextLen =  crypto.encryptMessage(buffer,bufferLen,ciphertext);
+
+        // Append OPCODE as clear text
+        memcpy(buffer, OP_REQUEST_TO_TALK, 1);
+        memcpy(buffer+1,ciphertext,ciphertextLen);
+        serverSocket.sendMessage(peerB.sd,buffer,ciphertextLen+1);
+        delete[] buffer;
+        delete[] pubkeyBuffer;
+        delete[] ciphertext;
+    } catch(const exception& e) {
+        cout << "Error in sendPublicKeyToB: " << e.what() << endl;
+        delete[] buffer;
+        delete[] pubkeyBuffer;
+        delete[] ciphertext;
+        throw;
+    }
+    
+}
+
+unsigned int extractNonces(onlineUser peerB, unsigned char *nonces) {
+    unsigned char *ciphertext = NULL, *plaintext = NULL;
+    unsigned int ciphertextLen, plaintextLen, noncesLen;
+    try {
+        cout << "Extract Nonces" << endl;
+        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertextLen = serverSocket.receiveMessage(peerB.sd, ciphertext);
+        crypto.setSessionKey(peerB.key_pos);
+        plaintext = new unsigned char[ciphertextLen];
+        plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
+        if(memcmp(plaintext, "OK", 2) != 0){
+            throw runtime_error("Request to talk failed.");
+        }
+        noncesLen = plaintextLen - 2;
+        memcpy(nonces,plaintext+2,noncesLen);
+        delete[] ciphertext;
+        delete[] plaintext;
+        return noncesLen;
+    } catch(const exception& e) {
+        cout << e.what() << '\n';
+        if (ciphertext) delete[] ciphertext;
+        if (plaintext) delete[] plaintext;
+    }
+    
+}
+
+void sendM4(unsigned char* nonces, uint64_t nonces_len, onlineUser peerB, onlineUser peerA) {
+    unsigned char *buffer, *pubkeyBBuff, *ciphertext;
+    unsigned int bufferLen, start, pubkeyBBuffLen, ciphertextLen;
+    EVP_PKEY *pubkeyB;
+    try {
+        buffer = new unsigned char[MAX_MESSAGE_SIZE];
+        start = 0;
+        memcpy(buffer,&nonces_len,8);
+        start += 8;
+        memcpy(buffer + start, "OK", 2);
+        start += 2;
+        memcpy(buffer + start, nonces, nonces_len);
+        start += nonces_len;
+
+        crypto.readPublicKey(peerB.username, pubkeyB);
+        pubkeyBBuff = new unsigned char[MAX_MESSAGE_SIZE];
+        pubkeyBBuffLen = crypto.serializePublicKey(pubkeyB, pubkeyBBuff);
+        memcpy(buffer + start, pubkeyBBuff, pubkeyBBuffLen);
+        start += pubkeyBBuffLen;
+
+        bufferLen = 8 + 2 + nonces_len + pubkeyBBuffLen;
+
+        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        crypto.setSessionKey(peerA.key_pos);
+        ciphertextLen = crypto.encryptMessage(buffer, bufferLen, ciphertext);
+        serverSocket.sendMessage(peerA.sd, ciphertext, ciphertextLen);
+        delete[] buffer;
+        delete[] pubkeyBBuff;
+        delete[] ciphertext;
+    } catch(const exception& e) {
+        cout << "Error in sendM4(): " << e.what() << '\n';
+        delete[] buffer;
+        delete[] pubkeyBBuff;
+        delete[] ciphertext;
+        throw;
+    }
+}
+
+void forward(onlineUser peerSender, onlineUser peerReceiver) {
+    unsigned char *ciphertext = NULL, *plaintext = NULL;
+    unsigned int ciphertextLen, plaintextLen;
+    try {
+        cout << "***    Receiving message from the sender " << peerSender.username << "..." << endl;
+        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertextLen = serverSocket.receiveMessage(peerSender.sd, ciphertext);
+        crypto.setSessionKey(peerSender.key_pos);
+        plaintext = new unsigned char[ciphertextLen];
+        plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
+        if(memcmp(plaintext, "OK", 2) != 0){
+            throw runtime_error("Request to talk failed.");
+        }
+
+        cout << "***    Forwarding message to the receiver " << peerReceiver.username << "..." << endl;
+        
+        crypto.setSessionKey(peerReceiver.key_pos);
+        ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
+        serverSocket.sendMessage(peerReceiver.sd, ciphertext, ciphertextLen);
+
+        delete[] ciphertext;
+        delete[] plaintext;
+    } catch(const exception& e) {
+        cout << e.what() << '\n';
+        if (ciphertext) delete[] ciphertext;
+        if (plaintext) delete[] plaintext;
+    }
+}
+
+
+
+void requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers) {
+    unsigned char *nonceA = NULL, *nonces = NULL;
+    onlineUser peerB;
+    uint64_t nonces_len;
+    try {
+        
+        nonceA = new unsigned char[NONCE_SIZE];
+        string usernameB = extractUsernameReceiver(msg, msgLen, nonceA, peerA);
+        
+        peerB = getUser(onlineUsers, usernameB);
+
+        // Encrypt Message M2 OPCODE||{PKa||Na}SB
+        sendPublicKeyToB(peerA, peerB, nonceA);
+        cout << "Waiting for M3..." << endl;
+
+        // Decrypt Message M3 {OK||{Na||Nb}PKa}SB
+        nonces = new unsigned char[MAX_MESSAGE_SIZE];
+        nonces_len = extractNonces(peerB, nonces);
+        
+        // Encrypt Message M4 {nonLen||OK||{Na||Nb}PKa||PKb} --> nonLen = 64 bits
+        cout << "\nSending M4..." << endl;
+        sendM4(nonces, nonces_len, peerB, peerA);
+        cout << "\nM4 sent" << endl << endl;
+
+        // Decrypt Message M5 and Encrypt M6
+        forward(peerA, peerB);
+
+        // Decrypt Message M7 and Encrypt M8
+        forward(peerB, peerA);
+        
+        delete[] nonceA;
+        delete[] nonces;
+    } catch(const std::exception& e) {
+        if (nonceA) delete[] nonceA;
+        if (nonces) delete[] nonces;
+        throw;
+    }
 }
