@@ -1,7 +1,7 @@
 #include "include/socket.h"
 
 SocketClient::SocketClient(int socketType) {
-    socketType = socketType;
+    this->socketType = socketType;
     port = 8080;
 
     if ((master_fd = socket(AF_INET, socketType, 0)) < 0)
