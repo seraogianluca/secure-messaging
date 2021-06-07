@@ -270,7 +270,7 @@ onlineUser getUser(vector<onlineUser> onlineUsers, string username){
     throw runtime_error("The user is not online");
 }
 
-bool getReceiver(vector<activeChat> activeChats, onlineUser sender, onlineUser receiver) {
+bool getReceiver(vector<activeChat> activeChats, onlineUser sender, onlineUser &receiver) {
     bool found = false;
     for (activeChat chat : activeChats) {
         if(chat.a.username.compare(sender.username)) {
@@ -456,7 +456,7 @@ void refuseRequestToTalk(onlineUser peer) {
     }
 }
 
-bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat chat) {
+bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat &chat) {
     unsigned char *nonceA = NULL, *nonces = NULL, *ciphertext;
     unsigned int ciphertextLen;
     onlineUser peerB;
