@@ -458,11 +458,15 @@ void sendRequestToTalk(string usernameReceiver, string usernameSender, string pa
         delete[] nonceB;
     } catch(const exception& e) {
         cout << "Error in send request to talk: " << e.what() << endl;
+<<<<<<< HEAD
         if (!nonce) delete[] nonce;
         if (!nonceB) delete[] nonceB,
         throw;
+=======
+        if (nonce) delete[] nonce;
+        if (nonceB) delete[] nonceB;
+>>>>>>> 9ed98e6c3d38ef98cf11b840d6e3e18def4e1ed0
     }
-    
 }
 
 void extractPubKeyA(unsigned char *nonceA, EVP_PKEY *&pubKeyA) {

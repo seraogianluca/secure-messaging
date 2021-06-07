@@ -361,6 +361,7 @@ unsigned int extractNonces(onlineUser peerB, unsigned char *nonces) {
         cout << e.what() << '\n';
         if (ciphertext) delete[] ciphertext;
         if (plaintext) delete[] plaintext;
+        return 0;
     }
     
 }
@@ -425,14 +426,28 @@ void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciph
     }
 }
 
+void refuseRequestToTalk(onlineUser peer) {
+    unsigned char plaintext[2];
+    unsigned char *ciphertext = NULL;
+    unsigned int plaintextLen = 2, ciphertextLen;
+    try {
+        memcpy(plaintext, "NO", 2);
+        crypto.setSessionKey(0);
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
+        serverSocket.sendMessage(peer.sd, ciphertext, ciphertextLen);
+        delete[] ciphertext;
+    } catch(const exception& e) {
+        cout << e.what() << '\n';
+        if(!ciphertext) delete[] ciphertext;
+    }
+}
 
-
-activeChat requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers) {
+bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat chat) {
     unsigned char *nonceA = NULL, *nonces = NULL, *ciphertext;
     unsigned int ciphertextLen;
     onlineUser peerB;
     uint64_t nonces_len;
-    activeChat chat = activeChat();
     try {
         
         nonceA = new unsigned char[NONCE_SIZE];
@@ -447,6 +462,12 @@ activeChat requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, online
         // Decrypt Message M3 {OK||{Na||Nb}PKa}SB
         nonces = new unsigned char[MAX_MESSAGE_SIZE];
         nonces_len = extractNonces(peerB, nonces);
+
+        if (nonces_len == 0) {
+            refuseRequestToTalk(peerA);
+            cout << "The request to talk has been refused." << endl;
+            return false;
+        }
         
         // Encrypt Message M4 {nonLen||OK||{Na||Nb}PKa||PKb} --> nonLen = 64 bits
         cout << "\nSending M4..." << endl;
@@ -464,14 +485,12 @@ activeChat requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, online
 
         cout << "Create an active chat" << endl;
         chat.a = peerA;
-        cout << "Add peer A" << endl;
         chat.b = peerB;
-        cout << "Add peer B" << endl;
 
         delete[] nonceA;
         delete[] nonces;
         delete[] ciphertext;
-        return chat;
+        return true;
     } catch(const exception& e) {
         if (nonceA) delete[] nonceA;
         if (nonces) delete[] nonces;
