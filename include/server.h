@@ -270,6 +270,21 @@ onlineUser getUser(vector<onlineUser> onlineUsers, string username){
     throw runtime_error("The user is not online");
 }
 
+bool getReceiver(vector<activeChat> activeChats, onlineUser sender, onlineUser receiver) {
+    bool found = false;
+    for (activeChat chat : activeChats) {
+        if(chat.a.username.compare(sender.username)) {
+            receiver = chat.b;
+            found = true;
+        }
+        if (chat.b.username.compare(sender.username)) {
+            receiver = chat.a;
+            found = true;
+        }
+    }
+    return found;
+}
+
 string extractUsernameReceiver(unsigned char *msg, unsigned int msgLen, unsigned char *nonceA, onlineUser peer_a) {
     unsigned char *buffer_b = NULL, *username_b = NULL;
     unsigned int buffer_b_len, username_b_len;

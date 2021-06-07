@@ -18,6 +18,10 @@ int main(int argc, char* const argv[]) {
                         //incoming message                         
                         unsigned int message_len;    
                         unsigned char *messageReceived = new unsigned char[MAX_MESSAGE_SIZE];
+
+                        onlineUser user = onlineUser();
+                        onlineUser receiver = onlineUser();
+
                         message_len = serverSocket.receiveMessage(sd, messageReceived);
                         cout << "Message received length: " << message_len << endl;
                         if (message_len == 0)  { 
@@ -34,25 +38,11 @@ int main(int argc, char* const argv[]) {
                                 string username = authentication(sd, messageReceived, message_len);
                                 keyEstablishment(sd, i);
                                 cout << "-----------------------------" << endl << endl;
-                                onlineUser user = onlineUser();
                                 user.username = username;
                                 user.sd = sd;
                                 user.key_pos = i;
                                 onlineUsers.push_back(user);
                                 sendOnlineUsers(onlineUsers, user);
-                            } else if (operationCode == 3) {
-                                //CHECK HEADER SIZE
-                                int ciphertext_len = message_len-1;
-                                unsigned char ciphertext[ciphertext_len];
-                                unsigned char plaintext[ciphertext_len];
-
-                                memcpy(ciphertext, messageReceived+1, ciphertext_len);
-                                int plaintext_len = crypto.decryptMessage(ciphertext,ciphertext_len,plaintext);
-                                if(plaintext_len == -1)
-                                    cout << "Not corresponding tag." << endl;
-                                else {
-                                    cout << "Plaintext: " << plaintext << endl;
-                                }
                             }
                             if (operationCode == 2) {
                                 // Request to talk
@@ -67,14 +57,22 @@ int main(int argc, char* const argv[]) {
                                 cout << "------------------------------" << endl;
                             }
                             if (operationCode == 3) {
-                                // Message
-                                // ricavare 
+                                //Message Forwarding
+                                //Remove OP code
+                                int ciphertextLen = message_len-1;
+                                unsigned char ciphertext[message_len - 1];
+                                memcpy(ciphertext, messageReceived+1, ciphertextLen);
+                                //Find the receiver
+                                if (getReceiver(activeChats, user, receiver)) {
+                                    forward(user, receiver, ciphertext, ciphertextLen);
+                                } else {
+                                    cout << "No receiver for the user " << user.username << endl;
+                                }
                             }
                             if (operationCode == 4) {
                                 // Certificate Request
                             }
                         }
-
                         delete[] messageReceived;
                     }  
                 }
@@ -85,13 +83,3 @@ int main(int argc, char* const argv[]) {
     }
     return 0;
 }
-
-
-void login() {
-
-}
-
-void logout() {
-
-}
-
