@@ -487,6 +487,13 @@ bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser p
         chat.a = peerA;
         chat.b = peerB;
 
+        // Decrypt key of A and encrypt key for B
+        ciphertextLen = serverSocket.receiveMessage(peerA.sd, ciphertext);
+        forward(peerA, peerB, ciphertext, ciphertextLen);
+
+        // Decrypt key of B and encrypt key for A
+        ciphertextLen = serverSocket.receiveMessage(peerB.sd, ciphertext);
+        forward(peerB, peerA, ciphertext, ciphertextLen);
         delete[] nonceA;
         delete[] nonces;
         delete[] ciphertext;
