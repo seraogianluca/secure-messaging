@@ -38,10 +38,10 @@ int main(int argc, char *const argv[]) {
                     sendRequestToTalk(user, username, username);
                     cout << "-----------------------------" << endl;
                     while(true){
-                        message = readFromStdout("Insert message: ");
+                        message = readFromStdout(username + ": ");
                         sendMessage(message);
                         message = receiveMessage();
-                        cout<< message;
+                        cout << user << ": " << message << endl;
                     }
                     break;
                 case 3:
@@ -57,8 +57,8 @@ int main(int argc, char *const argv[]) {
                     cout << "------------------------------------------" << endl;
                     while(true){
                         message = receiveMessage();
-                        cout<< message;
-                        message = readFromStdout("Insert message: ");
+                        cout << "lore" << ": " << message << endl;;
+                        message = readFromStdout(username + ": ");
                         sendMessage(message);
                     }
                     break;

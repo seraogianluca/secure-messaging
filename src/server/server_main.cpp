@@ -27,6 +27,14 @@ int main(int argc, char* const argv[]) {
                         if (message_len == 0)  { 
                             //Somebody disconnected , get his details and print 
                             serverSocket.disconnectHost(sd, i);
+                            // Remove its chat from the active chats
+                            onlineUser userDisconnected = onlineUsers.at(i);
+                            cout << "Users size: " << onlineUsers.size() << endl;
+                            deleteUser(userDisconnected, onlineUsers);
+                            cout << "Users size: " << onlineUsers.size() << endl;
+                            cout << "Active chat size: " << activeChats.size() << endl;
+                            deleteActiveChat(userDisconnected, activeChats);
+                            cout << "Active chat size: " << activeChats.size() << endl;
                         } else {
                             int operationCode;
                             operationCode = getOperationCode(messageReceived);
@@ -50,29 +58,31 @@ int main(int argc, char* const argv[]) {
                                 activeChat chat = activeChat();
                                 bool success = requestToTalkProtocol(messageReceived, message_len, onlineUsers.at(i), onlineUsers, chat);
                                 if (success) {
+                                    activeChats.push_back(chat);
                                     cout << "New chat active between " << chat.a.username << " and " << chat.b.username << endl;
                                     cout << "------------------------------" << endl;
                                 } else {
                                     cout << "No chat has been created" << endl;
                                     cout << "------------------------------" << endl;
                                 }
-                                
                             }
                             if (operationCode == 3) {
+                                cout << "alsdkasl" << endl;
                                 //Message Forwarding
                                 //Remove OP code
+                                user = onlineUsers.at(i);
+                                cout << "Sender Username: " << user.username << endl;
+
                                 int ciphertextLen = message_len-1;
                                 unsigned char ciphertext[message_len - 1];
                                 memcpy(ciphertext, messageReceived+1, ciphertextLen);
                                 //Find the receiver
                                 if (getReceiver(activeChats, user, receiver)) {
+                                    cout << "Receiver: " << receiver.username << " - " << receiver.key_pos << endl;
                                     forward(user, receiver, ciphertext, ciphertextLen);
                                 } else {
                                     cout << "No receiver for the user " << user.username << endl;
                                 }
-                            }
-                            if (operationCode == 4) {
-                                // Certificate Request
                             }
                         }
                         delete[] messageReceived;
