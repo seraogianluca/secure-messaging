@@ -19,7 +19,7 @@ $(info "============== Compiling for linux ======================")
 TARGET = server_main.out client_main.out
 CC = g++
 LINKFLAG = -lssl -lcrypto
-CFLAGS = -Wall -std=c++20
+CFLAGS = -Wall -std=c++2a
 endif
 
 all: $(TARGET)
