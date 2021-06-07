@@ -52,9 +52,11 @@ int main(int argc, char* const argv[]) {
                                 if (success) {
                                     cout << "New chat active between " << chat.a.username << " and " << chat.b.username << endl;
                                     cout << "------------------------------" << endl;
+                                } else {
+                                    cout << "No chat has been created" << endl;
+                                    cout << "------------------------------" << endl;
                                 }
-                                cout << "No chat has been created" << endl;
-                                cout << "------------------------------" << endl;
+                                
                             }
                             if (operationCode == 3) {
                                 //Message Forwarding
