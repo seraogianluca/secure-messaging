@@ -57,9 +57,13 @@ int main(int argc, char* const argv[]) {
                             if (operationCode == 2) {
                                 // Request to talk
                                 cout << "\n-------Request to Talk-------" << endl;
-                                activeChat chat = requestToTalkProtocol(messageReceived, message_len, onlineUsers.at(i), onlineUsers);
-                                activeChats.push_back(chat);
-                                cout << "New chat active between " << chat.a.username << " and " << chat.b.username << endl;
+                                activeChat chat = activeChat();
+                                bool success = requestToTalkProtocol(messageReceived, message_len, onlineUsers.at(i), onlineUsers, chat);
+                                if (success) {
+                                    cout << "New chat active between " << chat.a.username << " and " << chat.b.username << endl;
+                                    cout << "------------------------------" << endl;
+                                }
+                                cout << "No chat has been created" << endl;
                                 cout << "------------------------------" << endl;
                             }
                             if (operationCode == 3) {
