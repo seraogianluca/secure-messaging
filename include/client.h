@@ -442,23 +442,24 @@ void sendRequestToTalk(string usernameReceiver, string usernameSender, string pa
     EVP_PKEY *pubKeyB;
     try {
         // Send Message M1
-        nonce = new unsigned char[NONCE_SIZE];
+        nonce = new(nothrow) unsigned char[NONCE_SIZE];
         requestToTalkM1(nonce, usernameReceiver);
         cout << "\nRequest to talk sent" << endl;
         // Receive Message M4:
-        nonceB = new unsigned char[NONCE_SIZE];
+        nonceB = new(nothrow) unsigned char[NONCE_SIZE];
         extractPubKeyB(pubKeyB, nonce, nonceB, usernameSender, password);
         // Send Message M5:
         sendNoncesToB(pubKeyB, nonce, nonceB);
         // Receive Message M8:
         finalizeRequestToTalk();
         cout << "Request to talk accepted by " << usernameReceiver << endl;
+        sendKey(usernameSender, password, pubKeyB);
         delete[] nonce;
         delete[] nonceB;
     } catch(const exception& e) {
         cout << "Error in send request to talk: " << e.what() << endl;
-        if (nonce) delete[] nonce;
-        if (nonceB) delete[] nonceB,
+        if (!nonce) delete[] nonce;
+        if (!nonceB) delete[] nonceB,
         throw;
     }
     
@@ -676,3 +677,50 @@ void receiveRequestToTalk(string username, string password) {
         throw;
     }
 }
+
+void sendKey(string username, string password, EVP_PKEY *pub_key) {
+    unsigned char *buffer = NULL;
+    unsigned char *encrypt_buffer = NULL;
+    unsigned int key_len;
+    unsigned int encrypt_buffer_len;
+    EVP_PKEY *prv_key = NULL;
+
+    try {
+        crypto.readPrivateKey(username, password, prv_key);
+        // Generate public key
+        crypto.keyGeneration(prv_key);
+        // Send public key to peer
+        buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        key_len = crypto.serializePublicKey(pub_key, buffer);
+        crypto.setSessionKey(0);
+        encrypt_buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        encrypt_buffer_len = crypto.encryptMessage(buffer, key_len, encrypt_buffer);
+        // Send message to server for forwarding
+        socketClient.sendMessage(socketClient.getMasterFD(), encrypt_buffer, encrypt_buffer_len);
+    }catch(const exception& e) {
+        if(!buffer) delete[] buffer;
+        if(!encrypt_buffer) delete[] encrypt_buffer;
+        throw;
+    }
+}
+/*
+void receiveKey(){
+    try{
+        // Receive peer's public key
+        key_len = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
+        crypto.deserializePublicKey(buffer, key_len, pub_key_b);
+
+        // Secret derivation
+        secret = new unsigned char[DIGEST_LEN];
+        crypto.secretDerivation(prv_key_a, pub_key_b, secret);
+
+        cout << "O' secret: " << endl;
+        BIO_dump_fp(stdout, (const char*)secret, DIGEST_LEN);
+
+        crypto.insertKey(secret, key_pos);
+        delete[] buffer;
+        delete[] secret;
+    }catch(const exception& e){
+        throw;
+    }
+}*/
