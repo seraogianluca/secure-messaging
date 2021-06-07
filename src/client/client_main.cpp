@@ -32,8 +32,10 @@ int main(int argc, char *const argv[]) {
                 case 1:
                     break;
                 case 2:
+                    cout << "\n-------Request to talk-------" << endl;
                     user = readFromStdout("Insert username: ");
                     sendRequestToTalk(user, username, username);
+                    cout << "-----------------------------" << endl;
                     break;
                 case 3:
                     cout << "> ";
@@ -42,8 +44,10 @@ int main(int argc, char *const argv[]) {
                     cout << "Message sent." << endl;
                     break;
                 case 4:
+                    cout << "\n-------Waiting for request to talk-------" << endl;
                     cout << "Waiting for request to talk" << endl;
                     receiveRequestToTalk(username, username); //REFACTOR
+                    cout << "------------------------------------------" << endl;
                     break;
                 case 0:
                     cout << "Bye." << endl;

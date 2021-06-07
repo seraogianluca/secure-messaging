@@ -276,63 +276,75 @@ void receiveOnlineUsersList() {
     }
 }
 
-void sendKey(string username, string password, EVP_PKEY *pub_key) {
-    unsigned char *buffer = NULL;
-    unsigned char *encrypt_buffer = NULL;
-    unsigned int key_len;
+void sendKey(string username, string password, EVP_PKEY *pubKey, EVP_PKEY *prvKeyDH) {
+    unsigned char *buffer = NULL, *ciphertext = NULL, *encrypt_buffer = NULL;
+    unsigned int bufferLen, ciphertextLen;
     unsigned int encrypt_buffer_len;
-    EVP_PKEY *prv_key = NULL;
-
     try {
-        crypto.readPrivateKey(username, password, prv_key);
         // Generate public key
-        crypto.keyGeneration(prv_key);
-        // Send public key to peer
         buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        key_len = crypto.serializePublicKey(pub_key, buffer);
+        if (!buffer) throw runtime_error("Buffer not defined");
+        bufferLen = crypto.serializePublicKey(prvKeyDH, buffer);
+
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        ciphertextLen = crypto.publicKeyEncryption(buffer, bufferLen, ciphertext, pubKey);
+
+        // Send public key to peer
         crypto.setSessionKey(0);
         encrypt_buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        encrypt_buffer_len = crypto.encryptMessage(buffer, key_len, encrypt_buffer);
+        encrypt_buffer_len = crypto.encryptMessage(ciphertext, ciphertextLen, encrypt_buffer);
         // Send message to server for forwarding
         socketClient.sendMessage(socketClient.getMasterFD(), encrypt_buffer, encrypt_buffer_len);
+        delete[] buffer;
+        delete[] ciphertext;
+        delete[] encrypt_buffer;
     }catch(const exception& e) {
-        if(!buffer) delete[] buffer;
-        if(!encrypt_buffer) delete[] encrypt_buffer;
+        cout << "Error: " << e.what() << endl;
+        if(buffer != nullptr) delete[] buffer;
+        if(ciphertext != nullptr) delete[] ciphertext;
+        if(encrypt_buffer != nullptr) delete[] encrypt_buffer;
         throw;
     }
 }
 
-void receiveKey(string username, string password, EVP_PKEY *pub_key){
-    unsigned char *buffer = NULL;
-    unsigned char *decrypt_buffer = NULL;
-    unsigned char *secret = NULL;
-    unsigned int key_len;
-    unsigned int decrypt_buffer_len;
+void receiveKey(string username, string password, EVP_PKEY *prv_key_dh){
+    unsigned char *ciphertext = NULL, *plaintext = NULL, *keyPeerStream = NULL, *secret = NULL;
+    unsigned int ciphertextLen, plaintextLen, keyPeerStreamLen;
     EVP_PKEY *prv_key = NULL;
+    EVP_PKEY *pub_key_dh = NULL;
     try{
-        buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
         // Receive peer's public key
-        key_len = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
+        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
         crypto.setSessionKey(0);
+        plaintext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
 
-        decrypt_buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        decrypt_buffer_len = crypto.decryptMessage(buffer, key_len, decrypt_buffer);
         crypto.readPrivateKey(username, password, prv_key);
-        key_len = crypto.publicKeyDecryption(decrypt_buffer, decrypt_buffer_len, buffer, prv_key);
+
+        keyPeerStream = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        keyPeerStreamLen = crypto.publicKeyDecryption(plaintext, plaintextLen, keyPeerStream, prv_key);
+
+        crypto.deserializePublicKey(keyPeerStream, keyPeerStreamLen, pub_key_dh);
+
         // Secret derivation
         secret = new(nothrow) unsigned char[DIGEST_LEN];
-        crypto.secretDerivation(prv_key, pub_key, secret);
+        crypto.secretDerivation(prv_key_dh, pub_key_dh, secret);
 
         cout << "O' secret: " << endl;
         BIO_dump_fp(stdout, (const char*)secret, DIGEST_LEN);
 
         crypto.insertKey(secret, 1);
-        delete[] buffer;
+        delete[] ciphertext;
+        delete[] plaintext;
         delete[] secret;
+        delete[] keyPeerStream;
     }catch(const exception& e){
-        if(!buffer) delete[] buffer;
-        if(!decrypt_buffer) delete[] decrypt_buffer;
+        cout << "receiveKey(): " << e.what() << endl;
+        if(!ciphertext) delete[] ciphertext;
+        if(!plaintext) delete[] plaintext;
         if(!secret) delete[] secret;
+        if(!keyPeerStream) delete[] keyPeerStream;
         throw;
     }
 }
@@ -348,23 +360,14 @@ void requestToTalkM1(unsigned char *nonce, string username) {
         memcpy(message + start, nonce, NONCE_SIZE);
         messageLen = NONCE_SIZE + username.length();
 
-        cout << "M1 plaintext" << endl;
-        BIO_dump_fp(stdout, (const char *)message, messageLen);
-            
         encryptedMessage = new unsigned char[MAX_MESSAGE_SIZE];
         crypto.setSessionKey(0);
         encryptedMessageLen = crypto.encryptMessage(message, messageLen, encryptedMessage);
-
-        cout << "Encrypted Message: " << endl;
-        BIO_dump_fp(stdout, (const char *) encryptedMessage, encryptedMessageLen);
 
         memcpy(message, OP_REQUEST_TO_TALK, 1);
         start = 1;
         memcpy(message + start, encryptedMessage, encryptedMessageLen);
         messageLen = encryptedMessageLen + 1;
-
-        cout << "Message Sent: " << endl;
-        BIO_dump_fp(stdout, (const char *) message, messageLen);
 
         socketClient.sendMessage(socketClient.getMasterFD(), message, messageLen);
         delete[] message;
@@ -411,17 +414,11 @@ void extractPubKeyB(EVP_PKEY *&pubKeyB, unsigned char* nonce, unsigned char* non
         memcpy(pubKeyB_buff, plaintext + start, pubKeyB_len);
         crypto.deserializePublicKey(pubKeyB_buff, pubKeyB_len, pubKeyB);
 
-        cout << "Encrypted Nonces (" << encryptedNoncesLen << ")" << endl;
-        BIO_dump_fp(stdout, (const char *) encryptedNonces, encryptedNoncesLen);
-
         nonceAreceived = new unsigned char[NONCE_SIZE];
         crypto.readPrivateKey(username, password, prvKeyA);
         
         noncesPt = new unsigned char[MAX_MESSAGE_SIZE];
         crypto.publicKeyDecryption(encryptedNonces, encryptedNoncesLen, noncesPt, prvKeyA);
-
-        cout << "Nonces PT" << endl;
-        BIO_dump_fp(stdout, (const char *) noncesPt, 2*NONCE_SIZE);
         
         memcpy(nonceAreceived, noncesPt, NONCE_SIZE);
         
@@ -498,34 +495,6 @@ void finalizeRequestToTalk() {
     }
 }
 
-void sendRequestToTalk(string usernameReceiver, string usernameSender, string password) {
-    unsigned char *nonce = NULL, *nonceB = NULL;
-    EVP_PKEY *pubKeyB;
-    try {
-        // Send Message M1
-        nonce = new(nothrow) unsigned char[NONCE_SIZE];
-        requestToTalkM1(nonce, usernameReceiver);
-        cout << "\nRequest to talk sent" << endl;
-        // Receive Message M4:
-        nonceB = new(nothrow) unsigned char[NONCE_SIZE];
-        extractPubKeyB(pubKeyB, nonce, nonceB, usernameSender, password);
-        // Send Message M5:
-        sendNoncesToB(pubKeyB, nonce, nonceB);
-        // Receive Message M8:
-        finalizeRequestToTalk();
-        cout << "Request to talk accepted by " << usernameReceiver << endl;
-        sendKey(usernameSender, password, pubKeyB);
-        receiveKey(usernameSender, password, pubKeyB);
-        delete[] nonce;
-        delete[] nonceB;
-    } catch(const exception& e) {
-        cout << "Error in send request to talk: " << e.what() << endl;
-        if (!nonce) delete[] nonce;
-        if (!nonceB) delete[] nonceB,
-        throw;
-    }
-}
-
 void extractPubKeyA(unsigned char *nonceA, EVP_PKEY *&pubKeyA) {
     unsigned char *ciphertext = NULL, *plaintext = NULL, *keyBuffer = NULL;
     unsigned int ciphertextLen, plaintextLen, keyBufferLen;
@@ -569,12 +538,6 @@ void sendNoncesToA(unsigned char *nonce, unsigned char *nonceA, EVP_PKEY *pubKey
     try {
         crypto.generateNonce(nonce);
         noncesPT = new unsigned char[noncesPTLen];
-
-        cout << "Nonce A: " << endl;
-        BIO_dump_fp(stdout, (const char *)nonceA, NONCE_SIZE);
-
-        cout << "Nonce B: " << endl;
-        BIO_dump_fp(stdout, (const char *)nonce, NONCE_SIZE);
 
         memcpy(noncesPT, nonceA, NONCE_SIZE);
         memcpy(noncesPT+NONCE_SIZE, nonce, NONCE_SIZE);
@@ -648,17 +611,9 @@ void validateFreshness(unsigned char* nonce, string username, string password) {
         noncesPT = new unsigned char[MAX_MESSAGE_SIZE];
         noncesPTLen = crypto.publicKeyDecryption(noncesCT, noncesCTLen, noncesPT, prvKeyB);
 
-        cout << "Nonce PT (" << noncesPTLen << ")" << endl;
-        BIO_dump_fp(stdout, (const char *) noncesPT, noncesPTLen);
-
         nonceReceivedB = new unsigned char[NONCE_SIZE];
         memcpy(nonceReceivedB, noncesPT+NONCE_SIZE, NONCE_SIZE);
-
-        cout << "Nonce Received" << endl;
-        BIO_dump_fp(stdout, (const char *) nonceReceivedB, NONCE_SIZE);
-        cout << "Nonce" << endl;
-        BIO_dump_fp(stdout, (const char *) nonce, NONCE_SIZE);
-
+        
         if(memcmp(nonceReceivedB, nonce, NONCE_SIZE) != 0) {
             throw runtime_error("Request to talk operation not successful: nonce are different, the message is not fresh (error occurred receiving M6).");
         }
@@ -701,9 +656,45 @@ void sendOkMessage() {
     }
 }
 
+void sendRequestToTalk(string usernameReceiver, string usernameSender, string password) {
+    unsigned char *nonce = NULL, *nonceB = NULL;
+    EVP_PKEY *pubKeyB = NULL;
+    EVP_PKEY *prvKeyDH = NULL;
+    try {
+        // Send Message M1
+        nonce = new(nothrow) unsigned char[NONCE_SIZE];
+        requestToTalkM1(nonce, usernameReceiver);
+        cout << "\nRequest to talk sent" << endl;
+        // Receive Message M4:
+        cout << "Waiting for confirmation..." << endl;
+        nonceB = new(nothrow) unsigned char[NONCE_SIZE];
+        extractPubKeyB(pubKeyB, nonce, nonceB, usernameSender, password);
+        // Send Message M5:
+        sendNoncesToB(pubKeyB, nonce, nonceB);
+        // Receive Message M8:
+        finalizeRequestToTalk();
+        cout << "Request to talk accepted by " << usernameReceiver << endl;
+
+        crypto.keyGeneration(prvKeyDH);
+
+        cout << "Sending the key to " << usernameReceiver << endl; 
+        sendKey(usernameSender, password, pubKeyB, prvKeyDH);
+        cout << "Receiving the key from " << usernameReceiver << endl;
+        receiveKey(usernameSender, password, prvKeyDH);
+        delete[] nonce;
+        delete[] nonceB;
+    } catch(const exception& e) {
+        cout << "Error in send request to talk: " << e.what() << endl;
+        if (!nonce) delete[] nonce;
+        if (!nonceB) delete[] nonceB,
+        throw;
+    }
+}
+
 void receiveRequestToTalk(string username, string password) {
     unsigned char *nonce, *nonceA;
-    EVP_PKEY *pubKeyA;
+    EVP_PKEY *pubKeyA = NULL;
+    EVP_PKEY *prvKeyDH = NULL;
     try {
         // Receive M2:
         cout << "Waiting for message M2..." << endl;
@@ -728,12 +719,16 @@ void receiveRequestToTalk(string username, string password) {
         cout << "Receive M6" << endl;
         validateFreshness(nonce, username, password);
         // Send M7:
-        cout << "Send M7" << endl;
+        cout << "Send Ok" << endl;
         sendOkMessage();
 
+        crypto.keyGeneration(prvKeyDH);
+
         //Receive key from A
-        receiveKey(username, password, pubKeyA);
-        sendKey(username, password, pubKeyA);
+        cout << "Waiting for the key..." << endl;
+        receiveKey(username, password, prvKeyDH);
+        cout << "Sending the key..." << endl;
+        sendKey(username, password, pubKeyA, prvKeyDH);
         delete[] nonceA;
         delete[] nonce;
     } catch(const exception& e) {

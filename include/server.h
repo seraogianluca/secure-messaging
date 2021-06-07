@@ -411,9 +411,7 @@ void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciph
         crypto.setSessionKey(peerSender.key_pos);
         plaintext = new unsigned char[ciphertextLen];
         plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
-        if(memcmp(plaintext, "OK", 2) != 0){
-            throw runtime_error("Request to talk failed.");
-        }
+        
         cout << "***    Forwarding message to the receiver " << peerReceiver.username << "..." << endl;
         crypto.setSessionKey(peerReceiver.key_pos);
         ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
