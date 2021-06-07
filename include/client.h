@@ -613,7 +613,7 @@ void validateFreshness(unsigned char* nonce, string username, string password) {
 
         nonceReceivedB = new unsigned char[NONCE_SIZE];
         memcpy(nonceReceivedB, noncesPT+NONCE_SIZE, NONCE_SIZE);
-        
+
         if(memcmp(nonceReceivedB, nonce, NONCE_SIZE) != 0) {
             throw runtime_error("Request to talk operation not successful: nonce are different, the message is not fresh (error occurred receiving M6).");
         }
@@ -736,4 +736,66 @@ void receiveRequestToTalk(string username, string password) {
         if (nonce) delete[] nonce;
         throw;
     }
+}
+
+void sendMessage(string message) {
+    unsigned char *ciphertext = NULL, *serverCT;
+    unsigned int msgLen, ciphertextLen, serverCTLen;
+    try {
+        msgLen = message.length();
+        unsigned char *msg = (unsigned char*)message.c_str();
+        if(msgLen > MAX_MESSAGE_SIZE) {
+            throw runtime_error("Message size is greater than the maximum");
+        }
+        crypto.setSessionKey(1);
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext){
+            throw runtime_error("An error occurred during the allocation of the ciphertext for the ciphertext.");
+        }
+        ciphertextLen = crypto.encryptMessage(msg, msgLen, ciphertext);
+
+        crypto.setSessionKey(0);
+
+        serverCT = new unsigned char[MAX_MESSAGE_SIZE];
+        serverCTLen = crypto.encryptMessage(ciphertext, ciphertextLen, serverCT);
+        
+        unsigned char buffer[serverCTLen+1];
+        memcpy(buffer,OP_MESSAGE,1);
+        memcpy(buffer+1,serverCT,serverCTLen);
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer, serverCTLen+1);
+        delete[] ciphertext;
+    } catch(const exception& e) {
+        if(ciphertext != nullptr) delete[] ciphertext;
+        throw;
+    }
+}
+
+string receiveMessage(){
+    unsigned char *ciphertext = NULL, *plaintext = NULL, *text;
+    unsigned int cipherlen, plainlen, textLen;
+    try {
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext){
+            throw runtime_error("An error occurred during the allocation of the ciphertext for receiving message.");
+        }
+        cipherlen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
+        crypto.setSessionKey(0);
+        plaintext = new(nothrow) unsigned char[cipherlen];
+        if(!ciphertext){
+            throw runtime_error("An error occurred during the allocation of the plaintext for receiving message.");
+        }
+        plainlen = crypto.decryptMessage(ciphertext, cipherlen, plaintext);
+
+        crypto.setSessionKey(1);
+
+        text = new unsigned char[MAX_MESSAGE_SIZE];
+        textLen = crypto.decryptMessage(plaintext, plainlen, text);
+
+        text[textLen] = '\0';
+
+        return string((const char*)text);
+    } catch(const exception& e) {
+        if(ciphertext != nullptr) delete[] ciphertext;
+        return "";
+    }  
 }

@@ -271,18 +271,49 @@ onlineUser getUser(vector<onlineUser> onlineUsers, string username){
 }
 
 bool getReceiver(vector<activeChat> activeChats, onlineUser sender, onlineUser &receiver) {
-    bool found = false;
+    cout << "Sender: " << sender.username << endl;
     for (activeChat chat : activeChats) {
-        if(chat.a.username.compare(sender.username)) {
+        cout << chat.a.username << " - " << chat.b.username<< endl;
+        if(chat.a.username.compare(sender.username) == 0) {
             receiver = chat.b;
-            found = true;
+            return true;
         }
-        if (chat.b.username.compare(sender.username)) {
+        if (chat.b.username.compare(sender.username) == 0) {
             receiver = chat.a;
-            found = true;
+            return true;
         }
     }
-    return found;
+    return false;
+}
+
+void deleteUser(onlineUser user, vector<onlineUser> users) {
+    bool found = false;
+    int i = 0;
+    for (onlineUser usr : users) {
+        if (usr.username.compare(user.username)){
+            found = true;
+            break;
+        }
+        i++;
+    }
+    if (found && i < users.size()) {
+        users.erase(users.begin() + i);
+    }
+}
+
+void deleteActiveChat(onlineUser user, vector<activeChat> chats) {
+    int i = 0;
+    bool found = false;
+    for (activeChat chat : chats) {
+        if(chat.a.username.compare(user.username) || (chat.b.username.compare(user.username))) {
+            found = true;
+            break;
+        }
+        i++;
+    }
+    if (found && i < chats.size()) {
+        chats.erase(chats.begin() + i);
+    }
 }
 
 string extractUsernameReceiver(unsigned char *msg, unsigned int msgLen, unsigned char *nonceA, onlineUser peer_a) {
@@ -424,8 +455,13 @@ void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciph
     unsigned int plaintextLen;
     try {
         crypto.setSessionKey(peerSender.key_pos);
-        plaintext = new unsigned char[ciphertextLen];
+
+        cout << "Sender " << peerSender.username << " " << peerSender.key_pos << endl;
+
+        plaintext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!plaintext) throw runtime_error("Buffer not allocated");
         plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
+
         
         cout << "***    Forwarding message to the receiver " << peerReceiver.username << "..." << endl;
         crypto.setSessionKey(peerReceiver.key_pos);
@@ -435,7 +471,7 @@ void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciph
         delete[] plaintext;
     } catch(const exception& e) {
         cout << e.what() << '\n';
-        if (plaintext) delete[] plaintext;
+        if (plaintext != nullptr) delete[] plaintext;
     }
 }
 

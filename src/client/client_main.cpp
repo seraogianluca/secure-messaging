@@ -10,6 +10,7 @@ int main(int argc, char *const argv[]) {
     string user;
     string username;
     string password;
+    string message;
 
     try {
         buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
@@ -61,6 +62,12 @@ int main(int argc, char *const argv[]) {
                     user = readFromStdout("Insert username: ");
                     sendRequestToTalk(user, username, password);
                     cout << "-----------------------------" << endl;
+                    while(true){
+                        message = readFromStdout(username + ": ");
+                        sendMessage(message);
+                        message = receiveMessage();
+                        cout << user << ": " << message << endl;
+                    }
                     break;
                 case 3:
                     cout << "> ";
@@ -72,6 +79,12 @@ int main(int argc, char *const argv[]) {
                     cout << "\n-------Received request to talk-------" << endl;
                     receiveRequestToTalk(username, password);
                     cout << "------------------------------------------" << endl;
+                    while(true){
+                        message = receiveMessage();
+                        cout << "lore" << ": " << message << endl;;
+                        message = readFromStdout(username + ": ");
+                        sendMessage(message);
+                    }
                     break;
                 case 0:
                     cout << "Bye." << endl;
