@@ -19,26 +19,27 @@ void setStdinEcho(bool enable = true) {
 
 string readPassword() {
     string password;
-
     cout << "Insert password: ";
     setStdinEcho(false);
     cin >> password;
+    cin.ignore();
     setStdinEcho(true);
     cout << endl;
-
     return password;
 }
 
 string readFromStdout(string message) {
     string value;
-
     cout << message;
-    getline(cin, value);
-    while (value.length() == 0) {
-        cout << "Insert at least a character." << endl;
-        cout << message;
+    
+    do {
         getline(cin, value);
-    }
+        if(value.length() == 0) {
+            cout << "Insert at least a character." << endl;
+            cout << message;
+        }
+    } while (value.length() == 0);
+    
     return value;
 }
 
@@ -134,7 +135,7 @@ void verifyServerCertificate(unsigned char *message, unsigned int messageLen, un
     delete[] cert_buff;
 }
 
-void authentication(string username) {
+void authentication(string username, string password) {
     unsigned char *nonceClient = NULL;
     unsigned char *nonceServer = NULL;
     unsigned char *buffer = NULL;
@@ -147,7 +148,6 @@ void authentication(string username) {
         // Get Username
         unsigned int usernameLen = username.length();
 
-        string password = readPassword();
         crypto.readPrivateKey(username,password,prvkey);
 
         // Generate nonce

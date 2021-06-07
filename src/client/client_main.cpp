@@ -1,40 +1,65 @@
 #include "include/client.h"
+#include <sys/select.h>
 
-int showMenu();
+void showMenu();
+void insertCommand();
 
 int main(int argc, char *const argv[]) {
-    unsigned char *greetingMessage;
-    int menuOption;
+    unsigned char *buffer = NULL;
     string input;
     string user;
     string username;
+    string password;
 
     try {
-        
+        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!buffer) throw runtime_error("Buffer not allocated.");
+
         cout << "\n-------Authentication-------" << endl;
         socketClient.makeConnection();
 
-        greetingMessage = new unsigned char[MAX_MESSAGE_SIZE ];
-        socketClient.receiveMessage(socketClient.getMasterFD(), greetingMessage);
-        cout << "Connection confirmed: " << greetingMessage << endl;
-        delete[] greetingMessage;
+        socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
+        cout << "Connection confirmed: " << buffer << endl;
+
         username = readFromStdout("Insert username: ");
-        authentication(username);
+        password = readPassword();
+
+        authentication(username, password);
         keyEstablishment(0);
         crypto.setSessionKey(0);
         cout << "-----------------------------" << endl << endl;
-        receiveOnlineUsersList();
-        
-        while (true) {
-            menuOption = showMenu();
 
-            switch(menuOption) {
+        receiveOnlineUsersList();    
+        while (true) {
+            fd_set fds;
+            int maxfd;
+            int option = -1;
+
+            maxfd = (socketClient.getMasterFD() > STDIN_FILENO) ? socketClient.getMasterFD() : STDIN_FILENO;
+            FD_ZERO(&fds);
+            FD_SET(socketClient.getMasterFD(), &fds); 
+            FD_SET(STDIN_FILENO, &fds); 
+
+            showMenu();
+            cout << "--> ";
+            cout.flush();  
+            
+            select(maxfd+1, &fds, NULL, NULL, NULL); 
+
+            if (FD_ISSET(0, &fds)) {  
+                cin >> option;
+                cin.ignore();
+            }
+
+            if (FD_ISSET(socketClient.getMasterFD(), &fds)) option = 4;
+
+            switch(option) {
                 case 1:
                     break;
                 case 2:
-                    cout << "\n-------Request to talk-------" << endl;
+                    cout << "\n-------Request to talk-------" << endl; 
                     user = readFromStdout("Insert username: ");
-                    sendRequestToTalk(user, username, username);
+                    sendRequestToTalk(user, username, password);
                     cout << "-----------------------------" << endl;
                     break;
                 case 3:
@@ -44,40 +69,36 @@ int main(int argc, char *const argv[]) {
                     cout << "Message sent." << endl;
                     break;
                 case 4:
-                    cout << "\n-------Waiting for request to talk-------" << endl;
-                    cout << "Waiting for request to talk" << endl;
-                    receiveRequestToTalk(username, username); //REFACTOR
+                    cout << "\n-------Received request to talk-------" << endl;
+                    receiveRequestToTalk(username, password);
                     cout << "------------------------------------------" << endl;
                     break;
                 case 0:
                     cout << "Bye." << endl;
                     return 0;
-
                 default:
                     cout << "Insert a valid command." << endl;
             }
+
         }
     }
     catch (const exception &e) {
-        delete[] greetingMessage;
+        if(buffer != nullptr) delete[] buffer;
         cerr << e.what() << endl;
+        return 0;
     }
+
+    if(buffer != nullptr) delete[] buffer;
 
     return 0;
 }
 
-int showMenu() {
-    size_t value;
-
+void showMenu() {
     cout << endl;
     cout << "1. Online users" << endl;
     cout << "2. Request to talk" << endl;
     cout << "3. Send a message" << endl;
     cout << "4. Wait for Request for Talk" << endl;
     cout << "0. Exit" << endl;
-    cout << "> ";
-    cin >> value;
-    cin.ignore();
-    return value;
 }
 

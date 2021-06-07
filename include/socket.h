@@ -1,14 +1,15 @@
 #include <iostream>
 #include <string>
+#include <string.h>
 #include <sys/socket.h>
-#include <stdlib.h>
+#include <fcntl.h>
+#include <poll.h>
 #include <netinet/in.h>
 #include <unistd.h>   //close 
 #include <arpa/inet.h>    //close
-#include <string.h>
-#include "include/symbols.h"
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros 
 #include <errno.h>
+#include "include/symbols.h"
 
 using namespace std;
 
@@ -25,9 +26,11 @@ class SocketClient {
         SocketClient(int socketType);
         ~SocketClient();
         int getMasterFD();
+        void makeConnection();
+        bool wait(int socket);
+        void setBlockingSocket(int socket, bool is_blocking);
         void sendMessage(int sd, unsigned char* message, unsigned int message_len);
         int receiveMessage(int sd, unsigned char *buffer);
-        void makeConnection();
 };
 
 class SocketServer: public SocketClient {
