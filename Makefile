@@ -8,7 +8,7 @@ SOCKET_PATH = src/socket/
 
 ifeq ($(OS), Darwin)
 $(info "================= Compiling for mac ======================")
-TARGET = server_main.out client_main.out
+TARGET = clean server_main.out client_main.out
 CC = clang++
 LINKFLAG = ${LDFLAGS} -lcrypto 
 CFLAGS = ${CPPFLAGS} -Wall -std=c++20
@@ -16,7 +16,7 @@ endif
 
 ifeq ($(OS), Linux)
 $(info "============== Compiling for linux ======================")
-TARGET = server_main.out client_main.out
+TARGET = server_main.out client_main.out clean
 CC = g++
 LINKFLAG = -lssl -lcrypto
 CFLAGS = -Wall -std=c++2a
@@ -36,4 +36,4 @@ server_main.o:
 client_main.o:
 	$(CC) -c $(CLIENT_PATH)client_main.cpp -I$(CURRENT_DIR) $(CFLAGS) 
 clean:
-	$(RM) -rf *.o
+	rm -rf *.o
