@@ -68,7 +68,7 @@ SocketServer::SocketServer(int socketType):SocketClient(socketType) {
 SocketServer::~SocketServer() {}
 
 void SocketServer::serverBind() {
-    if (bind(master_fd, (struct sockaddr *)&address, sizeof(address)) < 0) 
+    if (::bind(master_fd, (struct sockaddr *)&address, sizeof(address)) < 0) 
         throw runtime_error("Error in binding");  
     cout << "Listening on port: " <<  port << endl;  
 }
