@@ -57,11 +57,14 @@ int main(int argc, char* const argv[]) {
                             if (operationCode == 2) {
                                 // Request to talk
                                 cout << "\n-------Request to Talk-------" << endl;
-                                requestToTalkProtocol(messageReceived, message_len, onlineUsers.at(i), onlineUsers);
+                                activeChat chat = requestToTalkProtocol(messageReceived, message_len, onlineUsers.at(i), onlineUsers);
+                                activeChats.push_back(chat);
+                                cout << "New chat active between " << chat.a.username << " and " << chat.b.username << endl;
                                 cout << "------------------------------" << endl;
                             }
                             if (operationCode == 3) {
                                 // Message
+                                // ricavare 
                             }
                             if (operationCode == 4) {
                                 // Certificate Request

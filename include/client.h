@@ -522,9 +522,10 @@ void sendNoncesToA(unsigned char *nonce, unsigned char *nonceA, EVP_PKEY *pubKey
 
         plaintextLen = noncesCTLen + 2;
         plaintext = new unsigned char[plaintextLen];
+
         memcpy(plaintext, "OK", 2);
         memcpy(plaintext + 2, noncesCT, noncesCTLen);
-        
+
         ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
         crypto.setSessionKey(0);
         ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
@@ -540,8 +541,24 @@ void sendNoncesToA(unsigned char *nonce, unsigned char *nonceA, EVP_PKEY *pubKey
         if (noncesCT) delete[] noncesCT;
         if (noncesPT) delete[] noncesPT;
         throw;
+    }   
+}
+
+void refuseRequestToTalk() {
+    unsigned char plaintext[2];
+    unsigned char *ciphertext = NULL;
+    unsigned int plaintextLen = 2, ciphertextLen;
+    try {
+        memcpy(plaintext, "NO", 2);
+        crypto.setSessionKey(0);
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
+        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
+        delete[] ciphertext;
+    } catch(const exception& e) {
+        cout << e.what() << '\n';
+        if(!ciphertext) delete[] ciphertext;
     }
-    
 }
 
 void validateFreshness(unsigned char* nonce, string username, string password) {
@@ -584,6 +601,7 @@ void validateFreshness(unsigned char* nonce, string username, string password) {
             throw runtime_error("Request to talk operation not successful: nonce are different, the message is not fresh (error occurred receiving M6).");
         }
         cout << "Freshness confirmed" << endl;
+
         delete[] plaintext;
         delete[] ciphertext;
         delete[] noncesPT;
@@ -629,10 +647,21 @@ void receiveRequestToTalk(string username, string password) {
         cout << "Waiting for message M2..." << endl;
         nonceA = new unsigned char[NONCE_SIZE];
         extractPubKeyA(nonceA, pubKeyA);
+
         // Send M3:
         cout << "Send Message M3" << endl;
         nonce = new unsigned char[NONCE_SIZE];
+        // Accept
+        string confirmation = readFromStdout("Type y to accept --> ");
+        if (strcasecmp((const char *)confirmation.c_str(), "Y")) {
+            cout << "The request to talk has been refused." << endl;
+            refuseRequestToTalk();
+            delete[] nonceA;
+            delete[] nonce;
+            return;
+        }
         sendNoncesToA(nonce, nonceA, pubKeyA);
+
         // Receive M6:
         cout << "Receive M6" << endl;
         validateFreshness(nonce, username, password);

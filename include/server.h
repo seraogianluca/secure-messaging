@@ -403,41 +403,36 @@ void sendM4(unsigned char* nonces, uint64_t nonces_len, onlineUser peerB, online
     }
 }
 
-void forward(onlineUser peerSender, onlineUser peerReceiver) {
-    unsigned char *ciphertext = NULL, *plaintext = NULL;
-    unsigned int ciphertextLen, plaintextLen;
+void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciphertext, unsigned int ciphertextLen) {
+    unsigned char *plaintext = NULL;
+    unsigned int plaintextLen;
     try {
-        cout << "***    Receiving message from the sender " << peerSender.username << "..." << endl;
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
-        ciphertextLen = serverSocket.receiveMessage(peerSender.sd, ciphertext);
         crypto.setSessionKey(peerSender.key_pos);
         plaintext = new unsigned char[ciphertextLen];
         plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
         if(memcmp(plaintext, "OK", 2) != 0){
             throw runtime_error("Request to talk failed.");
         }
-
         cout << "***    Forwarding message to the receiver " << peerReceiver.username << "..." << endl;
-        
         crypto.setSessionKey(peerReceiver.key_pos);
         ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
         serverSocket.sendMessage(peerReceiver.sd, ciphertext, ciphertextLen);
 
-        delete[] ciphertext;
         delete[] plaintext;
     } catch(const exception& e) {
         cout << e.what() << '\n';
-        if (ciphertext) delete[] ciphertext;
         if (plaintext) delete[] plaintext;
     }
 }
 
 
 
-void requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers) {
-    unsigned char *nonceA = NULL, *nonces = NULL;
+activeChat requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers) {
+    unsigned char *nonceA = NULL, *nonces = NULL, *ciphertext;
+    unsigned int ciphertextLen;
     onlineUser peerB;
     uint64_t nonces_len;
+    activeChat chat = activeChat();
     try {
         
         nonceA = new unsigned char[NONCE_SIZE];
@@ -459,14 +454,25 @@ void requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser p
         cout << "\nM4 sent" << endl << endl;
 
         // Decrypt Message M5 and Encrypt M6
-        forward(peerA, peerB);
+        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertextLen = serverSocket.receiveMessage(peerA.sd, ciphertext);
+        forward(peerA, peerB, ciphertext, ciphertextLen);
 
         // Decrypt Message M7 and Encrypt M8
-        forward(peerB, peerA);
-        
+        ciphertextLen = serverSocket.receiveMessage(peerB.sd, ciphertext);
+        forward(peerB, peerA, ciphertext, ciphertextLen);
+
+        cout << "Create an active chat" << endl;
+        chat.a = peerA;
+        cout << "Add peer A" << endl;
+        chat.b = peerB;
+        cout << "Add peer B" << endl;
+
         delete[] nonceA;
         delete[] nonces;
-    } catch(const std::exception& e) {
+        delete[] ciphertext;
+        return chat;
+    } catch(const exception& e) {
         if (nonceA) delete[] nonceA;
         if (nonces) delete[] nonces;
         throw;
