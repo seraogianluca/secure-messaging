@@ -24,9 +24,9 @@ endif
 
 all: $(TARGET)
 server_main.out: socket.o crypto.o server_main.o
-	$(CC) crypto.o socket.o server_main.o -o server_main.out -I$(CURRENT_DIR) $(LINKFLAG) 
+	$(CC) crypto.o socket.o server_main.o -o server_main.out -I$(CURRENT_DIR) $(CFLAGS) $(LINKFLAG) 
 client_main.out: socket.o crypto.o client_main.o
-	$(CC) socket.o crypto.o client_main.o -o client_main.out -I$(CURRENT_DIR) $(LINKFLAG) 
+	$(CC) socket.o crypto.o client_main.o -o client_main.out -I$(CURRENT_DIR) $(CFLAGS) $(LINKFLAG) 
 crypto.o:
 	$(CC) -c $(CRYPTO_PATH)crypto.cpp -I$(CURRENT_DIR) $(CFLAGS) 
 socket.o:
