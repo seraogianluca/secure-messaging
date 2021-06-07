@@ -8,6 +8,7 @@ int main(int argc, char *const argv[]) {
     string input;
     string user;
     string username;
+    string message;
 
     try {
         
@@ -36,6 +37,12 @@ int main(int argc, char *const argv[]) {
                     user = readFromStdout("Insert username: ");
                     sendRequestToTalk(user, username, username);
                     cout << "-----------------------------" << endl;
+                    while(true){
+                        message = readFromStdout("Insert message: ");
+                        sendMessage(message);
+                        message = receiveMessage();
+                        cout<< message;
+                    }
                     break;
                 case 3:
                     cout << "> ";
@@ -48,6 +55,12 @@ int main(int argc, char *const argv[]) {
                     cout << "Waiting for request to talk" << endl;
                     receiveRequestToTalk(username, username); //REFACTOR
                     cout << "------------------------------------------" << endl;
+                    while(true){
+                        message = receiveMessage();
+                        cout<< message;
+                        message = readFromStdout("Insert message: ");
+                        sendMessage(message);
+                    }
                     break;
                 case 0:
                     cout << "Bye." << endl;

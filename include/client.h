@@ -737,3 +737,51 @@ void receiveRequestToTalk(string username, string password) {
         throw;
     }
 }
+
+void sendMessage(string message) {
+    unsigned char *ciphertext = NULL, *buffer = NULL, *msg = NULL;
+    unsigned int msgLen, ciphertextLen;
+    try {
+        msgLen = message.length();
+        msg[msgLen];
+        msg = (unsigned char*)message.c_str();
+        if(msgLen > MAX_MESSAGE_SIZE) {
+            throw runtime_error("Message size is greater than the maximum");
+        }
+        crypto.setSessionKey(1);
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext){
+            throw runtime_error("An error occurred during the allocation of the ciphertext for the ciphertext.");
+        }
+        ciphertextLen = crypto.encryptMessage(msg, msgLen, ciphertext);
+        buffer[ciphertextLen+1];
+        memcpy(buffer,OP_MESSAGE,1);
+        memcpy(buffer+1,ciphertext,ciphertextLen);
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer, ciphertextLen+1);
+        delete[] ciphertext;
+    } catch(const exception& e) {
+        if(ciphertext != nullptr) delete[] ciphertext;
+        throw;
+    }
+}
+
+string receiveMessage(){
+    unsigned char *ciphertext = NULL, *plaintext = NULL;
+    unsigned int cipherlen, plainlen;
+    try {
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext){
+            throw runtime_error("An error occurred during the allocation of the ciphertext for receiving message.");
+        }
+        cipherlen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
+        crypto.setSessionKey(1);
+        plaintext = new(nothrow) unsigned char[cipherlen];
+        if(!ciphertext){
+            throw runtime_error("An error occurred during the allocation of the plaintext for receiving message.");
+        }
+        plainlen = crypto.decryptMessage(ciphertext, cipherlen, plaintext);
+        return string((const char*)plaintext);
+    } catch(const exception& e) {
+        if(ciphertext != nullptr) delete[] ciphertext;
+    }  
+}
