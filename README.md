@@ -23,7 +23,7 @@ An user, before to start a chat with another user, must send to him a request to
 
 1) CLIENT A -> SERVER: Client A send to the server a message which has the username of the user he want to chat with and a nonce to guarantee freshness against replay attack. This part of the message is encrypted and at the beginning there is the OPCODE relative to the request to talk (2) that is in clear.
 
-2) SERVER -> CLIENT B: now the server knows that it must to send a request to talk to the client B, whose username is knows from the message previously received and decrypted. The first 64 bits of the message are composed with the username length of the sender. Then there is the username sender, the public key of the sender and the nounce. This is all encrypted, then the message is sent to client B with the OPCODE = 2 at the beginning of the message in clear.
+2) SERVER -> CLIENT B: now the server knows that it must send a request to talk to the client B, whose username is knows from the message previously received and decrypted. The first 64 bits of the message are composed with the username length of the sender. Then there is the username sender, the public key of the sender and the nounce. This is all encrypted, then the message is sent to client B with the OPCODE = 2 at the beginning of the message in clear.
 
 3) CLIENT B -> SERVER: at this point, client B can accept of refuse the request to talk sent by A.  It sends to the server an OK messagge to which is appended the nonce of A and the nonce just generate from B, both encrypted with the public key of A. If client B wants to refuse the request to talk the process is the same but he sends only a message with NO to the server which is forwarded to the client A.
 
@@ -41,40 +41,9 @@ At the end of this process, the server added the two clients to the active chat 
 
 ![alt text](resources/request-to-talk.png)
 
-### Server-Auth
-
-![alt text](resources/authentication.png "Authentication")
-
-1) Client hello. M1 C->S: hello||nc
-2) Server hello. M2 S->C: hello||nc||ns
-3) Client requests certificate. M3 C->S: cert_req||nc||ns
-4) Server sends certificate. M4 S->C: cert||nc
-//5) Server: S -> C: hello done
-
-- Client verifica il certificato
-
-### Client-Auth
-
-- Client fa l'hash della password
-- Client Cripta con la sua chiave pubblica
-- Server Decripta con la chiave privata
-- Server controlla se la hash è presente nello store
-
-### Chat Session Key Estabilishment
+## Client A-Client B session key establishment
 
 ![alt text](resources/ke_clientA-clientB.png)
-
-### Diffie-Hellman key exchange
-
-- Client A invia Client B request to talk
-- Client B accetta request to talk
-- (?)
-- Client A calcola chiave pubblica DH e la invia a Client B
-- Client B riceve la chiave pubblica DH di client A
-- Client B calcola chiave pubblica DH e la invia a Client A
-- Client A riceve la chiave pubblica DH di client B
-- Client A e Client B calcolano la session key ed eliminano i paramentri
-- LA SESSION KEY CALCOLATA NON PUO' ESSERE USATA PER ENCRYPTION, DEVE ESSERE FATTO L'HASH.
 
 ## Miscellanea
 
