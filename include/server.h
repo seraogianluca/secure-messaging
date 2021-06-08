@@ -348,7 +348,7 @@ string extractUsernameReceiver(unsigned char *msg, unsigned int msgLen, unsigned
 }
 
 void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, unsigned char *nonceA) {
-    unsigned char *buffer = NULL, *pubkeyBuffer = NULL, *ciphertext = NULL, *peerAUsername = NULL;
+    unsigned char *buffer = NULL, *pubkeyBuffer = NULL, *ciphertext = NULL;
     unsigned int bufferLen, pubkeyBufferLen, ciphertextLen;
     EVP_PKEY *pubkey_a;
     uint64_t peerALen;
@@ -356,10 +356,9 @@ void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, unsigned char *nonceA)
     try {
         buffer = new unsigned char[MAX_MESSAGE_SIZE];
         peerALen = peerA.username.length();
-        peerAUsername[peerALen];
         memcpy(buffer,&peerALen,sizeof(uint64_t));
-        start += 8;
-        memcpy(buffer + start, peerAUsername, peerALen);
+        start += sizeof(uint64_t);
+        memcpy(buffer + start, peerA.username.c_str(), peerALen);
         start += peerALen;
         crypto.readPublicKey(peerA.username,pubkey_a);
         pubkeyBuffer = new unsigned char[MAX_MESSAGE_SIZE];
@@ -368,7 +367,7 @@ void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, unsigned char *nonceA)
 
         start += pubkeyBufferLen;
         memcpy(buffer + start, nonceA, NONCE_SIZE);
-        bufferLen = pubkeyBufferLen + NONCE_SIZE;
+        bufferLen = sizeof(uint64_t) + peerALen + pubkeyBufferLen + NONCE_SIZE;
         ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
 
         crypto.setSessionKey(peerB.key_pos);

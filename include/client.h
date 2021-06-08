@@ -516,23 +516,27 @@ void extractPubKeyA(unsigned char *nonceA, string &peerAUsername, EVP_PKEY *&pub
 
         memcpy(&peerALen, plaintext, sizeof(uint64_t));
         start += sizeof(uint64_t);
+        cout << "Peer usrname len: " << peerALen << endl;
         peerAUsr = new unsigned char[peerALen];
         memcpy(peerAUsr, plaintext + start, peerALen);
         start += peerALen;
         peerAUsername = string((const char*)peerAUsr);
-        keyBufferLen = plaintextLen - NONCE_SIZE - peerALen;
+        keyBufferLen = plaintextLen - NONCE_SIZE - peerALen - sizeof(uint64_t);
         keyBuffer = new unsigned char[keyBufferLen];
 
         memcpy(keyBuffer, plaintext + start, keyBufferLen);
         crypto.deserializePublicKey(keyBuffer, keyBufferLen, pubKeyA);
-        memcpy(nonceA, plaintext+keyBufferLen, NONCE_SIZE);
+        start += keyBufferLen;
+        memcpy(nonceA, plaintext+start, NONCE_SIZE);
         delete[] ciphertext;
         delete[] plaintext;
+        delete[] peerAUsr;
         delete[] keyBuffer;
     } catch(const exception& e) {
         cout << "Error in extractPubKeyA(): " << e.what() << endl;
         if (ciphertext) delete[] ciphertext;
         if (plaintext) delete[] plaintext;
+        if (peerAUsr) delete[] peerAUsr;
         if (keyBuffer) delete[] keyBuffer;
         throw;
     }
