@@ -59,8 +59,7 @@ The chat is *back and forth*: the first who can send a message is the one who se
 
 ## Miscellanea
 
-The communication between client and server is performed using TCP sockets to guarantee the reliability of the messages.
-The server allows opening only a chat at a time for each client with at most 10 online users.
-To handle this, the server keeps a structure for the online users and a structure for the active chats.
-A user in an active chat can close the communication by typing "!deh", in this case, the server will forward the message to the other side and remove the chat from the active ones.
-When a chat is closed, the client application is automatically terminated.
+- The communication between client and server is performed using TCP sockets to guarantee the reliability of the messages.
+- The server allows opening only a chat at a time for each client with at most 10 online users. To handle this, the server keeps a structure for the online users and a structure for the active chats.
+- A user in an active chat can close the communication by typing "!deh", in this case, the server will forward the message to the other side and remove the chat from the active ones.
+- When a chat is closed, the client application is automatically terminated.
