@@ -26,11 +26,16 @@ Crypto::Crypto(int num_keys) {
 Crypto::~Crypto() {
     delete[] iv;
     delete[] session_key;
+    keys.clear();
 }
 
 void Crypto::insertKey(unsigned char *key, unsigned int pos) {
     vector<unsigned char> temp(key, key + DIGEST_LEN);
     keys.insert(keys.begin() + pos, temp);
+}
+
+void Crypto::removeKey(unsigned int pos) {
+    keys.erase(keys.begin() + pos, keys.begin() + pos + 1);
 }
 
 void Crypto::setSessionKey(unsigned int key) {

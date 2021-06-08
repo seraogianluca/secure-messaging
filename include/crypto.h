@@ -27,6 +27,7 @@ class Crypto {
         ~Crypto();
 
         void insertKey(unsigned char *key, unsigned int pos);
+        void removeKey(unsigned int pos);
         void setSessionKey(unsigned int key);
         void generateNonce(unsigned char* nonce);
 

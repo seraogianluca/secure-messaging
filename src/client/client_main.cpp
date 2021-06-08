@@ -69,12 +69,14 @@ int main(int argc, char *const argv[]) {
                     while(true){
                         message = readFromStdout(username + ": ");
                         if(message.compare("!deh") == 0){
+                            cout << "You closed the chat." << endl;
                             sendCloseConnection(username);
                             break;
                         }
                         sendMessage(message);
                         message = receiveMessage();
                         if(message.compare("!deh") == 0){
+                            cout << user << " closed the chat." << endl;
                             break;
                         }
                         cout << user << ": " << message << endl;
@@ -93,11 +95,15 @@ int main(int argc, char *const argv[]) {
                     while(true){
                         message = receiveMessage();
                         if(message.compare("!deh") == 0){
+                            cout << user << " closed the chat." << endl;
+                            crypto.removeKey(1);
+                            crypto.setSessionKey(0);
                             break;
                         }
                         cout << user << ": " << message << endl;
                         message = readFromStdout(username + ": ");
                         if(message.compare("!deh") == 0){
+                            cout << "You closed the chat." << endl;
                             sendCloseConnection(username);
                             break;
                         }
