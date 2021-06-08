@@ -46,6 +46,10 @@ Perfect forward secrecy + replay attack
 
 ![alt text](resources/request-to-talk.png)
 
+### Chat Session Key Estabilishment
+
+![alt text](resources/ke_clientA-clientB.png)
+
 ### Diffie-Hellman key exchange
 
 - Client A invia Client B request to talk
