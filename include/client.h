@@ -43,105 +43,140 @@ string readFromStdout(string message) {
     return value;
 }
 
-void sendHelloMessage(unsigned char* username, unsigned int usernameLen, unsigned char *nonce) {
+// ---------- AUTHENTICATION ---------- //
+void sendHelloMessage(unsigned char *username, unsigned int usernameLen, unsigned char *nonce) {
     unsigned char *helloMessage = NULL;
     unsigned int start = 0;
     unsigned int helloMessageLen = 1 + usernameLen + NONCE_SIZE;
+
     try {
-        helloMessage = new unsigned char[helloMessageLen];
+        helloMessage = new (nothrow) unsigned char[helloMessageLen];
+        if(!helloMessage)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(helloMessage, OP_LOGIN, 1);
         start += 1;
-        memcpy(helloMessage+start, username, usernameLen);
+        memcpy(helloMessage + start, username, usernameLen);
         start += usernameLen;
-        memcpy(helloMessage+start, nonce, NONCE_SIZE);
+        memcpy(helloMessage + start, nonce, NONCE_SIZE);
+
         socketClient.sendMessage(socketClient.getMasterFD(), helloMessage, helloMessageLen);
-    } catch(const exception& e) {
+
         delete[] helloMessage;
+    } catch(const exception& e) {
+        if(helloMessage != nullptr) delete[] helloMessage;
         throw;
     }
-    delete[] helloMessage;
 }
 
 void extractNonce(unsigned char *clientNonce, unsigned char *serverNonce, unsigned char *receivedMessage, unsigned int messageLen) {
     unsigned char *nonceReceived = NULL;
     unsigned int start = messageLen - 2*NONCE_SIZE;
+
     try {
-        nonceReceived = new unsigned char[NONCE_SIZE];
-        memcpy(nonceReceived, receivedMessage+start, NONCE_SIZE);
-        if(memcmp(nonceReceived, clientNonce, NONCE_SIZE) != 0) {
+        nonceReceived = new (nothrow) unsigned char[NONCE_SIZE];
+        if(!nonceReceived)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        memcpy(nonceReceived, receivedMessage + start, NONCE_SIZE);
+        if(memcmp(nonceReceived, clientNonce, NONCE_SIZE) != 0)
             throw runtime_error("Login Error: The freshness of the message is not confirmed");
-        }
+
         start = messageLen - NONCE_SIZE;
         memcpy(serverNonce, receivedMessage + start, NONCE_SIZE);
-    } catch (const exception& e) {
+
         delete[] nonceReceived;
+    } catch (const exception& e) {
+        if(nonceReceived != nullptr) delete[] nonceReceived;
         throw;
     }
-    delete[] nonceReceived;
 }
 
 void sendPassword(unsigned char *nonce, string password, string username, X509 *cert) {
+    EVP_PKEY *server_pubkey = NULL;
     unsigned char *buffer = NULL;
     unsigned char *pwdDigest = NULL;
     unsigned char *finalDigest = NULL;
     unsigned char *ciphertext = NULL;
-    EVP_PKEY *server_pubkey = NULL;
     unsigned int start = 0;
     unsigned int ciphertextLen = 0;
+
     try {
-        buffer = new unsigned char[NONCE_SIZE + DIGEST_LEN];
-        pwdDigest = new unsigned char[DIGEST_LEN];
+        buffer = new (nothrow) unsigned char[NONCE_SIZE + DIGEST_LEN];
+        if(!buffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        pwdDigest = new (nothrow) unsigned char[DIGEST_LEN];
+        if(!pwdDigest)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         crypto.computeHash((unsigned char *) password.c_str(), password.length(), pwdDigest);
 
         memcpy(buffer, pwdDigest, DIGEST_LEN);
         start += DIGEST_LEN;
-        memcpy(buffer+start, nonce, NONCE_SIZE);
+        memcpy(buffer + start, nonce, NONCE_SIZE);
 
-        finalDigest = new unsigned char[DIGEST_LEN];
+        finalDigest = new (nothrow) unsigned char[DIGEST_LEN];
+        if(!finalDigest)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         crypto.computeHash(buffer, DIGEST_LEN + NONCE_SIZE, finalDigest);
 
         crypto.getPublicKeyFromCertificate(cert,server_pubkey);
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         ciphertextLen = crypto.publicKeyEncryption(finalDigest, DIGEST_LEN, ciphertext, server_pubkey);
         socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
-    } catch(const std::exception& e) {
+
         delete[] buffer;
         delete[] pwdDigest;
         delete[] finalDigest;
         delete[] ciphertext;
+    } catch(const exception& e) {
+        if(buffer != nullptr) delete[] buffer;
+        if(pwdDigest != nullptr) delete[] pwdDigest;
+        if(finalDigest != nullptr) delete[] finalDigest;
+        if(ciphertext != nullptr) delete[] ciphertext;
         throw;
     }
-    delete[] buffer;
-    delete[] pwdDigest;
-    delete[] finalDigest;
-    delete[] ciphertext;
 }
 
 void verifyServerCertificate(unsigned char *message, unsigned int messageLen, unsigned int usernameLen, X509 *&cert) {
-    unsigned char *cert_buff = NULL;
+    unsigned char *certBuff = NULL;
     unsigned int start = usernameLen;
-    unsigned int cert_len = messageLen - 2*NONCE_SIZE - usernameLen;
+    unsigned int certLen = messageLen - 2*NONCE_SIZE - usernameLen;
+
     try {
-        cert_buff = new unsigned char[cert_len];        
-        memcpy(cert_buff, message+start, cert_len);
-        crypto.deserializeCertificate(cert_len, cert_buff,cert);
+        certBuff = new (nothrow) unsigned char[certLen];  
+        if(!certBuff)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        memcpy(certBuff, message + start, certLen);
+
+        crypto.deserializeCertificate(certLen, certBuff,cert);
+
         if(!crypto.verifyCertificate(cert))
             throw runtime_error("Pay attention, server is not authenticated.");
+
         cout << "Server authenticated." << endl;
+
+        delete[] certBuff;
     } catch(const exception& e) {
-        delete[] cert_buff;
+        if(certBuff != nullptr) delete[] certBuff;
         throw;
     }
-    delete[] cert_buff;
 }
 
 void authentication(string username, string password) {
+    X509 *cert;
+    EVP_PKEY *prvkey = NULL;
     unsigned char *nonceClient = NULL;
     unsigned char *nonceServer = NULL;
     unsigned char *buffer = NULL;
     unsigned char *plaintext = NULL;
-    EVP_PKEY *prvkey = NULL;
-    X509 *cert;
     unsigned int messageReceivedLen;
     unsigned int plainlen;
     try {
@@ -151,21 +186,32 @@ void authentication(string username, string password) {
         crypto.readPrivateKey(username,password,prvkey);
 
         // Generate nonce
-        nonceClient = new unsigned char[NONCE_SIZE];
+        nonceClient = new (nothrow) unsigned char[NONCE_SIZE];
+        if(!nonceClient)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         crypto.generateNonce(nonceClient);
 
         // Build hello message
         sendHelloMessage((unsigned char *)username.c_str(), usernameLen, nonceClient);
 
         // Receive server hello
-        buffer = new unsigned char[MAX_MESSAGE_SIZE];
+        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!buffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         messageReceivedLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
 
-        plaintext = new unsigned char[messageReceivedLen];
+        plaintext = new (nothrow) unsigned char[messageReceivedLen];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
         plainlen = crypto.publicKeyDecryption(buffer, messageReceivedLen,plaintext,prvkey);
 
         // Check and extract nonce
-        nonceServer = new unsigned char[NONCE_SIZE];
+        nonceServer = new (nothrow) unsigned char[NONCE_SIZE];
+        if(!nonceServer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         extractNonce(nonceClient, nonceServer, plaintext, plainlen);
 
         // Verify certificate
@@ -173,108 +219,193 @@ void authentication(string username, string password) {
 
         // Send pwd
         sendPassword(nonceServer, password, username, cert);
-    } catch (const exception &e) {
+
         delete[] nonceClient;
         delete[] buffer;
         delete[] plaintext;
         delete[] nonceServer;
+    } catch (const exception &e) {
+        if(nonceClient != nullptr) delete[] nonceClient;
+        if(buffer != nullptr) delete[] buffer;
+        if(plaintext != nullptr) delete[] plaintext;
+        if(nonceServer != nullptr) delete[] nonceServer;
         throw;
     }
-    delete[] nonceClient;
-    delete[] buffer;
-    delete[] plaintext;
-    delete[] nonceServer;
 }
 
-void sendMessage(unsigned char *header, unsigned int head_len, unsigned char *msg, unsigned int pln_len) {
-    unsigned char *msg_cipher = NULL;
-    unsigned char *buffer = NULL;
-    unsigned int ciphr_len;
-    unsigned int msg_len = 0;
-    int start = 0;
-
-    try {
-        msg_cipher = new unsigned char[pln_len + TAG_SIZE + IV_SIZE];
-        ciphr_len = crypto.encryptMessage(msg,pln_len,msg_cipher);
-
-        msg_len = head_len + ciphr_len;
-        if (msg_len > MAX_MESSAGE_SIZE) {
-            throw runtime_error("Maximum message size exceeded");
-        }
-
-        buffer = new unsigned char[msg_len];
-        memcpy(buffer, header, head_len);
-        start += head_len;
-        memcpy(buffer+start, msg_cipher, ciphr_len);
-        start += ciphr_len;
-
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer, msg_len);
-    } catch(const exception& e) {
-        delete[] msg_cipher;
-        delete[] buffer;
-        throw;
-    }
-    delete[] msg_cipher;
-    delete[] buffer;
-}
-
-void keyEstablishment(unsigned int key_pos) {
+// ---------- KEY ESTABLISHMENT ---------- //
+void keyEstablishment(unsigned int keyPos) {
+    EVP_PKEY *prvKeyA = NULL;
+    EVP_PKEY *pubKeyB = NULL;
     unsigned char *buffer = NULL;
     unsigned char *secret = NULL;
-    unsigned int key_len;
-    EVP_PKEY *prv_key_a = NULL;
-    EVP_PKEY *pub_key_b = NULL;
+    unsigned int keyLen;
 
     try {
-        // TODO: check where put the login request
-        //socketClient.sendMessage(socketClient.getMasterFD(), OP_LOGIN, 1);
-        
         // Generate public key
-        crypto.keyGeneration(prv_key_a);
+        crypto.keyGeneration(prvKeyA);
 
         // Send public key to peer
-        buffer = new unsigned char[MAX_MESSAGE_SIZE];
-        key_len = crypto.serializePublicKey(prv_key_a, buffer);
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer, key_len);
+        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!buffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+        
+        keyLen = crypto.serializePublicKey(prvKeyA, buffer);
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer, keyLen);
 
         // Receive peer's public key
-        key_len = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
-        crypto.deserializePublicKey(buffer, key_len, pub_key_b);
+        keyLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
+        crypto.deserializePublicKey(buffer, keyLen, pubKeyB);
 
         // Secret derivation
-        secret = new unsigned char[DIGEST_LEN];
-        crypto.secretDerivation(prv_key_a, pub_key_b, secret);
+        secret = new (nothrow) unsigned char[DIGEST_LEN];
+        if(!secret)
+            throw runtime_error("An error occurred while allocating the buffer.");
 
-        cout << "O' secret: " << endl;
-        BIO_dump_fp(stdout, (const char*)secret, DIGEST_LEN);
+        crypto.secretDerivation(prvKeyA, pubKeyB, secret);
+        crypto.insertKey(secret, keyPos);
 
-        crypto.insertKey(secret, key_pos);
         delete[] buffer;
         delete[] secret;    
     } catch(const exception& e) {
-        delete[] buffer;
-        delete[] secret;
+        if(buffer != nullptr) delete[] buffer;
+        if(secret != nullptr) delete[] secret;
         throw;
     }
 }
 
-void askOnlineUserList() {
-    unsigned char *ciphertext;
+void sendKey(string username, string password, EVP_PKEY *pubKey, EVP_PKEY *prvKeyDH) {
+    unsigned char *buffer = NULL;
+    unsigned char *ciphertext = NULL;
+    unsigned char *encryptBuffer = NULL;
+    unsigned int bufferLen;
     unsigned int ciphertextLen;
+    unsigned int encryptBufferLen;
     try {
-        unsigned int plaintextLen = 25;
-        const char* plaintext = "Send me the online users";
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if (!ciphertext) throw runtime_error("Ciphertext not allocated");
+        // Generate public key
+        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!buffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        bufferLen = crypto.serializePublicKey(prvKeyDH, buffer);
+
+        // Encrypting with peer's public key
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        ciphertextLen = crypto.publicKeyEncryption(buffer, bufferLen, ciphertext, pubKey);
+
+        // Send public key to peer
+        crypto.setSessionKey(0);
+        encryptBuffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!encryptBuffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        encryptBufferLen = crypto.encryptMessage(ciphertext, ciphertextLen, encryptBuffer);
+
+        // Send message to server for forwarding
+        socketClient.sendMessage(socketClient.getMasterFD(), encryptBuffer, encryptBufferLen);
+
+        delete[] buffer;
+        delete[] ciphertext;
+        delete[] encryptBuffer;
+    }catch(const exception& e) {
+        if(buffer != nullptr) delete[] buffer;
+        if(ciphertext != nullptr) delete[] ciphertext;
+        if(encryptBuffer != nullptr) delete[] encryptBuffer;
+        throw;
+    }
+}
+
+void receiveKey(string username, string password, EVP_PKEY *prvKeyDH) {
+    EVP_PKEY *prvKey = NULL;
+    EVP_PKEY *pubKeyDH = NULL;
+    unsigned char *ciphertext = NULL;
+    unsigned char *plaintext = NULL;
+    unsigned char *keyPeerStream = NULL;
+    unsigned char *secret = NULL;
+    unsigned int ciphertextLen;
+    unsigned int plaintextLen;
+    unsigned int keyPeerStreamLen;
+
+    try {
+        // Receive peer's public key
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
+        crypto.setSessionKey(0);
+
+        plaintext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
+        crypto.readPrivateKey(username, password, prvKey);
+
+        keyPeerStream = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!keyPeerStream)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        keyPeerStreamLen = crypto.publicKeyDecryption(plaintext, plaintextLen, keyPeerStream, prvKey);
+        crypto.deserializePublicKey(keyPeerStream, keyPeerStreamLen, pubKeyDH);
+
+        // Secret derivation
+        secret = new (nothrow) unsigned char[DIGEST_LEN];
+        if (!secret)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        crypto.secretDerivation(prvKeyDH, pubKeyDH, secret);
+        crypto.insertKey(secret, 1);
+
+        delete[] ciphertext;
+        delete[] plaintext;
+        delete[] keyPeerStream;
+        delete[] secret;
+    } catch(const exception& e) {
+        if(ciphertext != nullptr) delete[] ciphertext;
+        if(plaintext != nullptr) delete[] plaintext;
+        if(keyPeerStream != nullptr) delete[] keyPeerStream;
+        if(secret != nullptr) delete[] secret;
+        throw;
+    }
+}
+
+// ---------- ONLINE USERS UTILITY ---------- //
+void askOnlineUserList() {
+    const char* plaintext;
+    unsigned char *ciphertext;
+    unsigned char *buffer;
+    unsigned int ciphertextLen;
+    unsigned int plaintextLen;
+
+    try {
+        plaintextLen = 25;
+        plaintext = "Send me the online users";
+
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         crypto.setSessionKey(0);
         ciphertextLen = crypto.encryptMessage((unsigned char*)plaintext, plaintextLen, ciphertext);
-        unsigned char buffer[ciphertextLen+1];
+        
+        buffer = new (nothrow) unsigned char[ciphertextLen + 1];
+        if(!buffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(buffer, OP_ONLINE_USERS, 1);
-        memcpy(buffer+1, ciphertext, ciphertextLen);
+        memcpy(buffer + 1, ciphertext, ciphertextLen);
         socketClient.sendMessage(socketClient.getMasterFD(), buffer, ciphertextLen+1);
-    }
-    catch(const std::exception& e) {
-        std::cerr << e.what() << '\n';
+
+        delete[] ciphertext;
+        delete[] buffer;
+    } catch(const exception& e) {
+        if(ciphertext != nullptr) delete[] ciphertext;
+        if(buffer != nullptr) delete[] buffer;
+        throw;
     }
 }
 
@@ -288,125 +419,79 @@ bool checkUserOnline(string username, vector<string> onlineUsers) {
 }
 
 void receiveOnlineUsersList(vector<string> &onlineUsers) {
-    unsigned char *buffer, *plaintext;
+    unsigned char *buffer; 
+    unsigned char *plaintext;
     unsigned int bufferLen;
     unsigned int plaintextLen;
+    string usersString;
+    string delimiter;
+    string token;
+    size_t pos;
+
     try {
-        buffer = new unsigned char[MAX_MESSAGE_SIZE];
+        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!buffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         bufferLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
-        plaintext = new unsigned char[MAX_MESSAGE_SIZE];
+
+        plaintext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         plaintextLen = crypto.decryptMessage(buffer, bufferLen, plaintext);
         plaintext[plaintextLen] = '\0';
-        string usersString = string((const char*) plaintext);
+        usersString = string((const char*) plaintext);
 
         cout << "Online Users" << endl;
+
         if (usersString.compare("None") != 0) {
-            std::string delimiter = "\n";
-            size_t pos = 0;
-            string token;
-            while ((pos = usersString.find(delimiter)) != std::string::npos) {
+            delimiter = "\n";
+            pos = 0;
+
+            while ((pos = usersString.find(delimiter)) != string::npos) {
                 token = usersString.substr(0, pos);
                 cout << "- " << token << endl;
                 onlineUsers.push_back(token);
                 usersString.erase(0, pos + delimiter.length());
             }
+
         } else {
             cout << "** No other users online" << endl;
             onlineUsers.clear();
         }
         
     } catch(const exception& e) {
-        if (buffer) delete[] buffer;
-        if (plaintext) delete[] plaintext;
+        if (buffer != nullptr) delete[] buffer;
+        if (plaintext != nullptr) delete[] plaintext;
         throw;
     }
 }
 
-void sendKey(string username, string password, EVP_PKEY *pubKey, EVP_PKEY *prvKeyDH) {
-    unsigned char *buffer = NULL, *ciphertext = NULL, *encrypt_buffer = NULL;
-    unsigned int bufferLen, ciphertextLen;
-    unsigned int encrypt_buffer_len;
+// ---------- REQUEST TO TALK ---------- //
+void requestToTalkInit(unsigned char *nonce, string username) {
+    unsigned char *message;
+    unsigned char *encryptedMessage;
+    unsigned int messageLen;
+    unsigned int encryptedMessageLen;
+    unsigned int start = 0;
+
     try {
-        // Generate public key
-        buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if (!buffer) throw runtime_error("Buffer not defined");
-        bufferLen = crypto.serializePublicKey(prvKeyDH, buffer);
+        message = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!message)
+            throw runtime_error("An error occurred while allocating the buffer.");
 
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        ciphertextLen = crypto.publicKeyEncryption(buffer, bufferLen, ciphertext, pubKey);
-
-        // Send public key to peer
-        crypto.setSessionKey(0);
-        encrypt_buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        encrypt_buffer_len = crypto.encryptMessage(ciphertext, ciphertextLen, encrypt_buffer);
-        // Send message to server for forwarding
-        socketClient.sendMessage(socketClient.getMasterFD(), encrypt_buffer, encrypt_buffer_len);
-        delete[] buffer;
-        delete[] ciphertext;
-        delete[] encrypt_buffer;
-    }catch(const exception& e) {
-        cout << "Error: " << e.what() << endl;
-        if(buffer != nullptr) delete[] buffer;
-        if(ciphertext != nullptr) delete[] ciphertext;
-        if(encrypt_buffer != nullptr) delete[] encrypt_buffer;
-        throw;
-    }
-}
-
-void receiveKey(string username, string password, EVP_PKEY *prv_key_dh){
-    unsigned char *ciphertext = NULL, *plaintext = NULL, *keyPeerStream = NULL, *secret = NULL;
-    unsigned int ciphertextLen, plaintextLen, keyPeerStreamLen;
-    EVP_PKEY *prv_key = NULL;
-    EVP_PKEY *pub_key_dh = NULL;
-    try{
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        // Receive peer's public key
-        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
-        crypto.setSessionKey(0);
-        plaintext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
-
-        crypto.readPrivateKey(username, password, prv_key);
-
-        keyPeerStream = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        keyPeerStreamLen = crypto.publicKeyDecryption(plaintext, plaintextLen, keyPeerStream, prv_key);
-
-        crypto.deserializePublicKey(keyPeerStream, keyPeerStreamLen, pub_key_dh);
-
-        // Secret derivation
-        secret = new(nothrow) unsigned char[DIGEST_LEN];
-        crypto.secretDerivation(prv_key_dh, pub_key_dh, secret);
-
-        cout << "O' secret: " << endl;
-        BIO_dump_fp(stdout, (const char*)secret, DIGEST_LEN);
-
-        crypto.insertKey(secret, 1);
-        delete[] ciphertext;
-        delete[] plaintext;
-        delete[] secret;
-        delete[] keyPeerStream;
-    }catch(const exception& e){
-        cout << "receiveKey(): " << e.what() << endl;
-        if(!ciphertext) delete[] ciphertext;
-        if(!plaintext) delete[] plaintext;
-        if(!secret) delete[] secret;
-        if(!keyPeerStream) delete[] keyPeerStream;
-        throw;
-    }
-}
-
-void requestToTalkM1(unsigned char *nonce, string username) {
-    unsigned char *message, *encryptedMessage;
-    unsigned int messageLen, encryptedMessageLen, start = 0;
-    try {
-        message = new unsigned char[MAX_MESSAGE_SIZE];
         crypto.generateNonce(nonce);
+
         memcpy(message, (const char *)username.c_str(), username.length());
         start += username.length();
         memcpy(message + start, nonce, NONCE_SIZE);
         messageLen = NONCE_SIZE + username.length();
 
-        encryptedMessage = new unsigned char[MAX_MESSAGE_SIZE];
+        encryptedMessage = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!encryptedMessage)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         crypto.setSessionKey(0);
         encryptedMessageLen = crypto.encryptMessage(message, messageLen, encryptedMessage);
 
@@ -416,212 +501,293 @@ void requestToTalkM1(unsigned char *nonce, string username) {
         messageLen = encryptedMessageLen + 1;
 
         socketClient.sendMessage(socketClient.getMasterFD(), message, messageLen);
+
         delete[] message;
         delete[] encryptedMessage;
     } catch(const exception& e) {
-        cout << "Error in requestToTalkM1(): " << e.what() << endl;
-        if (message) delete[] message;
-        if (encryptedMessage) delete[] encryptedMessage;
+        if (message != nullptr) delete[] message;
+        if (encryptedMessage != nullptr) delete[] encryptedMessage;
         throw;
     }
 }
 
-int64_t extractNoncesCiphertextLength(unsigned char *buffer, unsigned int bufferLen) {
-    int64_t value;
-    memcpy(&value, buffer,sizeof(int64_t));
+uint64_t extractNoncesCiphertextLength(unsigned char *buffer, unsigned int bufferLen) {
+    uint64_t value;
+    memcpy(&value, buffer,sizeof(uint64_t));
     return value;
 }
 
-void extractPubKeyB(EVP_PKEY *&pubKeyB, unsigned char* nonce, unsigned char* nonceB, string username, string password) {
-    unsigned char *ciphertext = NULL, *plaintext = NULL, *pubKeyB_buff = NULL;
-    unsigned char *nonceAreceived = NULL, *encryptedNonces = NULL, *noncesPt = NULL;
-    unsigned int plaintextLen, ciphertextLen, encryptedNoncesLen;
-    unsigned int pubKeyB_len;
+void extractPubKeyB(EVP_PKEY *&pubKeyB, unsigned char *nonce, unsigned char *nonceB, string username, string password) {
     EVP_PKEY *prvKeyA;
-    unsigned int start = 0, headerLen = 10;// "OK" + 8 bytes
+    unsigned char *ciphertext = NULL;
+    unsigned char *plaintext = NULL;
+    unsigned char *pubKeyBBuff = NULL;
+    unsigned char *nonceAreceived = NULL;
+    unsigned char *encryptedNonces = NULL;
+    unsigned char *noncesPt = NULL;
+    unsigned int plaintextLen;
+    unsigned int ciphertextLen;
+    unsigned int encryptedNoncesLen;
+    unsigned int pubKeyBLen;
+    unsigned int start = 0;
+    unsigned int headerLen = 10; // "OK" + 8 bytes
+
     try {
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
-        plaintext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+        
         ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
+
+        plaintext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+        
         plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
         encryptedNoncesLen = extractNoncesCiphertextLength(plaintext, plaintextLen);
 
-        if(memcmp(plaintext+8, "OK", 2) != 0) {
+        if(memcmp(plaintext + sizeof(uint64_t), "OK", 2) != 0) {
             throw runtime_error("Request to talk operation not successful: OK is missing (error occurred receiving M4 of the protocol).");
         }
 
-        encryptedNonces = new unsigned char[encryptedNoncesLen];
+        encryptedNonces = new (nothrow) unsigned char[encryptedNoncesLen];
+        if(!encryptedNonces)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         start += headerLen;
         memcpy(encryptedNonces, plaintext + start, encryptedNoncesLen);
+        pubKeyBLen = plaintextLen - encryptedNoncesLen - headerLen; 
 
-        pubKeyB_len = plaintextLen - encryptedNoncesLen - headerLen; 
-        pubKeyB_buff = new unsigned char [pubKeyB_len];
+        pubKeyBBuff = new (nothrow) unsigned char[pubKeyBLen];
+        if(!pubKeyBBuff)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         start = headerLen + encryptedNoncesLen;
-        memcpy(pubKeyB_buff, plaintext + start, pubKeyB_len);
-        crypto.deserializePublicKey(pubKeyB_buff, pubKeyB_len, pubKeyB);
+        memcpy(pubKeyBBuff, plaintext + start, pubKeyBLen);
+        crypto.deserializePublicKey(pubKeyBBuff, pubKeyBLen, pubKeyB);
 
-        nonceAreceived = new unsigned char[NONCE_SIZE];
+        nonceAreceived = new (nothrow) unsigned char[NONCE_SIZE];
+        if(!nonceAreceived)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         crypto.readPrivateKey(username, password, prvKeyA);
         
-        noncesPt = new unsigned char[MAX_MESSAGE_SIZE];
-        crypto.publicKeyDecryption(encryptedNonces, encryptedNoncesLen, noncesPt, prvKeyA);
-        
-        memcpy(nonceAreceived, noncesPt, NONCE_SIZE);
-        
+        noncesPt = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!noncesPt)
+            throw runtime_error("An error occurred while allocating the buffer.");
 
-        if (memcmp(nonce, nonceAreceived, NONCE_SIZE) != 0) {
+        crypto.publicKeyDecryption(encryptedNonces, encryptedNoncesLen, noncesPt, prvKeyA);
+        memcpy(nonceAreceived, noncesPt, NONCE_SIZE);
+
+        if(memcmp(nonce, nonceAreceived, NONCE_SIZE) != 0)
             throw runtime_error("Request to talk operation not successful: nonce are different, the message is not fresh (error occurred receiving M4 of the protocol).");
-        }
+
         memcpy(nonceB, noncesPt+NONCE_SIZE, NONCE_SIZE);
+
         delete[] ciphertext;
         delete[] plaintext;
-        delete[] pubKeyB_buff;
+        delete[] encryptedNonces;
         delete[] nonceAreceived;
         delete[] noncesPt;
     } catch(const exception& e) {
-        cout << "Error in extractPubKeyB(): " << e.what() << endl;
-        if (ciphertext) delete[] ciphertext;
-        if (plaintext) delete[] plaintext;
-        if (pubKeyB_buff) delete[] pubKeyB_buff;
-        if (nonceAreceived) delete[] nonceAreceived;
-        if (noncesPt) delete[] noncesPt;
+        if(ciphertext != nullptr) delete[] ciphertext;
+        if(plaintext != nullptr) delete[] plaintext;
+        if(encryptedNonces != nullptr) delete[] encryptedNonces;
+        if(nonceAreceived != nullptr) delete[] nonceAreceived;
+        if(noncesPt != nullptr) delete[] noncesPt;
         throw;
     }
 }
 
 void sendNoncesToB(EVP_PKEY* pubKeyB, unsigned char *nonce, unsigned char *nonceB) {
-    unsigned char *ciphertext = NULL, *nonces = NULL, *message = NULL;
-    unsigned int messageLen, ciphertextLen, start = 0;
+    unsigned char *ciphertext = NULL;
+    unsigned char *nonces = NULL;
+    unsigned char *message = NULL;
+    unsigned int messageLen;
+    unsigned int ciphertextLen;
+    unsigned int start = 0;
+
     try {
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
-        nonces = new unsigned char[NONCE_SIZE*2];
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+            
+        nonces = new (nothrow) unsigned char[NONCE_SIZE*2];
+        if(!nonces)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(nonces, nonce, NONCE_SIZE);
         memcpy(nonces + NONCE_SIZE, nonceB, NONCE_SIZE);
         ciphertextLen = crypto.publicKeyEncryption(nonces, NONCE_SIZE*2, ciphertext, pubKeyB);
 
         messageLen = ciphertextLen + 2;
-        message = new unsigned char[ciphertextLen + 2];
+        message = new (nothrow) unsigned char[ciphertextLen + 2];
+        if(!message)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(message, "OK", 2);
         start += 2;
         memcpy(message + 2, ciphertext, ciphertextLen);
-
         ciphertextLen = crypto.encryptMessage(message, messageLen, ciphertext);
-
         socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
+
         delete[] ciphertext;
         delete[] nonces;
         delete[] message;
     } catch(const exception& e) {
-        cout << "Error in sendNoncesToB(): " << e.what() << endl;
-        if (ciphertext) delete[] ciphertext;
-        if (nonces) delete[] nonces;
-        if (message) delete[] message;
+        if (ciphertext != nullptr) delete[] ciphertext;
+        if (nonces != nullptr) delete[] nonces;
+        if (message != nullptr) delete[] message;
         throw;
     }
 }
 
 void finalizeRequestToTalk() {
-    unsigned char *ciphertext = NULL, *plaintext = NULL;
-    unsigned int plaintextLen, ciphertextLen;
+    unsigned char *ciphertext = NULL;
+    unsigned char *plaintext = NULL;
+    unsigned int plaintextLen;
+    unsigned int ciphertextLen;
+
     try {
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
-        plaintext = new unsigned char[ciphertextLen]; // |pt| <= |ct|
+        
+        plaintext = new (nothrow) unsigned char[ciphertextLen];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
-        if (memcmp(plaintext, "OK", 2) != 0) {
+
+        if(memcmp(plaintext, "OK", 2) != 0) {
             throw runtime_error("Request to talk operation not successful: error occurred receiving M8 of the protocol");
         }
+
         delete[] ciphertext;
         delete[] plaintext;
     } catch(const exception& e) {
-        cout << "Error in finalizeRequestToTalk(): " << e.what() << endl;
-        if (ciphertext) delete[] ciphertext;
-        if (plaintext) delete[] plaintext;
+        if(ciphertext != nullptr) delete[] ciphertext;
+        if(plaintext != nullptr) delete[] plaintext;
         throw;
     }
 }
 
 void extractPubKeyA(unsigned char *nonceA, string &peerAUsername, EVP_PKEY *&pubKeyA) {
-    unsigned char *ciphertext = NULL, *plaintext = NULL, *keyBuffer = NULL, *peerAUsr = NULL;
-    unsigned int ciphertextLen, plaintextLen, keyBufferLen, start = 0;
+    unsigned char *ciphertext = NULL;
+    unsigned char *plaintext = NULL;
+    unsigned char *keyBuffer = NULL;
+    unsigned char *peerAUsr = NULL;
+    unsigned int ciphertextLen;
+    unsigned int plaintextLen;
+    unsigned int keyBufferLen;
+    unsigned int start = 0;
     uint64_t peerALen;
 
     try {
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
 
         if(memcmp(ciphertext, OP_REQUEST_TO_TALK, 1) != 0) {
-            cout << "**Wrong OP" << endl;
             throw runtime_error("Request to talk operation not successful: wrong OP");
         }
-        cout << "Request code verified." << endl;
 
-        plaintext = new unsigned char[ciphertextLen-1]; //|pt| <= |ct|
+        plaintext = new (nothrow) unsigned char[ciphertextLen-1];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         crypto.setSessionKey(0);
-        plaintextLen = crypto.decryptMessage(ciphertext+1, ciphertextLen-1, plaintext); // remove the OP Code
-
+        plaintextLen = crypto.decryptMessage(ciphertext+1, ciphertextLen-1, plaintext);
+        
         memcpy(&peerALen, plaintext, sizeof(uint64_t));
         start += sizeof(uint64_t);
-        cout << "Peer usrname len: " << peerALen << endl;
-        peerAUsr = new unsigned char[peerALen];
+
+        peerAUsr = new (nothrow) unsigned char[peerALen];
+        if(!peerAUsr)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(peerAUsr, plaintext + start, peerALen);
         start += peerALen;
         peerAUsername = string((const char*)peerAUsr);
         keyBufferLen = plaintextLen - NONCE_SIZE - peerALen - sizeof(uint64_t);
-        keyBuffer = new unsigned char[keyBufferLen];
+
+        keyBuffer = new (nothrow) unsigned char[keyBufferLen];
+        if(!keyBuffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
 
         memcpy(keyBuffer, plaintext + start, keyBufferLen);
         crypto.deserializePublicKey(keyBuffer, keyBufferLen, pubKeyA);
         start += keyBufferLen;
         memcpy(nonceA, plaintext+start, NONCE_SIZE);
+
         delete[] ciphertext;
         delete[] plaintext;
         delete[] peerAUsr;
         delete[] keyBuffer;
     } catch(const exception& e) {
-        cout << "Error in extractPubKeyA(): " << e.what() << endl;
-        if (ciphertext) delete[] ciphertext;
-        if (plaintext) delete[] plaintext;
-        if (peerAUsr) delete[] peerAUsr;
-        if (keyBuffer) delete[] keyBuffer;
+        if (ciphertext != nullptr) delete[] ciphertext;
+        if (plaintext != nullptr) delete[] plaintext;
+        if (peerAUsr != nullptr) delete[] peerAUsr;
+        if (keyBuffer != nullptr) delete[] keyBuffer;
         throw;
     }
 }
 
 void sendNoncesToA(unsigned char *nonce, unsigned char *nonceA, EVP_PKEY *pubKeyA) {
-    unsigned char *plaintext = NULL, *ciphertext = NULL, *noncesCT = NULL, *noncesPT = NULL;
-    unsigned int plaintextLen, ciphertextLen, noncesCTLen, noncesPTLen = 2*NONCE_SIZE;
+    unsigned char *plaintext = NULL;
+    unsigned char *ciphertext = NULL;
+    unsigned char *noncesCT = NULL;
+    unsigned char *noncesPT = NULL;
+    unsigned int plaintextLen;
+    unsigned int ciphertextLen;
+    unsigned int noncesCTLen;
+    unsigned int noncesPTLen = 2*NONCE_SIZE;
 
     try {
         crypto.generateNonce(nonce);
-        noncesPT = new unsigned char[noncesPTLen];
+
+        noncesPT = new (nothrow)  unsigned char[noncesPTLen];
+        if(!noncesPT)
+            throw runtime_error("An error occurred while allocating the buffer.");
 
         memcpy(noncesPT, nonceA, NONCE_SIZE);
-        memcpy(noncesPT+NONCE_SIZE, nonce, NONCE_SIZE);
+        memcpy(noncesPT + NONCE_SIZE, nonce, NONCE_SIZE);
 
-        noncesCT = new unsigned char[MAX_MESSAGE_SIZE];
+        noncesCT = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!noncesCT)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         noncesCTLen = crypto.publicKeyEncryption(noncesPT, noncesPTLen, noncesCT, pubKeyA);
-
         plaintextLen = noncesCTLen + 2;
-        plaintext = new unsigned char[plaintextLen];
+
+        plaintext = new (nothrow) unsigned char[plaintextLen];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
 
         memcpy(plaintext, "OK", 2);
         memcpy(plaintext + 2, noncesCT, noncesCTLen);
 
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+        
         crypto.setSessionKey(0);
         ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
         socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
+
+        delete[] noncesPT;
+        delete[] noncesCT;
         delete[] plaintext;
         delete[] ciphertext;
-        delete[] noncesCT;
-        delete[] noncesPT;
     } catch(const exception& e) {
-        cout << "Error in send nonces to A: " << e.what() << endl;
-        if (plaintext) delete[] plaintext;
-        if (ciphertext) delete[] ciphertext;
-        if (noncesCT) delete[] noncesCT;
-        if (noncesPT) delete[] noncesPT;
+        if(noncesPT != nullptr) delete[] noncesPT;
+        if(noncesCT != nullptr) delete[] noncesCT;
+        if(plaintext != nullptr) delete[] plaintext;
+        if(ciphertext != nullptr) delete[] ciphertext;
         throw;
     }   
 }
@@ -629,140 +795,191 @@ void sendNoncesToA(unsigned char *nonce, unsigned char *nonceA, EVP_PKEY *pubKey
 void refuseRequestToTalk() {
     unsigned char plaintext[2];
     unsigned char *ciphertext = NULL;
-    unsigned int plaintextLen = 2, ciphertextLen;
+    unsigned int plaintextLen = 2;
+    unsigned int ciphertextLen;
+
     try {
         memcpy(plaintext, "NO", 2);
         crypto.setSessionKey(0);
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
         socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
+
         delete[] ciphertext;
     } catch(const exception& e) {
-        cout << e.what() << '\n';
-        if(!ciphertext) delete[] ciphertext;
+        if(ciphertext != nullptr) delete[] ciphertext;
+        throw;
     }
 }
 
 void validateFreshness(unsigned char* nonce, string username, string password) {
-    unsigned char *plaintext = NULL, *ciphertext = NULL, *noncesPT = NULL, *noncesCT = NULL, *nonceReceivedB = NULL;
-    unsigned int plaintextLen, ciphertextLen, noncesPTLen, noncesCTLen;
     EVP_PKEY *prvKeyB;
+    unsigned char *plaintext = NULL;
+    unsigned char *ciphertext = NULL;
+    unsigned char *noncesPT = NULL;
+    unsigned char *noncesCT = NULL;
+    unsigned char *nonceReceivedB = NULL;
+    unsigned int plaintextLen;
+    unsigned int ciphertextLen;
+    unsigned int noncesPTLen;
+    unsigned int noncesCTLen;
+    
     try {
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
 
-        plaintext = new unsigned char[ciphertextLen]; //|pt| <= |ct|
+        plaintext = new (nothrow) unsigned char[ciphertextLen];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         crypto.setSessionKey(0);
         plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
 
-        if(memcmp(plaintext, "OK", 2) != 0) {
+        if(memcmp(plaintext, "OK", 2) != 0)
             throw runtime_error("Request to talk operation not successful: wrong OP (error occurred receiving M6)");
-        }
 
         crypto.readPrivateKey(username, password, prvKeyB);
-
         noncesCTLen = plaintextLen-2;
-        noncesCT = new unsigned char[noncesCTLen];
+
+        noncesCT = new (nothrow) unsigned char[noncesCTLen];
+        if(!noncesCT)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(noncesCT, plaintext+2, noncesCTLen);
 
         noncesPT = new unsigned char[MAX_MESSAGE_SIZE];
+        if(!noncesPT)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         noncesPTLen = crypto.publicKeyDecryption(noncesCT, noncesCTLen, noncesPT, prvKeyB);
 
         nonceReceivedB = new unsigned char[NONCE_SIZE];
+        if(!nonceReceivedB)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(nonceReceivedB, noncesPT+NONCE_SIZE, NONCE_SIZE);
 
-        if(memcmp(nonceReceivedB, nonce, NONCE_SIZE) != 0) {
+        if(memcmp(nonceReceivedB, nonce, NONCE_SIZE) != 0)
             throw runtime_error("Request to talk operation not successful: nonce are different, the message is not fresh (error occurred receiving M6).");
-        }
-        cout << "Freshness confirmed" << endl;
 
-        delete[] plaintext;
         delete[] ciphertext;
-        delete[] noncesPT;
+        delete[] plaintext;
         delete[] noncesCT;
+        delete[] noncesPT;
         delete[] nonceReceivedB;
     } catch(const exception& e) {
-        cout << "Error in validateFreshness(): " << e.what() << endl;
-        if (plaintext) delete[] plaintext;
-        if (ciphertext) delete[] ciphertext;
-        if (noncesPT) delete[] noncesPT;
-        if (noncesCT) delete[] noncesCT;
-        if (nonceReceivedB) delete[] nonceReceivedB;
+        if(ciphertext != nullptr) delete[] ciphertext;
+        if(plaintext != nullptr) delete[] plaintext;
+        if(noncesCT != nullptr) delete[] noncesCT;
+        if(noncesPT != nullptr) delete[] noncesPT;
+        if(nonceReceivedB != nullptr) delete[] nonceReceivedB;
         throw;
     }
     
 }
 
 void sendOkMessage() {
-    unsigned char *ciphertext = NULL, *plaintext = NULL;
-    unsigned int ciphertextLen, plaintextLen = 2;
+    unsigned char *ciphertext = NULL;
+    unsigned char *plaintext = NULL;
+    unsigned int ciphertextLen;
+    unsigned int plaintextLen = 2;
+
     try {
-        plaintext = new unsigned char[plaintextLen];
+        plaintext = new (nothrow) unsigned char[plaintextLen];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(plaintext, "OK", 2);
         crypto.setSessionKey(0);
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
+
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         ciphertextLen = crypto.encryptMessage(plaintext, 2, ciphertext);
         socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
-        delete[] ciphertext;
+
         delete[] plaintext;
+        delete[] ciphertext;
     } catch(const std::exception& e) {
-        cout << "Error in sendOKMessage(): " << e.what() << endl;
-        if (ciphertext) delete[] ciphertext;
-        if (plaintext) delete[] plaintext;
+        if (plaintext != nullptr) delete[] plaintext;
+        if (ciphertext != nullptr) delete[] ciphertext;
         throw;
     }
 }
 
 void sendRequestToTalk(string usernameReceiver, string usernameSender, string password) {
-    unsigned char *nonce = NULL, *nonceB = NULL;
+    unsigned char *nonce = NULL;
+    unsigned char *nonceB = NULL;
     EVP_PKEY *pubKeyB = NULL;
     EVP_PKEY *prvKeyDH = NULL;
+
     try {
         // Send Message M1
-        nonce = new(nothrow) unsigned char[NONCE_SIZE];
-        requestToTalkM1(nonce, usernameReceiver);
-        cout << "\nRequest to talk sent" << endl;
+        nonce = new (nothrow) unsigned char[NONCE_SIZE];
+        if(!nonce)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
+        requestToTalkInit(nonce, usernameReceiver);
+        cout << "\nRequest to talk sent to " << usernameReceiver << endl;
+
         // Receive Message M4:
-        cout << "Waiting for confirmation..." << endl;
-        nonceB = new(nothrow) unsigned char[NONCE_SIZE];
+        nonceB = new (nothrow) unsigned char[NONCE_SIZE];
+        if(!nonceB)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         extractPubKeyB(pubKeyB, nonce, nonceB, usernameSender, password);
+
         // Send Message M5:
         sendNoncesToB(pubKeyB, nonce, nonceB);
+
         // Receive Message M8:
         finalizeRequestToTalk();
+
         cout << "Request to talk accepted by " << usernameReceiver << endl;
-
         crypto.keyGeneration(prvKeyDH);
-
-        cout << "Sending the key to " << usernameReceiver << endl; 
         sendKey(usernameSender, password, pubKeyB, prvKeyDH);
-        cout << "Receiving the key from " << usernameReceiver << endl;
         receiveKey(usernameSender, password, prvKeyDH);
+
         delete[] nonce;
         delete[] nonceB;
     } catch(const exception& e) {
         cout << "Error in send request to talk: " << e.what() << endl;
-        if (!nonce) delete[] nonce;
-        if (!nonceB) delete[] nonceB,
-        throw;
+        if (nonce != nullptr) delete[] nonce;
+        if (nonceB != nullptr) delete[] nonceB;
     }
 }
 
 void receiveRequestToTalk(string username, string password, string &peerAUsername) {
-    unsigned char *nonce, *nonceA;
+    string confirmation;
+    unsigned char *nonce;
+    unsigned char *nonceA;
     EVP_PKEY *pubKeyA = NULL;
     EVP_PKEY *prvKeyDH = NULL;
+
     try {
         // Receive M2:
-        cout << "Waiting for message M2..." << endl;
-        nonceA = new unsigned char[NONCE_SIZE];
+        nonceA = new (nothrow) unsigned char[NONCE_SIZE];
+        if(!nonceA)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         extractPubKeyA(nonceA, peerAUsername, pubKeyA);
+        cout << peerAUsername << " wants to talk with you" << endl;
 
         // Send M3:
-        cout << "Send Message M3" << endl;
-        nonce = new unsigned char[NONCE_SIZE];
+        nonce = new (nothrow) unsigned char[NONCE_SIZE];
+        if(!nonce)
+            throw runtime_error("An error occurred while allocating the buffer.");
+        
         // Accept
-        string confirmation = readFromStdout("Type y to accept --> ");
+        confirmation = readFromStdout("Type y to accept --> ");
         if (strcasecmp((const char *)confirmation.c_str(), "Y")) {
             cout << "The request to talk has been refused." << endl;
             refuseRequestToTalk();
@@ -770,120 +987,164 @@ void receiveRequestToTalk(string username, string password, string &peerAUsernam
             delete[] nonce;
             return;
         }
+
         sendNoncesToA(nonce, nonceA, pubKeyA);
 
         // Receive M6:
-        cout << "Receive M6" << endl;
         validateFreshness(nonce, username, password);
-        // Send M7:
-        cout << "Send Ok" << endl;
-        sendOkMessage();
 
+        // Send M7:
+        sendOkMessage();
         crypto.keyGeneration(prvKeyDH);
 
         //Receive key from A
-        cout << "Waiting for the key..." << endl;
         receiveKey(username, password, prvKeyDH);
-        cout << "Sending the key..." << endl;
         sendKey(username, password, pubKeyA, prvKeyDH);
+
         delete[] nonceA;
         delete[] nonce;
     } catch(const exception& e) {
-        if (nonceA) delete[] nonceA;
-        if (nonce) delete[] nonce;
-        throw;
+        cout << "Error in receive request to talk: " << e.what() << endl;
+        if (nonceA != nullptr) delete[] nonceA;
+        if (nonce != nullptr) delete[] nonce;
     }
 }
 
+// ---------- MESSAGE UTILITY ---------- //
 void sendMessage(string message) {
-    unsigned char *ciphertext = NULL, *serverCT;
-    unsigned int msgLen, ciphertextLen, serverCTLen;
+    unsigned char *ciphertext = NULL;
+    unsigned char *serverCT;
+    unsigned char *msg;
+    unsigned char *buffer;
+    unsigned int msgLen;
+    unsigned int ciphertextLen;
+    unsigned int serverCTLen;
+
     try {
         msgLen = message.length();
-        unsigned char *msg = (unsigned char*)message.c_str();
-        if(msgLen > MAX_MESSAGE_SIZE) {
+        msg = (unsigned char*)message.c_str();
+        if(msgLen > MAX_MESSAGE_SIZE) 
             throw runtime_error("Message size is greater than the maximum");
-        }
+        
         crypto.setSessionKey(1);
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext){
-            throw runtime_error("An error occurred during the allocation of the ciphertext for the ciphertext.");
-        }
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+        
         ciphertextLen = crypto.encryptMessage(msg, msgLen, ciphertext);
-
         crypto.setSessionKey(0);
 
-        serverCT = new unsigned char[MAX_MESSAGE_SIZE];
+        serverCT = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!serverCT)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         serverCTLen = crypto.encryptMessage(ciphertext, ciphertextLen, serverCT);
         
-        unsigned char buffer[serverCTLen+1];
+        buffer = new (nothrow) unsigned char[serverCTLen+1];
+        if(!buffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(buffer,OP_MESSAGE,1);
-        memcpy(buffer+1,serverCT,serverCTLen);
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer, serverCTLen+1);
+        memcpy(buffer + 1,serverCT,serverCTLen);
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer, serverCTLen + 1);
+
         delete[] ciphertext;
+        delete[] serverCT;
+        delete[] buffer;
     } catch(const exception& e) {
         if(ciphertext != nullptr) delete[] ciphertext;
+        if(serverCT != nullptr) delete[] serverCT;
+        if(buffer != nullptr) delete[] buffer;
         throw;
     }
 }
 
 string receiveMessage(){
-    unsigned char *ciphertext = NULL, *plaintext = NULL, *text;
-    unsigned int cipherlen, plainlen, textLen;
+    unsigned char *ciphertext = NULL;
+    unsigned char *plaintext = NULL;
+    unsigned char *text;
+    unsigned int cipherlen;
+    unsigned int plainlen;
+    unsigned int textLen;
+
     try {
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext){
-            throw runtime_error("An error occurred during the allocation of the ciphertext for receiving message.");
-        }
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         cipherlen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
         crypto.setSessionKey(0);
-        plaintext = new(nothrow) unsigned char[cipherlen];
-        if(!ciphertext){
-            throw runtime_error("An error occurred during the allocation of the plaintext for receiving message.");
-        }
-        plainlen = crypto.decryptMessage(ciphertext, cipherlen, plaintext);
 
+        plaintext = new (nothrow) unsigned char[cipherlen];
+        if(!plaintext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+    
+        plainlen = crypto.decryptMessage(ciphertext, cipherlen, plaintext);
         crypto.setSessionKey(1);
 
-        text = new unsigned char[MAX_MESSAGE_SIZE];
-        textLen = crypto.decryptMessage(plaintext, plainlen, text);
+        text = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!text)
+            throw runtime_error("An error occurred while allocating the buffer.");
 
+        textLen = crypto.decryptMessage(plaintext, plainlen, text);
         text[textLen] = '\0';
 
-        return string((const char*)text);
+
+        delete[] ciphertext;
+        delete[] plaintext;
+        delete[] text;
     } catch(const exception& e) {
         if(ciphertext != nullptr) delete[] ciphertext;
+        if(plaintext != nullptr) delete[] ciphertext;
+        if(text != nullptr) delete[] ciphertext;
         return "";
-    }  
+    }
+
+    return string((const char*)text);  
 }
 
+// ---------- CLOSE CONNECTION ---------- //
 void sendCloseConnection(string username) {
-    unsigned char *ciphertext = NULL, *serverCT;
-    unsigned int ciphertextLen, serverCTLen;
     string msg;
+    unsigned char *ciphertext = NULL;
+    unsigned char *serverCT = NULL;
+    unsigned char *buffer;
+    unsigned int ciphertextLen;
+    unsigned int serverCTLen;
+
     try {
         crypto.setSessionKey(1);
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext){
-            throw runtime_error("An error occurred during the allocation of the ciphertext for the ciphertext.");
-        }
+        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext)
+            throw runtime_error("An error occurred while allocating the buffer.");
+        
         msg = "!deh";
         ciphertextLen = crypto.encryptMessage((unsigned char*)msg.c_str(), msg.length(), ciphertext);
-
         crypto.setSessionKey(0);
 
-        serverCT = new unsigned char[MAX_MESSAGE_SIZE];
+        serverCT = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!serverCT)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         serverCTLen = crypto.encryptMessage(ciphertext, ciphertextLen, serverCT);
         
-        unsigned char buffer[serverCTLen+1];
+        buffer = new (nothrow) unsigned char[serverCTLen + 1];
+        if(!buffer)
+            throw runtime_error("An error occurred while allocating the buffer.");
+
         memcpy(buffer,OP_LOGOUT,1);
-        memcpy(buffer+1,serverCT,serverCTLen);
+        memcpy(buffer + 1,serverCT,serverCTLen);
         socketClient.sendMessage(socketClient.getMasterFD(), buffer, serverCTLen+1);
         crypto.removeKey(1);
         crypto.setSessionKey(0);
+
         delete[] ciphertext;
+        delete[] serverCT;
+        delete[] buffer;
     } catch(const exception& e) {
         if(ciphertext != nullptr) delete[] ciphertext;
+        if(serverCT != nullptr) delete[] serverCT;
+        if(buffer != nullptr) delete[] buffer;
         throw;
     }
 }

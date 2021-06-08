@@ -29,12 +29,8 @@ int main(int argc, char* const argv[]) {
                             serverSocket.disconnectHost(sd, i);
                             // Remove its chat from the active chats
                             onlineUser userDisconnected = onlineUsers.at(i);
-                            cout << "Users size: " << onlineUsers.size() << endl;
                             deleteUser(userDisconnected, onlineUsers);
-                            cout << "Users size: " << onlineUsers.size() << endl;
-                            cout << "Active chat size: " << activeChats.size() << endl;
                             deleteActiveChat(userDisconnected, activeChats);
-                            cout << "Active chat size: " << activeChats.size() << endl;
                         } else {
                             int operationCode;
                             operationCode = getOperationCode(messageReceived);

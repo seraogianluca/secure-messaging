@@ -5,38 +5,36 @@ void showMenu();
 void insertCommand();
 
 int main(int argc, char *const argv[]) {
-    unsigned char *buffer = NULL;
     string input;
-    string user;
+    string peer;
     string username;
     string password;
     string message;
+    unsigned char *buffer = NULL;
     vector<string> onlineUsers;
+    fd_set fds;
+    int maxfd;
+    int option = -1;
 
     try {
         buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
         if(!buffer) throw runtime_error("Buffer not allocated.");
 
         cout << "\n-------Authentication-------" << endl;
-        socketClient.makeConnection();
 
+        socketClient.makeConnection();
         socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
         cout << "Connection confirmed: " << buffer << endl;
-
         username = readFromStdout("Insert username: ");
         password = readPassword();
-
         authentication(username, password);
         keyEstablishment(0);
         crypto.setSessionKey(0);
+
         cout << "-----------------------------" << endl << endl;
 
         receiveOnlineUsersList(onlineUsers);    
         while (true) {
-            fd_set fds;
-            int maxfd;
-            int option = -1;
-
             maxfd = (socketClient.getMasterFD() > STDIN_FILENO) ? socketClient.getMasterFD() : STDIN_FILENO;
             FD_ZERO(&fds);
             FD_SET(socketClient.getMasterFD(), &fds); 
@@ -62,49 +60,64 @@ int main(int argc, char *const argv[]) {
                     break;
                 case 2:
                     cout << "\n-------Request to talk-------" << endl;
-                    user = readFromStdout("Insert username: ");
-                    if(!checkUserOnline(username, onlineUsers)) {
+                    peer = readFromStdout("Insert username: ");
+
+                    if(!checkUserOnline(peer, onlineUsers)) {
                         cout << "No user online with this username: insert a valid username or ask for the list of online users." << endl;
                         cout << "-----------------------------" << endl;
                         break;
                     }
-                    sendRequestToTalk(user, username, password);
+
+                    sendRequestToTalk(peer, username, password);
                     cout << "-----------------------------" << endl;
+
                     while(true){
                         message = readFromStdout(username + ": ");
+
                         if(message.compare("!deh") == 0){
                             cout << "You closed the chat." << endl;
                             sendCloseConnection(username);
                             break;
                         }
+
                         sendMessage(message);
                         message = receiveMessage();
+
                         if(message.compare("!deh") == 0){
-                            cout << user << " closed the chat." << endl;
-                            break;
-                        }
-                        cout << user << ": " << message << endl;
-                    }
-                    break;
-                case 3:
-                    cout << "\n-------Received request to talk-------" << endl;
-                    receiveRequestToTalk(username, password, user);
-                    cout << "------------------------------------------" << endl;
-                    while(true){
-                        message = receiveMessage();
-                        if(message.compare("!deh") == 0){
-                            cout << user << " closed the chat." << endl;
+                            cout << peer << " closed the chat." << endl;
                             crypto.removeKey(1);
                             crypto.setSessionKey(0);
                             break;
                         }
-                        cout << user << ": " << message << endl;
+
+                        cout << peer << ": " << message << endl;
+                    }
+
+                    break;
+                case 3:
+                    cout << "\n-------Received request to talk-------" << endl;
+                    receiveRequestToTalk(username, password, peer);
+                    cout << "------------------------------------------" << endl;
+
+                    while(true){
+                        message = receiveMessage();
+
+                        if(message.compare("!deh") == 0){
+                            cout << peer << " closed the chat." << endl;
+                            crypto.removeKey(1);
+                            crypto.setSessionKey(0);
+                            break;
+                        }
+
+                        cout << peer << ": " << message << endl;
                         message = readFromStdout(username + ": ");
+
                         if(message.compare("!deh") == 0){
                             cout << "You closed the chat." << endl;
                             sendCloseConnection(username);
                             break;
                         }
+
                         sendMessage(message);
                     }
                     break;
@@ -114,17 +127,14 @@ int main(int argc, char *const argv[]) {
                 default:
                     cout << "Insert a valid command." << endl;
             }
-
         }
-    }
-    catch (const exception &e) {
+    } catch (const exception &e) {
         if(buffer != nullptr) delete[] buffer;
         cerr << e.what() << endl;
         return 0;
     }
 
-    if(buffer != nullptr) delete[] buffer;
-
+    delete[] buffer;
     return 0;
 }
 
