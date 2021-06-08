@@ -13,11 +13,27 @@ The messages are exchanged between two clients through the server which acts as 
 
 ## Client-Server session key establishment
 
-Once client and server are authenticated, they starts to establish a session key. For this reason we use the Ephemeral Diffie-Hellman protocol. First the parameters p and g are generated, then the client compute the public key generating the parameter a, and then send it to the server in encrypted way usign the server public key. The server decrypt the message with its own private key, generates the parameter b to compute the secret and then send the public key to the client in an encrypted way, using the client public key. At this point, the client can decrypt the message and compute the secret. At the end, both have the same secret.
+Once client and server are authenticated, they starts to establish a session key. For this reason we use the Ephemeral Diffie-Hellman protocol, to guarantee the Perfect Forwar Secrecy. First the parameters p and g are generated, then the client compute the public key generating the parameter a, and then send it to the server in encrypted way usign the server public key. The server decrypt the message with its own private key, generates the parameter b to compute the secret and then send the public key to the client in an encrypted way, using the client public key. At this point, the client can decrypt the message and compute the secret. At the end, both have the same secret.
 
 ![alt text](resources/ke_client-server.png "Client-Server Key Establishment")
 
-## Login protocol
+## Request to talk
+
+An user, before to start a chat with another user, must send to him a request to talk which can be accepted or not by the receiver. All the message exchanged between each client with the server are encrypted with the session key previously estabilished, as we have said in the previous paragraph. The request to talk protocol works in the following way:
+
+1) CLIENT A -> SERVER: Client A send to the server a message which has the username of the user he want to chat with and a nonce to guarantee freshness against replay attack. This part of the message is encrypted and at the beginning there is the OPCODE relative to the request to talk (2) that is in clear.
+
+2) SERVER -> CLIENT B: now the server knows that it must to send a request to talk to the client B, whose username is knows from the message previously received and decrypted. The first 64 bits of the message are composed with the username length of the sender. Then there is the username sender, the public key of the sender and the nounce. This is all encrypted, then the message is sent to client B with the OPCODE = 2 at the beginning of the message in clear.
+
+3) CLIENT B -> SERVER: at this point, client B can accept of refuse the request to talk sent by A.  It sends to the server an OK messagge to which is appended the nonce of A and the nonce just generate from B, both encrypted with the public key of A. If client B wants to refuse the request to talk the process is the same but he sends only a message with NO to the server which is forwarded to the client A.
+
+4) SERVER -> CLIENT A: to the message received, after the OK, the server adds the public key of B. Then the message is the same of before.
+
+
+
+5) CLIENT A -> SERVER
+
+![alt text](resources/request-to-talk.png)
 
 ### Server-Auth
 
@@ -37,14 +53,6 @@ Once client and server are authenticated, they starts to establish a session key
 - Client Cripta con la sua chiave pubblica
 - Server Decripta con la chiave privata
 - Server controlla se la hash è presente nello store
-
-### Client-Server session key establishment
-
-Perfect forward secrecy + replay attack
-
-### Request to talk
-
-![alt text](resources/request-to-talk.png)
 
 ### Chat Session Key Estabilishment
 
