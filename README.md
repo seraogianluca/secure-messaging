@@ -1,12 +1,21 @@
 # Secure messaging
 
-Secure messaging is a chatting application that offers confidentiality, integrity and reliability. It achieves confidentiality and integrity through authenticated encryption, whereas reliability with TCP communications.
+## Introducion
 
+Secure messaging is a chatting application that offers confidentiality, integrity and reliability. It achieves confidentiality and integrity through authenticated encryption, whereas reliability with TCP communications.
 Secure messaging works on Unix-like systems; we tested it on x86_64 Linux and intel/apple-silicon Mac.
 
-## Design Choices
+## Server and client authentication
 
-- la firma della CA deve essere installata nel client, per evitare di fare un altro server(ricordarsi di fare la CRL!!!)
+The messages are exchanged between two clients through the server which acts as intermediary. When the application starts, the server must authenticate using a certificate released by a trusted certification authority. Thanks to this certificate, the client can obtain the public key of the server and can be sure that the server is what we expect it to be. Once the server is authenticated, the client send to it the credentials to perform the login. The username is sent in clear but the password is hashed and encrypted with the server public key. Passwords are mantained in a file on the server: for each user there are the username in clear and the hashed password. To avoid replay attacks the messages are exchanged with nonces. 
+
+![alt text](resources/authentication.png "Authentication")
+
+## Client-Server session key establishment
+
+Once client and server are authenticated, they starts to establish a session key. For this reason we use the Ephemeral Diffie-Hellman protocol. First the parameters p and g are generated, then the client compute the public key generating the parameter a, and then send it to the server in encrypted way usign the server public key. The server decrypt the message with its own private key, generates the parameter b to compute the secret and then send the public key to the client in an encrypted way, using the client public key. At this point, the client can decrypt the message and compute the secret. At the end, both have the same secret.
+
+![alt text](resources/ke_client-server.png "Client-Server Key Establishment")
 
 ## Login protocol
 
@@ -32,8 +41,6 @@ Secure messaging works on Unix-like systems; we tested it on x86_64 Linux and in
 ### Client-Server session key establishment
 
 Perfect forward secrecy + replay attack
-
-![alt text](resources/ke_client-server.png "Client-Server Key Establishment")
 
 ### Request to talk
 
