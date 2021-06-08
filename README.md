@@ -7,7 +7,7 @@ Secure messaging works on Unix-like systems; we tested it on x86_64 Linux and in
 
 ## Server and client authentication
 
-The messages are exchanged between two clients through the server which acts as intermediary. When the application starts, the server must authenticate using a certificate released by a trusted certification authority. Thanks to this certificate, the client can obtain the public key of the server and can be sure that the server is what we expect it to be. Once the server is authenticated, the client send to it the credentials to perform the login. The username is sent in clear but the password is hashed and encrypted with the server public key. Passwords are mantained in a file on the server: for each user there are the username in clear and the hashed password. To avoid replay attacks the messages are exchanged with nonces. 
+The messages are exchanged between two clients through the server which acts as intermediary. When the application starts, the server must authenticate using a certificate released by a trusted certification authority. Thanks to this certificate, the client can obtain the public key of the server and can be sure that the server is what we expect it to be. Once the server is authenticated, the client send to it the credentials to perform the login. The username is sent in clear but the password is hashed and encrypted with the server public key. Passwords are mantained in a file on the server: for each user there are the username in clear and the hashed password. To avoid replay attacks the messages are exchanged with nonces.
 
 ![alt text](resources/authentication.png "Authentication")
 
@@ -61,3 +61,11 @@ Perfect forward secrecy + replay attack
 - Client A riceve la chiave pubblica DH di client B
 - Client A e Client B calcolano la session key ed eliminano i paramentri
 - LA SESSION KEY CALCOLATA NON PUO' ESSERE USATA PER ENCRYPTION, DEVE ESSERE FATTO L'HASH.
+
+## Miscellanea
+
+The communication between client and server is performed using TCP sockets to guarantee the reliability of the messages.
+The server allows opening only a chat at a time for each client with at most 10 online users.
+To handle this, the server keeps a structure for the online users and a structure for the active chats.
+A user in an active chat can close the communication by typing "!deh", in this case, the server will forward the message to the other side and remove the chat from the active ones.
+When a chat is closed, the client application is automatically terminated.
