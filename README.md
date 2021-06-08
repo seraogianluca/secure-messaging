@@ -49,4 +49,4 @@ Perfect forward secrecy + replay attack
 - Client B calcola chiave pubblica DH e la invia a Client A
 - Client A riceve la chiave pubblica DH di client B
 - Client A e Client B calcolano la session key ed eliminano i paramentri
-- LA SESSION KEY CALCOLATA NON PUO' ESSERE USATA PER ENCRYPTION, DEVE ESSERE FATTO L'HASH. 
+- LA SESSION KEY CALCOLATA NON PUO' ESSERE USATA PER ENCRYPTION, DEVE ESSERE FATTO L'HASH.
