@@ -29,9 +29,15 @@ An user, before to start a chat with another user, must send to him a request to
 
 4) SERVER -> CLIENT A: to the message received, after the OK, the server adds the public key of B. Then the message is the same of before.
 
+5) CLIENT A -> SERVER: client A decrypt the message and in particular its nonce to verify it is the same one that sent earlier. If the verification was successful, it sends to the server an OK message to which is appended the nonce of A and B encrypted with the public key of B just received.
 
+6) SERVER -> CLIENT B: now the server performs just the forwarding of the message. The only operation which it performs is the change of the session key with the right one depending on the client it communicates with.
 
-5) CLIENT A -> SERVER
+7) CLIENT B -> SERVER: client B receives the message and decrypt it, in particular its own nonce to verify it is the same one that sent earlier. If it is, he sends to the server an OK message.
+
+8) SERVER -> CLIENT A: the server forward the OK message to client A. At this point the request to talk was successful.
+
+At the end of this process, the server added the two clients to the active chat struct, to remember which users are chatting with each other.
 
 ![alt text](resources/request-to-talk.png)
 
