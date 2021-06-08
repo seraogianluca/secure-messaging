@@ -1,6 +1,6 @@
 # Secure messaging
 
-## Introducion
+## Introduction
 
 Secure messaging is a chatting application that offers confidentiality, integrity and reliability. It achieves confidentiality and integrity through authenticated encryption, whereas reliability with TCP communications.
 Secure messaging works on Unix-like systems; we tested it on x86_64 Linux and intel/apple-silicon Mac.
@@ -41,9 +41,21 @@ At the end of this process, the server added the two clients to the active chat 
 
 ![alt text](resources/request-to-talk.png)
 
-## Client A-Client B session key establishment
+## Client A - Client B session key establishment
+
+After client A sends a request to talk to client B and the last one has accepted, before starting to chat they have to exchange a session key with Ephimeral Diffie-Hellman. The server is omitted in this description because it only takes care of forwarding the messages and changing them session keys with the appropriate one, in fact communications with server are encrypted with the session key:
+
+1) CLIENT A -> CLIENT B: client A computes a parameter and sends to client B the public key. It is all encrypted with the public key of B.
+
+2) CLIENT B -> CLIENT A: client B receives the public key sent from client A, decrypt it with its own private key and after computing parameter B, computes the secret. Then it sends to client A the public key computed with the parameter B and encrypt the message with the public key of A. Then client A receives the message, decrypt it with its own private key and computes the secret.
+
+After this key exchange, the chat starts.
 
 ![alt text](resources/ke_clientA-clientB.png)
+
+## Chat
+
+The chat is *back and forth*: the first who can send a message is the one who sent the request to talk, in our example is the client A. Client B waits for a message from client A and only after receiving it can it reply.
 
 ## Miscellanea
 
