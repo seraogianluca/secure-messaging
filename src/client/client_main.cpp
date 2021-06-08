@@ -52,9 +52,7 @@ int main(int argc, char *const argv[]) {
                 cin.ignore();
             }
 
-            if (FD_ISSET(socketClient.getMasterFD(), &fds)) option = 4;
-
-            
+            if (FD_ISSET(socketClient.getMasterFD(), &fds)) option = 3;
 
             switch(option) {
                 case 1:
@@ -83,12 +81,6 @@ int main(int argc, char *const argv[]) {
                     }
                     break;
                 case 3:
-                    cout << "> ";
-                    getline(cin, input);
-                    sendMessage(OP_MESSAGE, 1, (unsigned char*)input.c_str(), input.length() + 1);
-                    cout << "Message sent." << endl;
-                    break;
-                case 4:
                     cout << "\n-------Received request to talk-------" << endl;
                     receiveRequestToTalk(username, password, user);
                     cout << "------------------------------------------" << endl;
@@ -134,8 +126,6 @@ void showMenu() {
     cout << endl;
     cout << "1. Online users" << endl;
     cout << "2. Request to talk" << endl;
-    cout << "3. Send a message" << endl;
-    cout << "4. Wait for Request for Talk" << endl;
     cout << "0. Exit" << endl;
 }
 
