@@ -833,6 +833,8 @@ void sendCloseConnection(string username) {
         memcpy(buffer,OP_LOGOUT,1);
         memcpy(buffer+1,serverCT,serverCTLen);
         socketClient.sendMessage(socketClient.getMasterFD(), buffer, serverCTLen+1);
+        crypto.removeKey(1);
+        crypto.setSessionKey(0);
         delete[] ciphertext;
     } catch(const exception& e) {
         if(ciphertext != nullptr) delete[] ciphertext;
