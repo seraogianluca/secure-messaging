@@ -495,9 +495,10 @@ void finalizeRequestToTalk() {
     }
 }
 
-void extractPubKeyA(unsigned char *nonceA, EVP_PKEY *&pubKeyA) {
-    unsigned char *ciphertext = NULL, *plaintext = NULL, *keyBuffer = NULL;
-    unsigned int ciphertextLen, plaintextLen, keyBufferLen;
+void extractPubKeyA(unsigned char *nonceA, string &peerAUsername, EVP_PKEY *&pubKeyA) {
+    unsigned char *ciphertext = NULL, *plaintext = NULL, *keyBuffer = NULL, *peerAUsr = NULL;
+    unsigned int ciphertextLen, plaintextLen, keyBufferLen, start = 0;
+    uint64_t peerALen;
 
     try {
         ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
@@ -513,10 +514,16 @@ void extractPubKeyA(unsigned char *nonceA, EVP_PKEY *&pubKeyA) {
         crypto.setSessionKey(0);
         plaintextLen = crypto.decryptMessage(ciphertext+1, ciphertextLen-1, plaintext); // remove the OP Code
 
-        keyBufferLen = plaintextLen - NONCE_SIZE;
+        memcpy(&peerALen, plaintext, sizeof(uint64_t));
+        start += sizeof(uint64_t);
+        peerAUsr = new unsigned char[peerALen];
+        memcpy(peerAUsr, plaintext + start, peerALen);
+        start += peerALen;
+        peerAUsername = string((const char*)peerAUsr);
+        keyBufferLen = plaintextLen - NONCE_SIZE - peerALen;
         keyBuffer = new unsigned char[keyBufferLen];
 
-        memcpy(keyBuffer, plaintext, keyBufferLen);
+        memcpy(keyBuffer, plaintext + start, keyBufferLen);
         crypto.deserializePublicKey(keyBuffer, keyBufferLen, pubKeyA);
         memcpy(nonceA, plaintext+keyBufferLen, NONCE_SIZE);
         delete[] ciphertext;
@@ -691,7 +698,7 @@ void sendRequestToTalk(string usernameReceiver, string usernameSender, string pa
     }
 }
 
-void receiveRequestToTalk(string username, string password) {
+void receiveRequestToTalk(string username, string password, string &peerAUsername) {
     unsigned char *nonce, *nonceA;
     EVP_PKEY *pubKeyA = NULL;
     EVP_PKEY *prvKeyDH = NULL;
@@ -699,7 +706,7 @@ void receiveRequestToTalk(string username, string password) {
         // Receive M2:
         cout << "Waiting for message M2..." << endl;
         nonceA = new unsigned char[NONCE_SIZE];
-        extractPubKeyA(nonceA, pubKeyA);
+        extractPubKeyA(nonceA, peerAUsername, pubKeyA);
 
         // Send M3:
         cout << "Send Message M3" << endl;

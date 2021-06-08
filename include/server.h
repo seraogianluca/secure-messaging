@@ -348,17 +348,23 @@ string extractUsernameReceiver(unsigned char *msg, unsigned int msgLen, unsigned
 }
 
 void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, unsigned char *nonceA) {
-    unsigned char *buffer, *pubkeyBuffer, *ciphertext;
+    unsigned char *buffer = NULL, *pubkeyBuffer = NULL, *ciphertext = NULL, *peerAUsername = NULL;
     unsigned int bufferLen, pubkeyBufferLen, ciphertextLen;
     EVP_PKEY *pubkey_a;
+    uint64_t peerALen;
     unsigned int start = 0;
     try {
         buffer = new unsigned char[MAX_MESSAGE_SIZE];
-
+        peerALen = peerA.username.length();
+        peerAUsername[peerALen];
+        memcpy(buffer,&peerALen,sizeof(uint64_t));
+        start += 8;
+        memcpy(buffer + start, peerAUsername, peerALen);
+        start += peerALen;
         crypto.readPublicKey(peerA.username,pubkey_a);
         pubkeyBuffer = new unsigned char[MAX_MESSAGE_SIZE];
         pubkeyBufferLen = crypto.serializePublicKey(pubkey_a,pubkeyBuffer);
-        memcpy(buffer,pubkeyBuffer,pubkeyBufferLen);
+        memcpy(buffer + start,pubkeyBuffer,pubkeyBufferLen);
 
         start += pubkeyBufferLen;
         memcpy(buffer + start, nonceA, NONCE_SIZE);

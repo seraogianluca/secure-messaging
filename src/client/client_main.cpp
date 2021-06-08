@@ -77,11 +77,11 @@ int main(int argc, char *const argv[]) {
                     break;
                 case 4:
                     cout << "\n-------Received request to talk-------" << endl;
-                    receiveRequestToTalk(username, password);
+                    receiveRequestToTalk(username, password, user);
                     cout << "------------------------------------------" << endl;
                     while(true){
                         message = receiveMessage();
-                        cout << "lore" << ": " << message << endl;;
+                        cout << user << ": " << message << endl;
                         message = readFromStdout(username + ": ");
                         sendMessage(message);
                     }
