@@ -278,7 +278,16 @@ void askOnlineUserList() {
     }
 }
 
-void receiveOnlineUsersList() {
+bool checkUserOnline(string username, vector<string> onlineUsers) {
+    for (string value : onlineUsers) {
+        if (value.compare(username) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void receiveOnlineUsersList(vector<string> &onlineUsers) {
     unsigned char *buffer, *plaintext;
     unsigned int bufferLen;
     unsigned int plaintextLen;
@@ -288,7 +297,24 @@ void receiveOnlineUsersList() {
         plaintext = new unsigned char[MAX_MESSAGE_SIZE];
         plaintextLen = crypto.decryptMessage(buffer, bufferLen, plaintext);
         plaintext[plaintextLen] = '\0';
-        cout << "Online users: " << endl << plaintext << endl;
+        string usersString = string((const char*) plaintext);
+
+        cout << "Online Users" << endl;
+        if (usersString.compare("None") != 0) {
+            std::string delimiter = "\n";
+            size_t pos = 0;
+            string token;
+            while ((pos = usersString.find(delimiter)) != std::string::npos) {
+                token = usersString.substr(0, pos);
+                cout << "- " << token << endl;
+                onlineUsers.push_back(token);
+                usersString.erase(0, pos + delimiter.length());
+            }
+        } else {
+            cout << "** No other users online" << endl;
+            onlineUsers.clear();
+        }
+        
     } catch(const exception& e) {
         if (buffer) delete[] buffer;
         if (plaintext) delete[] plaintext;

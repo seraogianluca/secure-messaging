@@ -11,6 +11,7 @@ int main(int argc, char *const argv[]) {
     string username;
     string password;
     string message;
+    vector<string> onlineUsers;
 
     try {
         buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
@@ -30,7 +31,7 @@ int main(int argc, char *const argv[]) {
         crypto.setSessionKey(0);
         cout << "-----------------------------" << endl << endl;
 
-        receiveOnlineUsersList();    
+        receiveOnlineUsersList(onlineUsers);    
         while (true) {
             fd_set fds;
             int maxfd;
@@ -57,11 +58,16 @@ int main(int argc, char *const argv[]) {
             switch(option) {
                 case 1:
                     askOnlineUserList();
-                    receiveOnlineUsersList();
+                    receiveOnlineUsersList(onlineUsers);
                     break;
                 case 2:
-                    cout << "\n-------Request to talk-------" << endl; 
+                    cout << "\n-------Request to talk-------" << endl;
                     user = readFromStdout("Insert username: ");
+                    if(!checkUserOnline(username, onlineUsers)) {
+                        cout << "No user online with this username: insert a valid username or ask for the list of online users." << endl;
+                        cout << "-----------------------------" << endl;
+                        break;
+                    }
                     sendRequestToTalk(user, username, password);
                     cout << "-----------------------------" << endl;
                     while(true){

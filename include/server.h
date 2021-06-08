@@ -249,7 +249,7 @@ void sendOnlineUsers(vector<onlineUser> onlineUsers, onlineUser user) {
             }
         }
         if(message.length() == 0) {
-            message.append("You are the only online user");
+            message.append("None");
         }
         crypto.setSessionKey(keyPos);
         encryptedMessage = new unsigned char[MAX_MESSAGE_SIZE];
