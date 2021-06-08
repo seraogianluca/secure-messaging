@@ -2,15 +2,17 @@
 
 Secure messaging is a chatting application that offers confidentiality, integrity and reliability. It achieves confidentiality and integrity through authenticated encryption, whereas reliability with TCP communications.
 
-Secure messaging works on Unix-like systems; we tested it on x86_64 Linux and intel/apple-silicon Mac.ì
+Secure messaging works on Unix-like systems; we tested it on x86_64 Linux and intel/apple-silicon Mac.
 
 ## Design Choices
 
 - la firma della CA deve essere installata nel client, per evitare di fare un altro server(ricordarsi di fare la CRL!!!)
 
-## Protocols
+## Login protocol
 
 ### Server-Auth
+
+![alt text](resources/authentication.png "Authentication")
 
 1) Client hello. M1 C->S: hello||nc
 2) Server hello. M2 S->C: hello||nc||ns
@@ -30,6 +32,12 @@ Secure messaging works on Unix-like systems; we tested it on x86_64 Linux and in
 ### Client-Server session key establishment
 
 Perfect forward secrecy + replay attack
+
+![alt text](resources/ke_client-server.png "Client-Server Key Establishment")
+
+### Request to talk
+
+![alt text](resources/request-to-talk.png)
 
 ### Diffie-Hellman key exchange
 
