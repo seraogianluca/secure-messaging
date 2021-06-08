@@ -810,3 +810,32 @@ string receiveMessage(){
         return "";
     }  
 }
+
+void sendCloseConnection(string username) {
+    unsigned char *ciphertext = NULL, *serverCT;
+    unsigned int ciphertextLen, serverCTLen;
+    string msg;
+    try {
+        crypto.setSessionKey(1);
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if(!ciphertext){
+            throw runtime_error("An error occurred during the allocation of the ciphertext for the ciphertext.");
+        }
+        msg = "!deh";
+        ciphertextLen = crypto.encryptMessage((unsigned char*)msg.c_str(), msg.length(), ciphertext);
+
+        crypto.setSessionKey(0);
+
+        serverCT = new unsigned char[MAX_MESSAGE_SIZE];
+        serverCTLen = crypto.encryptMessage(ciphertext, ciphertextLen, serverCT);
+        
+        unsigned char buffer[serverCTLen+1];
+        memcpy(buffer,OP_LOGOUT,1);
+        memcpy(buffer+1,serverCT,serverCTLen);
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer, serverCTLen+1);
+        delete[] ciphertext;
+    } catch(const exception& e) {
+        if(ciphertext != nullptr) delete[] ciphertext;
+        throw;
+    }
+}

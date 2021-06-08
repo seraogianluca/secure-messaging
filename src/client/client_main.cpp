@@ -64,8 +64,15 @@ int main(int argc, char *const argv[]) {
                     cout << "-----------------------------" << endl;
                     while(true){
                         message = readFromStdout(username + ": ");
+                        if(message.compare("!deh") == 0){
+                            sendCloseConnection(username);
+                            break;
+                        }
                         sendMessage(message);
                         message = receiveMessage();
+                        if(message.compare("!deh") == 0){
+                            break;
+                        }
                         cout << user << ": " << message << endl;
                     }
                     break;
@@ -81,8 +88,15 @@ int main(int argc, char *const argv[]) {
                     cout << "------------------------------------------" << endl;
                     while(true){
                         message = receiveMessage();
+                        if(message.compare("!deh") == 0){
+                            break;
+                        }
                         cout << user << ": " << message << endl;
                         message = readFromStdout(username + ": ");
+                        if(message.compare("!deh") == 0){
+                            sendCloseConnection(username);
+                            break;
+                        }
                         sendMessage(message);
                     }
                     break;

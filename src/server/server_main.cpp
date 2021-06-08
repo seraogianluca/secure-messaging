@@ -52,6 +52,23 @@ int main(int argc, char* const argv[]) {
                                 onlineUsers.push_back(user);
                                 sendOnlineUsers(onlineUsers, user);
                             }
+                            if (operationCode == 1){
+                                cout << "-------Starting close connection--------" << endl;
+                                user = onlineUsers.at(i);
+                                cout << "Sender Username: " << user.username << endl;
+
+                                int ciphertextLen = message_len-1;
+                                unsigned char ciphertext[message_len - 1];
+                                memcpy(ciphertext, messageReceived+1, ciphertextLen);
+                                //Find the receiver
+                                if (getReceiver(activeChats, user, receiver)) {
+                                    forward(user, receiver, ciphertext, ciphertextLen);
+                                    deleteActiveChat(user, activeChats);
+                                } else {
+                                    cout << "No receiver for the user " << user.username << endl;
+                                }
+                                cout << "--------Connection closed------------" << endl;
+                            }
                             if (operationCode == 2) {
                                 // Request to talk
                                 cout << "\n-------Request to Talk-------" << endl;
@@ -67,7 +84,6 @@ int main(int argc, char* const argv[]) {
                                 }
                             }
                             if (operationCode == 3) {
-                                cout << "alsdkasl" << endl;
                                 //Message Forwarding
                                 //Remove OP code
                                 user = onlineUsers.at(i);
