@@ -100,6 +100,12 @@ int main(int argc, char* const argv[]) {
                                     cout << "No receiver for the user " << user.username << endl;
                                 }
                             }
+                            if (operationCode == 4) {
+                                cout << "\n----Online User List Request----" << endl;
+                                user = onlineUsers.at(i);
+                                sendOnlineUsers(onlineUsers, user);
+                                cout << "---------------------------------" << endl;
+                            }
                         }
                         delete[] messageReceived;
                     }  

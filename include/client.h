@@ -258,6 +258,26 @@ void keyEstablishment(unsigned int key_pos) {
     }
 }
 
+void askOnlineUserList() {
+    unsigned char *ciphertext;
+    unsigned int ciphertextLen;
+    try {
+        unsigned int plaintextLen = 25;
+        const char* plaintext = "Send me the online users";
+        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        if (!ciphertext) throw runtime_error("Ciphertext not allocated");
+        crypto.setSessionKey(0);
+        ciphertextLen = crypto.encryptMessage((unsigned char*)plaintext, plaintextLen, ciphertext);
+        unsigned char buffer[ciphertextLen+1];
+        memcpy(buffer, OP_ONLINE_USERS, 1);
+        memcpy(buffer+1, ciphertext, ciphertextLen);
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer, ciphertextLen+1);
+    }
+    catch(const std::exception& e) {
+        std::cerr << e.what() << '\n';
+    }
+}
+
 void receiveOnlineUsersList() {
     unsigned char *buffer, *plaintext;
     unsigned int bufferLen;

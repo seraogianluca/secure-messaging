@@ -54,8 +54,12 @@ int main(int argc, char *const argv[]) {
 
             if (FD_ISSET(socketClient.getMasterFD(), &fds)) option = 4;
 
+            
+
             switch(option) {
                 case 1:
+                    askOnlineUserList();
+                    receiveOnlineUsersList();
                     break;
                 case 2:
                     cout << "\n-------Request to talk-------" << endl; 
