@@ -286,11 +286,11 @@ bool getReceiver(vector<activeChat> activeChats, onlineUser sender, onlineUser &
     return false;
 }
 
-void deleteUser(onlineUser user, vector<onlineUser> users) {
+void deleteUser(onlineUser user, vector<onlineUser> &users) {
     bool found = false;
     int i = 0;
     for (onlineUser usr : users) {
-        if (usr.username.compare(user.username)){
+        if (usr.username.compare(user.username) == 0){
             found = true;
             break;
         }
@@ -301,11 +301,11 @@ void deleteUser(onlineUser user, vector<onlineUser> users) {
     }
 }
 
-void deleteActiveChat(onlineUser user, vector<activeChat> chats) {
+void deleteActiveChat(onlineUser user, vector<activeChat> &chats) {
     int i = 0;
     bool found = false;
     for (activeChat chat : chats) {
-        if(chat.a.username.compare(user.username) || (chat.b.username.compare(user.username))) {
+        if(chat.a.username.compare(user.username) == 0 || (chat.b.username.compare(user.username) == 0)) {
             found = true;
             break;
         }
