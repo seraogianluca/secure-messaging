@@ -141,7 +141,7 @@ When the shared secret is established, the chat starts.
 
 ## Chat
 
-The chat is *back and forth*: the first who can send a message is the one who sent the request to talk, in our example is the client A. Client B waits for a message from client A and, only after receiving it, it can reply.
+The chat is **back and forth**: the first who can send a message is the one who sent the request to talk, in our example is the client A. Client B waits for a message from client A and, only after receiving it, it can reply.
 
 ## Miscellanea
 
