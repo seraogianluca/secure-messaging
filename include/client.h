@@ -47,17 +47,6 @@ string readFromStdout(string message) {
 }
 
 // ---------- AUTHENTICATION ---------- //
-void sendHelloMessage(unsigned char *username, unsigned int usernameLen, unsigned char *nonce) {
-    try {
-        vector<unsigned char> message;
-        message.push_back('0');
-        message.insert(message.end(), username, username + usernameLen);
-        message.insert(message.end(), nonce, nonce + NONCE_SIZE);
-        socketClient.sendMessage(socketClient.getMasterFD(), message.data(), message.size());
-    } catch(const exception& e) {
-        throw;
-    }
-}
 
 void sendPassword(unsigned char *nonce, string password, string username, X509 *cert) {
     EVP_PKEY *server_pubkey = NULL;
@@ -105,7 +94,10 @@ void authentication(string username, string password) {
         crypto.generateNonce(nonceClient.data());
 
         // Build hello message
-        sendHelloMessage((unsigned char *)username.c_str(), usernameLen, nonceClient.data());
+        buffer[0] = OP_LOGIN;
+        copy(username.begin(), username.end(), buffer.begin() + 1);
+        copy(nonceClient.begin(), nonceClient.end(), buffer.begin() + 1 + username.length());
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer.data(), username.length() + NONCE_SIZE + 1);
 
         // Receive server hello
         messageReceivedLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer.data());

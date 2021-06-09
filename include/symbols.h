@@ -3,7 +3,7 @@
 #define SERVER "127.0.0.1"
 
 // Operation Codes
-#define OP_LOGIN ((unsigned char *)"0")
+#define OP_LOGIN '0'
 #define OP_LOGOUT ((unsigned char *)"1")
 #define OP_REQUEST_TO_TALK ((unsigned char *)"2")
 #define OP_MESSAGE ((unsigned char *)"3")
