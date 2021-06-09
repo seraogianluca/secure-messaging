@@ -85,9 +85,6 @@ void authentication(string username, string password) {
     unsigned int messageReceivedLen;
     unsigned int plainlen;
     try {
-        // Get Username
-        unsigned int usernameLen = username.length();
-
         crypto.readPrivateKey(username,password,prvkey);
 
         // Generate nonce
