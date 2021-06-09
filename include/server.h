@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iterator>
 #include <vector>
+#include <array>
 #include "crypto.h"
 #include "socket.h"
 
@@ -20,12 +21,6 @@ struct activeChat {
 
 SocketServer serverSocket(SOCK_STREAM); //TCP
 Crypto crypto(MAX_CLIENTS);
-
-int getOperationCode(unsigned char* message) {
-    int opCode = message[0] - '0';
-    if (opCode < 0 || opCode > 4) { throw runtime_error("Operation Code not valid");}
-    return opCode;
-}
 
 unsigned int readPassword(unsigned char* username, unsigned int usernameLen, unsigned char* password) {
 
@@ -94,132 +89,87 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
     EVP_PKEY *userPubkey = NULL;
     unsigned char *encryptMsg = NULL;
     unsigned char *certBuff = NULL;
-    unsigned char *buffer = NULL;
     unsigned int certLen;
-    unsigned int start = 0;
-    unsigned int bufferLen = 0;
     unsigned int encryptedMsgLen;
     try{
+        vector<unsigned char> message;
+
         crypto.loadCertificate(cert,"server_cert");
         certBuff = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
+
         if(!certBuff)
             throw runtime_error("An error occurred while allocating the buffer");
-        certLen = crypto.serializeCertificate(cert,certBuff);
 
-        bufferLen = usernameLen + certLen + 2*NONCE_SIZE;
-        buffer = new(nothrow) unsigned char[bufferLen];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer");
+        certLen = crypto.serializeCertificate(cert,certBuff);
+        message.insert(message.end(), certBuff, certBuff + certLen);
+        delete[] certBuff;
+
+        message.insert(message.begin(), username, username + usernameLen);
+        message.insert(message.end(), nonceClient, nonceClient + NONCE_SIZE);
+        message.insert(message.end(), nonceServer, nonceServer + NONCE_SIZE);
+
+        crypto.readPublicKey((const char*)username, userPubkey);
         encryptMsg = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
         if(!encryptMsg)
             throw runtime_error("An error occurred while allocating the buffer");
-        memcpy(buffer, username, usernameLen);
-        start += usernameLen;
-        memcpy(buffer+start, certBuff, certLen);
-        start+=certLen;
-        memcpy(buffer+start, nonceClient, NONCE_SIZE);
-        start+=NONCE_SIZE;
-        memcpy(buffer+start, nonceServer, NONCE_SIZE);
-
-        crypto.readPublicKey((const char*)username, userPubkey);
-        encryptedMsgLen = crypto.publicKeyEncryption(buffer,bufferLen,encryptMsg,userPubkey);
+        encryptedMsgLen = crypto.publicKeyEncryption(message.data(),message.size(),encryptMsg,userPubkey);
         serverSocket.sendMessage(sd,encryptMsg,encryptedMsgLen);
-        delete[] certBuff;
-        delete[] buffer;
         delete[] encryptMsg;
     }catch(const exception& e) {
         if(certBuff != nullptr) delete[] certBuff;
-        if(buffer != nullptr) delete[] buffer;
         if(encryptMsg != nullptr) delete[] encryptMsg;
         throw;
     }
     
 }
 
-string authentication(int sd, unsigned char *messageReceived, unsigned int messageLen) {
+string authentication(int sd, vector<unsigned char> &messageReceived) {
     EVP_PKEY *prvkey = NULL;
     string usernameStr;
-    unsigned char *nonceServer = NULL;
-    unsigned char *nonceClient = NULL;
-    unsigned char *username = NULL;
-    unsigned char *buffer = NULL;
+    array<unsigned char,MAX_MESSAGE_SIZE> buffer;
+    array<unsigned char,NONCE_SIZE> nonceClient;
+    array<unsigned char,NONCE_SIZE> nonceServer;
+    vector<unsigned char> hashedPwd;
     unsigned char *plaintext = NULL;
-    unsigned char *password = NULL;
-    unsigned char *hashedPwd = NULL;
-    unsigned char *finalDigest = NULL;
     unsigned int bufferLen;
-    unsigned int usernameLen;
     unsigned int plainlen;
     unsigned int passwordLen;
     try {
         // Generate nonce
-        nonceServer = new(nothrow) unsigned char[NONCE_SIZE];
-        if(!nonceServer) {
-            throw runtime_error("An error occurred while allocating the buffer");
-        }
-        crypto.generateNonce(nonceServer);
+        crypto.generateNonce(nonceServer.data());
 
-        // Get peer nonce
-        nonceClient = new(nothrow) unsigned char[NONCE_SIZE];
-        if(!nonceClient) {
-            throw runtime_error("An error occurred while allocating the buffer");
-        }
-        memcpy(nonceClient, messageReceived+messageLen-NONCE_SIZE, NONCE_SIZE);
-        // Get peer username
-        usernameLen = messageLen-NONCE_SIZE-1;
-        username = new(nothrow) unsigned char[usernameLen];
-        if(!username)
-            throw runtime_error("An error occurred while allocating the buffer");
-        memcpy(username, messageReceived+1, usernameLen);
-        cout << "Client username: " << username << endl;
+        // Get peer nonce and username
+        copy_n(messageReceived.end() - NONCE_SIZE, NONCE_SIZE, nonceClient.begin());
+        usernameStr = string(messageReceived.begin(), messageReceived.end() - NONCE_SIZE);
+        cout << "Client username: " << usernameStr << endl;
 
-        //Send Certificate
-        sendCertificate(sd, username, usernameLen, nonceClient, nonceServer);
+        // Send Certificate
+        sendCertificate(sd, (unsigned char *)usernameStr.c_str(), usernameStr.length(), nonceClient.data(), nonceServer.data());
 
-        //Receive hashed passwords
-        buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!buffer) {
-            throw runtime_error("An error occurred while allocating the buffer");
-        }
-        bufferLen = serverSocket.receiveMessage(sd, buffer);
+        // Receive hashed password
+        bufferLen = serverSocket.receiveMessage(sd, buffer.data());
         plaintext = new(nothrow) unsigned char[bufferLen];
         if(!plaintext)
             throw runtime_error("An error occurred while allocating the buffer");
         crypto.readPrivateKey(prvkey);
-        plainlen = crypto.publicKeyDecryption(buffer, bufferLen,plaintext,prvkey);
+        plainlen = crypto.publicKeyDecryption(buffer.data(), bufferLen, plaintext,prvkey);
+        
+        // Read Hash from file
+        passwordLen = readPassword((unsigned char *)usernameStr.c_str(), usernameStr.length(), buffer.data());
 
-        password = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!password) 
-            throw runtime_error("An error occurred while allocating the buffer");
-        passwordLen = readPassword(username, usernameLen, password);
+        // Compute Hash of the H(pwd) + Nonce
+        hashedPwd.insert(hashedPwd.end(), buffer.begin(), buffer.begin() + passwordLen);
+        hashedPwd.insert(hashedPwd.end(), nonceServer.begin(), nonceServer.end());
+        crypto.computeHash(hashedPwd.data(), hashedPwd.size(), buffer.data());
 
-        hashedPwd = new(nothrow) unsigned char[passwordLen + NONCE_SIZE];
-        if(!hashedPwd)
-            throw runtime_error("An error occurred while allocating the buffer");
-        memcpy(hashedPwd, password, passwordLen);
-        memcpy(hashedPwd+passwordLen, nonceServer, NONCE_SIZE);
-
-        finalDigest = new(nothrow) unsigned char[DIGEST_LEN];
-        if(!finalDigest)
-            throw runtime_error("An error occurred while allocating the buffer");
-        crypto.computeHash(hashedPwd, passwordLen + NONCE_SIZE, finalDigest);
-
-        if(memcmp(plaintext, finalDigest, DIGEST_LEN) != 0) {
+        if(memcmp(plaintext, buffer.data(), DIGEST_LEN) != 0) {
             throw runtime_error("Wrong Password");
         }
-        usernameStr = string((const char *)username);
         cout << "Client " << usernameStr << " authenticated." << endl;
-        delete[] nonceServer;
-        delete[] nonceClient;
-        delete[] username;
-        delete[] buffer;
         delete[] plaintext;
         return usernameStr;
     } catch(const exception& e) {
-        if(nonceServer != nullptr) delete[] nonceServer;
-        if(nonceClient != nullptr) delete[] nonceClient;
-        if(username != nullptr) delete[] username;
-        if(buffer != nullptr) delete[] buffer;
+        cout << e.what() << endl;
         if(plaintext != nullptr) delete[] plaintext;
         throw;
     }

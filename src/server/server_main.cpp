@@ -16,14 +16,20 @@ int main(int argc, char* const argv[]) {
                     if (serverSocket.isFDSet(sd)) {
                         //Check if it was for closing , and also read the 
                         //incoming message                         
-                        unsigned int message_len;    
-                        unsigned char *messageReceived = new unsigned char[MAX_MESSAGE_SIZE];
+                        unsigned int message_len;  
+                        vector<unsigned char> messageReceived;
+                        messageReceived.reserve(MAX_MESSAGE_SIZE);
+                        unsigned char *messageReceivedBuffer = new unsigned char[MAX_MESSAGE_SIZE];
 
                         onlineUser user = onlineUser();
                         onlineUser receiver = onlineUser();
 
-                        message_len = serverSocket.receiveMessage(sd, messageReceived);
+                        message_len = serverSocket.receiveMessage(sd, messageReceivedBuffer);
+                        messageReceived.insert(messageReceived.end(), messageReceivedBuffer, messageReceivedBuffer + message_len);
+                        delete[] messageReceivedBuffer;
+                        
                         cout << "Message received length: " << message_len << endl;
+
                         if (message_len == 0)  { 
                             //Somebody disconnected , get his details and print 
                             serverSocket.disconnectHost(sd, i);
@@ -32,14 +38,15 @@ int main(int argc, char* const argv[]) {
                             deleteUser(userDisconnected, onlineUsers);
                             deleteActiveChat(userDisconnected, activeChats);
                         } else {
-                            int operationCode;
-                            operationCode = getOperationCode(messageReceived);
+                            int operationCode = messageReceived[0] - '0';
+                            if (operationCode < 0 || operationCode > 4) { throw runtime_error("Operation Code not valid");}
                             cout << "Operation code: " << operationCode << endl;
 
                             if (operationCode == 0) {
                                 // Login
                                 cout << "\n-------Authentication-------" << endl;
-                                string username = authentication(sd, messageReceived, message_len);
+                                messageReceived.erase(messageReceived.begin()); // TODO
+                                string username = authentication(sd, messageReceived);
                                 keyEstablishment(sd, i);
                                 cout << "-----------------------------" << endl << endl;
                                 user.username = username;
@@ -55,7 +62,7 @@ int main(int argc, char* const argv[]) {
 
                                 int ciphertextLen = message_len-1;
                                 unsigned char ciphertext[message_len - 1];
-                                memcpy(ciphertext, messageReceived+1, ciphertextLen);
+                                memcpy(ciphertext, messageReceived.data()+1, ciphertextLen);
                                 //Find the receiver
                                 if (getReceiver(activeChats, user, receiver)) {
                                     forward(user, receiver, ciphertext, ciphertextLen);
@@ -69,7 +76,7 @@ int main(int argc, char* const argv[]) {
                                 // Request to talk
                                 cout << "\n-------Request to Talk-------" << endl;
                                 activeChat chat = activeChat();
-                                bool success = requestToTalkProtocol(messageReceived, message_len, onlineUsers.at(i), onlineUsers, chat);
+                                bool success = requestToTalkProtocol(messageReceived.data(), message_len, onlineUsers.at(i), onlineUsers, chat);
                                 if (success) {
                                     activeChats.push_back(chat);
                                     cout << "New chat active between " << chat.a.username << " and " << chat.b.username << endl;
@@ -87,7 +94,7 @@ int main(int argc, char* const argv[]) {
 
                                 int ciphertextLen = message_len-1;
                                 unsigned char ciphertext[message_len - 1];
-                                memcpy(ciphertext, messageReceived+1, ciphertextLen);
+                                memcpy(ciphertext, messageReceived.data()+1, ciphertextLen);
                                 //Find the receiver
                                 if (getReceiver(activeChats, user, receiver)) {
                                     cout << "Receiver: " << receiver.username << " - " << receiver.key_pos << endl;
@@ -103,7 +110,6 @@ int main(int argc, char* const argv[]) {
                                 cout << "---------------------------------" << endl;
                             }
                         }
-                        delete[] messageReceived;
                     }  
                 }
             }

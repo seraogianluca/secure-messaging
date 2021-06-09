@@ -1,5 +1,6 @@
 #include "socket.h"
 #include "crypto.h"
+#include <iterator>
 #include <cstring>
 #include <termios.h>
 
@@ -45,26 +46,13 @@ string readFromStdout(string message) {
 
 // ---------- AUTHENTICATION ---------- //
 void sendHelloMessage(unsigned char *username, unsigned int usernameLen, unsigned char *nonce) {
-    unsigned char *helloMessage = NULL;
-    unsigned int start = 0;
-    unsigned int helloMessageLen = 1 + usernameLen + NONCE_SIZE;
-
     try {
-        helloMessage = new (nothrow) unsigned char[helloMessageLen];
-        if(!helloMessage)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        memcpy(helloMessage, OP_LOGIN, 1);
-        start += 1;
-        memcpy(helloMessage + start, username, usernameLen);
-        start += usernameLen;
-        memcpy(helloMessage + start, nonce, NONCE_SIZE);
-
-        socketClient.sendMessage(socketClient.getMasterFD(), helloMessage, helloMessageLen);
-
-        delete[] helloMessage;
+        vector<unsigned char> message;
+        message.push_back('0');
+        message.insert(message.end(), username, username + usernameLen);
+        message.insert(message.end(), nonce, nonce + NONCE_SIZE);
+        socketClient.sendMessage(socketClient.getMasterFD(), message.data(), message.size());
     } catch(const exception& e) {
-        if(helloMessage != nullptr) delete[] helloMessage;
         throw;
     }
 }
