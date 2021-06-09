@@ -1,7 +1,9 @@
 #include "socket.h"
 #include "crypto.h"
 #include <iterator>
+#include <array>
 #include <cstring>
+#include <algorithm>
 #include <termios.h>
 
 //TODO: serve costruttore con parametri di default per fare solo dichiarazione
@@ -53,29 +55,6 @@ void sendHelloMessage(unsigned char *username, unsigned int usernameLen, unsigne
         message.insert(message.end(), nonce, nonce + NONCE_SIZE);
         socketClient.sendMessage(socketClient.getMasterFD(), message.data(), message.size());
     } catch(const exception& e) {
-        throw;
-    }
-}
-
-void extractNonce(unsigned char *clientNonce, unsigned char *serverNonce, unsigned char *receivedMessage, unsigned int messageLen) {
-    unsigned char *nonceReceived = NULL;
-    unsigned int start = messageLen - 2*NONCE_SIZE;
-
-    try {
-        nonceReceived = new (nothrow) unsigned char[NONCE_SIZE];
-        if(!nonceReceived)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        memcpy(nonceReceived, receivedMessage + start, NONCE_SIZE);
-        if(memcmp(nonceReceived, clientNonce, NONCE_SIZE) != 0)
-            throw runtime_error("Login Error: The freshness of the message is not confirmed");
-
-        start = messageLen - NONCE_SIZE;
-        memcpy(serverNonce, receivedMessage + start, NONCE_SIZE);
-
-        delete[] nonceReceived;
-    } catch (const exception& e) {
-        if(nonceReceived != nullptr) delete[] nonceReceived;
         throw;
     }
 }
@@ -161,9 +140,10 @@ void verifyServerCertificate(unsigned char *message, unsigned int messageLen, un
 void authentication(string username, string password) {
     X509 *cert;
     EVP_PKEY *prvkey = NULL;
-    unsigned char *nonceClient = NULL;
-    unsigned char *nonceServer = NULL;
-    unsigned char *buffer = NULL;
+    array<unsigned char,MAX_MESSAGE_SIZE> buffer;
+    array<unsigned char,NONCE_SIZE> nonceClient;
+    array<unsigned char,NONCE_SIZE> nonceReceived;
+    array<unsigned char,NONCE_SIZE> nonceServer;
     unsigned char *plaintext = NULL;
     unsigned int messageReceivedLen;
     unsigned int plainlen;
@@ -174,49 +154,35 @@ void authentication(string username, string password) {
         crypto.readPrivateKey(username,password,prvkey);
 
         // Generate nonce
-        nonceClient = new (nothrow) unsigned char[NONCE_SIZE];
-        if(!nonceClient)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        crypto.generateNonce(nonceClient);
+        crypto.generateNonce(nonceClient.data());
 
         // Build hello message
-        sendHelloMessage((unsigned char *)username.c_str(), usernameLen, nonceClient);
+        sendHelloMessage((unsigned char *)username.c_str(), usernameLen, nonceClient.data());
 
         // Receive server hello
-        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        messageReceivedLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
+        messageReceivedLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer.data());
 
         plaintext = new (nothrow) unsigned char[messageReceivedLen];
         if(!plaintext)
             throw runtime_error("An error occurred while allocating the buffer.");
-        plainlen = crypto.publicKeyDecryption(buffer, messageReceivedLen,plaintext,prvkey);
+        plainlen = crypto.publicKeyDecryption(buffer.data(), messageReceivedLen,plaintext,prvkey);
 
         // Check and extract nonce
-        nonceServer = new (nothrow) unsigned char[NONCE_SIZE];
-        if(!nonceServer)
-            throw runtime_error("An error occurred while allocating the buffer.");
+        copy_n(plaintext + plainlen - 2*NONCE_SIZE, NONCE_SIZE, nonceReceived.begin());
+        if(nonceClient != nonceReceived)
+            throw runtime_error("Login Error: The freshness of the message is not confirmed");
 
-        extractNonce(nonceClient, nonceServer, plaintext, plainlen);
+        copy_n(plaintext + plainlen - NONCE_SIZE, NONCE_SIZE, nonceServer.begin());
 
         // Verify certificate
         verifyServerCertificate(plaintext, plainlen, usernameLen, cert);
 
         // Send pwd
-        sendPassword(nonceServer, password, username, cert);
+        sendPassword(nonceServer.data(), password, username, cert);
 
-        delete[] nonceClient;
-        delete[] buffer;
         delete[] plaintext;
-        delete[] nonceServer;
     } catch (const exception &e) {
-        if(nonceClient != nullptr) delete[] nonceClient;
-        if(buffer != nullptr) delete[] buffer;
         if(plaintext != nullptr) delete[] plaintext;
-        if(nonceServer != nullptr) delete[] nonceServer;
         throw;
     }
 }
