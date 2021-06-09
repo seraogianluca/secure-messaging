@@ -79,9 +79,9 @@ At the end of this process, the server added the two clients to the active chat 
 -----------------------
 
 // Message M2
-----------------------------------------
-2|IV|usernameA_len|usernameA|PKa|na|TAG|
-----------------------------------------
+-----------------------------------------
+|2|IV|usernameA_len|usernameA|PKa|na|TAG|
+-----------------------------------------
 
 // Message M3 (Request to talk accepted)
 ----------------------------------
