@@ -61,78 +61,27 @@ void sendHelloMessage(unsigned char *username, unsigned int usernameLen, unsigne
 
 void sendPassword(unsigned char *nonce, string password, string username, X509 *cert) {
     EVP_PKEY *server_pubkey = NULL;
-    unsigned char *buffer = NULL;
+    vector<unsigned char> message;
+    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
     unsigned char *pwdDigest = NULL;
-    unsigned char *finalDigest = NULL;
-    unsigned char *ciphertext = NULL;
-    unsigned int start = 0;
     unsigned int ciphertextLen = 0;
-
     try {
-        buffer = new (nothrow) unsigned char[NONCE_SIZE + DIGEST_LEN];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
         pwdDigest = new (nothrow) unsigned char[DIGEST_LEN];
+
         if(!pwdDigest)
             throw runtime_error("An error occurred while allocating the buffer.");
 
         crypto.computeHash((unsigned char *) password.c_str(), password.length(), pwdDigest);
-
-        memcpy(buffer, pwdDigest, DIGEST_LEN);
-        start += DIGEST_LEN;
-        memcpy(buffer + start, nonce, NONCE_SIZE);
-
-        finalDigest = new (nothrow) unsigned char[DIGEST_LEN];
-        if(!finalDigest)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        crypto.computeHash(buffer, DIGEST_LEN + NONCE_SIZE, finalDigest);
-
+        message.insert(message.end(), pwdDigest, pwdDigest + DIGEST_LEN);
+        message.insert(message.end(), nonce, nonce + NONCE_SIZE);
+        crypto.computeHash(message.data(), DIGEST_LEN + NONCE_SIZE, pwdDigest);
         crypto.getPublicKeyFromCertificate(cert,server_pubkey);
+        ciphertextLen = crypto.publicKeyEncryption(pwdDigest, DIGEST_LEN, buffer.data(), server_pubkey);
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer.data(), ciphertextLen);
 
-        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        ciphertextLen = crypto.publicKeyEncryption(finalDigest, DIGEST_LEN, ciphertext, server_pubkey);
-        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext, ciphertextLen);
-
-        delete[] buffer;
         delete[] pwdDigest;
-        delete[] finalDigest;
-        delete[] ciphertext;
     } catch(const exception& e) {
-        if(buffer != nullptr) delete[] buffer;
         if(pwdDigest != nullptr) delete[] pwdDigest;
-        if(finalDigest != nullptr) delete[] finalDigest;
-        if(ciphertext != nullptr) delete[] ciphertext;
-        throw;
-    }
-}
-
-void verifyServerCertificate(unsigned char *message, unsigned int messageLen, unsigned int usernameLen, X509 *&cert) {
-    unsigned char *certBuff = NULL;
-    unsigned int start = usernameLen;
-    unsigned int certLen = messageLen - 2*NONCE_SIZE - usernameLen;
-
-    try {
-        certBuff = new (nothrow) unsigned char[certLen];  
-        if(!certBuff)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        memcpy(certBuff, message + start, certLen);
-
-        crypto.deserializeCertificate(certLen, certBuff,cert);
-
-        if(!crypto.verifyCertificate(cert))
-            throw runtime_error("Pay attention, server is not authenticated.");
-
-        cout << "Server authenticated." << endl;
-
-        delete[] certBuff;
-    } catch(const exception& e) {
-        if(certBuff != nullptr) delete[] certBuff;
         throw;
     }
 }
@@ -142,7 +91,6 @@ void authentication(string username, string password) {
     EVP_PKEY *prvkey = NULL;
     array<unsigned char,MAX_MESSAGE_SIZE> buffer;
     array<unsigned char,NONCE_SIZE> nonceClient;
-    array<unsigned char,NONCE_SIZE> nonceReceived;
     array<unsigned char,NONCE_SIZE> nonceServer;
     unsigned char *plaintext = NULL;
     unsigned int messageReceivedLen;
@@ -168,14 +116,16 @@ void authentication(string username, string password) {
         plainlen = crypto.publicKeyDecryption(buffer.data(), messageReceivedLen,plaintext,prvkey);
 
         // Check and extract nonce
-        copy_n(plaintext + plainlen - 2*NONCE_SIZE, NONCE_SIZE, nonceReceived.begin());
-        if(nonceClient != nonceReceived)
+        if(!equal(plaintext + plainlen-2*NONCE_SIZE, plaintext + plainlen - NONCE_SIZE, nonceClient.begin()))
             throw runtime_error("Login Error: The freshness of the message is not confirmed");
 
         copy_n(plaintext + plainlen - NONCE_SIZE, NONCE_SIZE, nonceServer.begin());
 
         // Verify certificate
-        verifyServerCertificate(plaintext, plainlen, usernameLen, cert);
+        crypto.deserializeCertificate(plainlen - 2*NONCE_SIZE - usernameLen, plaintext + usernameLen, cert);
+        if(!crypto.verifyCertificate(cert))
+            throw runtime_error("Pay attention, server is not authenticated.");
+        cout << "Server authenticated." << endl;
 
         // Send pwd
         sendPassword(nonceServer.data(), password, username, cert);
