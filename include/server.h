@@ -104,7 +104,6 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
         message.insert(message.end(), certBuff, certBuff + certLen);
         delete[] certBuff;
 
-        message.insert(message.begin(), username, username + usernameLen);
         message.insert(message.end(), nonceClient, nonceClient + NONCE_SIZE);
         message.insert(message.end(), nonceServer, nonceServer + NONCE_SIZE);
 

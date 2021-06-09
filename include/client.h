@@ -114,7 +114,7 @@ void authentication(string username, string password) {
         copy_n(plaintext + plainlen - NONCE_SIZE, NONCE_SIZE, nonceServer.begin());
 
         // Verify certificate
-        crypto.deserializeCertificate(plainlen - 2*NONCE_SIZE - usernameLen, plaintext + usernameLen, cert);
+        crypto.deserializeCertificate(plainlen - 2*NONCE_SIZE, plaintext, cert);
         if(!crypto.verifyCertificate(cert))
             throw runtime_error("Pay attention, server is not authenticated.");
         cout << "Server authenticated." << endl;
