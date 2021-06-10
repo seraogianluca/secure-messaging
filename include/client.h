@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <termios.h>
 
+void keyEstablishmentServer(unsigned int keyPos, string username, string password, EVP_PKEY* serverPubKey);
+
 //TODO: serve costruttore con parametri di default per fare solo dichiarazione
 Crypto crypto(2);
 SocketClient socketClient(SOCK_STREAM);
@@ -48,8 +50,7 @@ string readFromStdout(string message) {
 
 // ---------- AUTHENTICATION ---------- //
 
-void sendPassword(unsigned char *nonce, string password, string username, X509 *cert) {
-    EVP_PKEY *server_pubkey = NULL;
+void sendPassword(unsigned char *nonce, string password, string username, EVP_PKEY *server_pubkey) {
     vector<unsigned char> message;
     array<unsigned char, MAX_MESSAGE_SIZE> buffer;
     unsigned char *pwdDigest = NULL;
@@ -64,7 +65,6 @@ void sendPassword(unsigned char *nonce, string password, string username, X509 *
         message.insert(message.end(), pwdDigest, pwdDigest + DIGEST_LEN);
         message.insert(message.end(), nonce, nonce + NONCE_SIZE);
         crypto.computeHash(message.data(), DIGEST_LEN + NONCE_SIZE, pwdDigest);
-        crypto.getPublicKeyFromCertificate(cert,server_pubkey);
         ciphertextLen = crypto.publicKeyEncryption(pwdDigest, DIGEST_LEN, buffer.data(), server_pubkey);
         socketClient.sendMessage(socketClient.getMasterFD(), buffer.data(), ciphertextLen);
 
@@ -78,6 +78,7 @@ void sendPassword(unsigned char *nonce, string password, string username, X509 *
 void authentication(string username, string password) {
     X509 *cert;
     EVP_PKEY *prvkey = NULL;
+    EVP_PKEY *serverPubKey = NULL;
     array<unsigned char,MAX_MESSAGE_SIZE> buffer;
     array<unsigned char,NONCE_SIZE> nonceClient;
     array<unsigned char,NONCE_SIZE> nonceServer;
@@ -117,53 +118,69 @@ void authentication(string username, string password) {
         cout << "Server authenticated." << endl;
 
         // Send pwd
-        sendPassword(nonceServer.data(), password, username, cert);
+        crypto.getPublicKeyFromCertificate(cert,serverPubKey);
+        sendPassword(nonceServer.data(), password, username, serverPubKey);
+
+        //Start Key Establishment
+        keyEstablishmentServer(0, username, password, serverPubKey);
 
         delete[] plaintext;
     } catch (const exception &e) {
+        string message = e.what();
+        message = "Authentication Error: " + message;
         if(plaintext != nullptr) delete[] plaintext;
-        throw;
+        throw runtime_error(message);
     }
 }
 
 // ---------- KEY ESTABLISHMENT ---------- //
-void keyEstablishment(unsigned int keyPos) {
-    EVP_PKEY *prvKeyA = NULL;
-    EVP_PKEY *pubKeyB = NULL;
-    unsigned char *buffer = NULL;
+void keyEstablishmentServer(unsigned int keyPos, string username, string password, EVP_PKEY* serverPubKey) {
+    EVP_PKEY *clientPrvKeyDH = NULL;
+    EVP_PKEY *clientPubKeyDH = NULL;
+    EVP_PKEY *clientPrvKey = NULL;
+    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
+    array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
     unsigned char *secret = NULL;
-    unsigned int keyLen;
+    unsigned int ciphertextLen;
+    unsigned int plaintextLen;
 
     try {
         // Generate public key
-        crypto.keyGeneration(prvKeyA);
+        crypto.keyGeneration(clientPrvKeyDH);
+        crypto.readPrivateKey(username, password, clientPrvKey);
 
         // Send public key to peer
-        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer.");
-        
-        keyLen = crypto.serializePublicKey(prvKeyA, buffer);
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer, keyLen);
+        cout << "!!!Critic instruction: serialize public key." << endl;
+        plaintextLen = crypto.serializePublicKey(clientPrvKeyDH, plaintext.data());
+        cout << "!!!Critic instruction: worked." << endl;
+        ciphertextLen = crypto.publicKeyEncryption(plaintext.data(), plaintextLen, ciphertext.data(), serverPubKey);
+        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), ciphertextLen);
 
         // Receive peer's public key
-        keyLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
-        crypto.deserializePublicKey(buffer, keyLen, pubKeyB);
+        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext.data());
+        if(ciphertextLen == 0) {
+            throw runtime_error("Error receiving the ciphertext of the server PubKey");
+        }
+        plaintextLen = crypto.publicKeyDecryption(ciphertext.data(), ciphertextLen, plaintext.data(), clientPrvKey);
+        cout << "!!!Critic instruction: deserialize public key." << endl;
+        crypto.deserializePublicKey(plaintext.data(), plaintextLen, clientPubKeyDH);
+        cout << "!!!Critic instruction: worked." << endl;
 
         // Secret derivation
         secret = new (nothrow) unsigned char[DIGEST_LEN];
+
         if(!secret)
             throw runtime_error("An error occurred while allocating the buffer.");
 
-        crypto.secretDerivation(prvKeyA, pubKeyB, secret);
+        crypto.secretDerivation(clientPrvKeyDH, clientPubKeyDH, secret);
         crypto.insertKey(secret, keyPos);
 
-        delete[] buffer;
         delete[] secret;    
     } catch(const exception& e) {
-        if(buffer != nullptr) delete[] buffer;
+        string message = e.what();
+        message = "Error in the key establishment:\n\t" + message;
         if(secret != nullptr) delete[] secret;
-        throw;
+        throw runtime_error(message);
     }
 }
 
