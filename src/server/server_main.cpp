@@ -3,8 +3,8 @@
 int main(int argc, char* const argv[]) {
     vector<onlineUser> onlineUsers;
     vector<activeChat> activeChats;
-    try {
-        while(true) {
+    while(true) {
+        try {
             serverSocket.initSet();
             serverSocket.selectActivity();
 
@@ -116,9 +116,7 @@ int main(int argc, char* const argv[]) {
                     }  
                 }
             }
-        }
-    } catch(const exception& e) {
-        cerr << e.what() << endl;
+        } catch(const exception& e) { cerr << e.what() << endl; }
     }
     return 0;
 }
