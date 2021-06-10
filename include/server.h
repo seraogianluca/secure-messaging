@@ -165,7 +165,6 @@ string authentication(int sd, vector<unsigned char> &messageReceived) {
     vector<unsigned char> hashedPwd;
     unsigned char *plaintext = NULL;
     unsigned int bufferLen;
-    unsigned int plainlen;
     unsigned int passwordLen;
     try {
         // Generate nonce
@@ -185,7 +184,7 @@ string authentication(int sd, vector<unsigned char> &messageReceived) {
         plaintext = new(nothrow) unsigned char[bufferLen];
         if(!plaintext)
             throw runtime_error("An error occurred while allocating the buffer");
-        plainlen = crypto.publicKeyDecryption(buffer.data(), bufferLen, plaintext,prvkey);
+        crypto.publicKeyDecryption(buffer.data(), bufferLen, plaintext,prvkey);
     
         // Read Hash from file
         passwordLen = readPassword((unsigned char *)usernameStr.c_str(), usernameStr.length(), buffer.data());
