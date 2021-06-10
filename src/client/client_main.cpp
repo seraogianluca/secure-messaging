@@ -67,7 +67,8 @@ int main(int argc, char *const argv[]) {
                         break;
                     }
 
-                    sendRequestToTalk(peer, username, password);
+                    if(!sendRequestToTalk(peer, username, password))
+                        break;
                     cout << "-----------------------------" << endl;
 
                     while(true){
@@ -95,7 +96,8 @@ int main(int argc, char *const argv[]) {
                     break;
                 case 3:
                     cout << "\n-------Received request to talk-------" << endl;
-                    receiveRequestToTalk(username, password, peer);
+                    if(!receiveRequestToTalk(username, password, peer))
+                        break;
                     cout << "------------------------------------------" << endl;
 
                     while(true){

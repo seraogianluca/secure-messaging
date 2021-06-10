@@ -358,7 +358,7 @@ void requestToTalkInit(array<unsigned char, NONCE_SIZE> &nonce, string username)
     }
 }
 
-void extractPubKeyB(EVP_PKEY *&pubKeyB, array<unsigned char, NONCE_SIZE> nonce, array<unsigned char, NONCE_SIZE> &nonceB, string username, string password) {
+bool extractPubKeyB(EVP_PKEY *&pubKeyB, array<unsigned char, NONCE_SIZE> nonce, array<unsigned char, NONCE_SIZE> &nonceB, string username, string password) {
     EVP_PKEY *prvKeyA;
     array<unsigned char,MAX_MESSAGE_SIZE> buffer;
     array<unsigned char,MAX_MESSAGE_SIZE> plaintext;
@@ -386,10 +386,11 @@ void extractPubKeyB(EVP_PKEY *&pubKeyB, array<unsigned char, NONCE_SIZE> nonce, 
             copy(plaintext.begin() + headerLen + encryptedNoncesLen, plaintext.begin() + plaintextLen, buffer.begin());
             pubKeyBLen = plaintextLen - headerLen - encryptedNoncesLen;
             crypto.deserializePublicKey(buffer.data(), pubKeyBLen, pubKeyB);
-            
+            return true;
+
         } else if(equal(plaintext.begin(), plaintext.begin() + 2, "NO")) {
             cout << "Request to talk refused." << endl;
-            return;
+            return false;
         } else {
             throw runtime_error("Request to talk operation not successful: OK is missing (error occurred receiving M4 of the protocol).");
         }
@@ -547,7 +548,7 @@ void sendOkMessage() {
     }
 }
 
-void sendRequestToTalk(string usernameReceiver, string usernameSender, string password) {
+bool sendRequestToTalk(string usernameReceiver, string usernameSender, string password) {
     array<unsigned char, NONCE_SIZE> nonce;
     array<unsigned char, NONCE_SIZE> nonceB;
     EVP_PKEY *pubKeyB = NULL;
@@ -559,7 +560,9 @@ void sendRequestToTalk(string usernameReceiver, string usernameSender, string pa
         cout << "\nRequest to talk sent to " << usernameReceiver << endl;
 
         // Receive Message M4:
-        extractPubKeyB(pubKeyB, nonce, nonceB, usernameSender, password);
+        if(!extractPubKeyB(pubKeyB, nonce, nonceB, usernameSender, password)) {
+            return false;
+        }
 
         // Send Message M5:
         sendNoncesToB(pubKeyB, nonceB);
@@ -571,13 +574,15 @@ void sendRequestToTalk(string usernameReceiver, string usernameSender, string pa
         crypto.keyGeneration(prvKeyDH);
         sendKey(usernameSender, password, pubKeyB, prvKeyDH);
         receiveKey(usernameSender, password, prvKeyDH);
+
+        return true;
     } catch(const exception& e) {
         cout << "Error in send request to talk: " << e.what() << endl;
         throw;
     }
 }
 
-void receiveRequestToTalk(string username, string password, string &peerAUsername) {
+bool receiveRequestToTalk(string username, string password, string &peerAUsername) {
     string confirmation;
     array<unsigned char, NONCE_SIZE> nonce;
     array<unsigned char, NONCE_SIZE> nonceA;
@@ -595,7 +600,7 @@ void receiveRequestToTalk(string username, string password, string &peerAUsernam
         if (strcasecmp((const char *)confirmation.c_str(), "Y")) {
             cout << "The request to talk has been refused." << endl;
             refuseRequestToTalk();
-            return;
+            return false;
         }
 
         sendNoncesToA(nonce, nonceA, pubKeyA);
@@ -610,9 +615,11 @@ void receiveRequestToTalk(string username, string password, string &peerAUsernam
         //Receive key from A
         receiveKey(username, password, prvKeyDH);
         sendKey(username, password, pubKeyA, prvKeyDH);
-        
+
+        return true;   
     } catch(const exception& e) {
         cout << "Error in receive request to talk: " << e.what() << endl;
+        return false;
     }
 }
 
