@@ -120,19 +120,18 @@ int Crypto::publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsign
 
     encrypted_key = new (nothrow) unsigned char[EVP_PKEY_size(pubkey)];
     if(!encrypted_key)
-        throw runtime_error("An error occurred while allocating the array for the encrypted key.");
+        throw runtime_error("Public Key Encryption - An error occurred while allocating the array for the encrypted key.");
 
     ciphertext = new (nothrow) unsigned char[msg_len + 16];
     if(!ciphertext) {
         delete[] encrypted_key;
-        throw runtime_error("An error occurred while allocating the array for the ciphertext.");
+        throw runtime_error("Public Key Encryption - An error occurred while allocating the array for the ciphertext.");
     }
-
     iv = new (nothrow) unsigned char[EVP_CIPHER_iv_length(CIPHER)];
     if(!iv) {
         delete[] encrypted_key;
         delete[] ciphertext;
-        throw runtime_error("An error occurred while allocating the array for the iv.");
+        throw runtime_error("Public Key Encryption - An error occurred while allocating the array for the iv.");
     }
 
     ctx = EVP_CIPHER_CTX_new();
@@ -140,19 +139,19 @@ int Crypto::publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsign
         delete[] encrypted_key;
         delete[] ciphertext;
         delete[] iv;
-        throw runtime_error("An error occurred creating the context during the public key encryption");
+        throw runtime_error("Public Key Encryption - An error occurred creating the context during the public key encryption");
     }
 
     try{        
         if(EVP_SealInit(ctx, CIPHER, &encrypted_key, &encrypted_key_len, iv, &pubkey, 1)==0)
-            throw runtime_error("An error occurred initializing the envelope.");
-
+            throw runtime_error("Public Key Encryption - An error occurred initializing the envelope.");
+        cout << "Seal Update" << endl;
         if(EVP_SealUpdate(ctx, ciphertext, &outlen, (unsigned char *)msg, msg_len)==0)
-            throw runtime_error("An error occurred updating the envelope.");
+            throw runtime_error("Public Key Encryption - An error occurred updating the envelope.");
 
         cipherlen = outlen; 
         if(EVP_SealFinal(ctx, ciphertext+cipherlen, &outlen)==0)
-            throw runtime_error("An error occurred finishing the envelop.");
+            throw runtime_error("Public Key Encryption - An error occurred finishing the envelop.");
         cipherlen+=outlen;
         memcpy(buff, iv, EVP_CIPHER_iv_length(CIPHER));
         start+=EVP_CIPHER_iv_length(CIPHER);
@@ -161,20 +160,16 @@ int Crypto::publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsign
         memcpy(buff+start, ciphertext, cipherlen);
         start+=cipherlen;
     }catch (const exception &e) {
-        delete[] encrypted_key;
-        delete[] ciphertext;
-        delete[] iv;
+        if(encrypted_key != nullptr) delete[] encrypted_key;
+        if(ciphertext != nullptr) delete[] ciphertext;
+        if(iv != nullptr) delete[] iv;
         EVP_CIPHER_CTX_free(ctx);
         throw;
     }
-
-    
-
     delete[] encrypted_key;
     delete[] ciphertext;
     delete[] iv;
     EVP_CIPHER_CTX_free(ctx);
-
     return start;
 }
 
@@ -189,36 +184,32 @@ int Crypto::publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsign
 
     plaintext = new (nothrow) unsigned char[msg_len];
     if(!plaintext)
-        throw runtime_error("An error occurred while allocating the array for the plaintext.");
-
+        throw runtime_error("Public key Decryption - An error occurred while allocating the array for the plaintext.");
     iv = new (nothrow) unsigned char[EVP_CIPHER_iv_length(CIPHER)];
     if(!iv) {
         delete[] plaintext;
-        throw runtime_error("An error occurred while allocating the array for the iv.");
+        throw runtime_error("Public key Decryption - An error occurred while allocating the array for the iv.");
     }
-
     encrypted_key = new (nothrow) unsigned char[EVP_PKEY_size(prvkey)];
     if(!encrypted_key) {
         delete[] plaintext;
         delete[] iv;
-        throw runtime_error("An error occurred while allocating the array for the encrypted key.");
+        throw runtime_error("Public key Decryption - An error occurred while allocating the array for the encrypted key.");
     }
-
     ciphertext = new (nothrow) unsigned char[msg_len-EVP_CIPHER_iv_length(CIPHER)-EVP_PKEY_size(prvkey)];
     if(!ciphertext) {
         delete[] plaintext;
         delete[] iv;
         delete[] encrypted_key;
-        throw runtime_error("An error occurred while allocating the array for the ciphertext.");
+        throw runtime_error("Public key Decryption - An error occurred while allocating the array for the ciphertext.");
     }
-
     ctx = EVP_CIPHER_CTX_new();
     if(!ctx){
         delete[] plaintext;
         delete[] iv;
         delete[] encrypted_key;
         delete[] ciphertext;
-        throw runtime_error("An error occurred initializing the context");
+        throw runtime_error("Public key Decryption - An error occurred initializing the context");
     }
 
     try{
@@ -227,37 +218,32 @@ int Crypto::publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsign
         memcpy(encrypted_key,msg+start,EVP_PKEY_size(prvkey));
         start+=EVP_PKEY_size(prvkey);
         memcpy(ciphertext, msg+start,msg_len-start);
-
         if(EVP_OpenInit(ctx, CIPHER, encrypted_key, EVP_PKEY_size(prvkey), iv, prvkey)==0){
-            EVP_CIPHER_CTX_free(ctx);
-            throw runtime_error("An error occurred initializing the envelope.");
+            throw runtime_error("Public key Decryption - An error occurred initializing the envelope.");
         }
         if(EVP_OpenUpdate(ctx,plaintext, &outlen, ciphertext, msg_len-start)==0){
-            EVP_CIPHER_CTX_free(ctx);
-            throw runtime_error("An error occurred updating the envelope.");
+            throw runtime_error("Public key Decryption - An error occurred updating the envelope.");
         }
         plainlen = outlen;
         if(EVP_OpenFinal(ctx,plaintext+plainlen,&outlen)==0){
-            EVP_CIPHER_CTX_free(ctx);
-            throw runtime_error("An error occurred finishing the envelope.");
+            ERR_print_errors_fp(stdout);
+            throw runtime_error("Public key Decryption - An error occurred finishing the envelope.");
         }
         plainlen+=outlen;
         memcpy(buff,plaintext,plainlen);
-    }catch (const exception &e) {
         delete[] plaintext;
         delete[] iv;
         delete[] encrypted_key;
         delete[] ciphertext;
         EVP_CIPHER_CTX_free(ctx);
+    }catch (const exception &e) {
+        if(plaintext != nullptr) delete[] plaintext;
+        if(iv != nullptr) delete[] iv;
+        if(encrypted_key != nullptr) delete[] encrypted_key;
+        if(ciphertext != nullptr) delete[] ciphertext;
+        EVP_CIPHER_CTX_free(ctx);
         throw;
     }
-    
-    delete[] plaintext;
-    delete[] iv;
-    delete[] encrypted_key;
-    delete[] ciphertext;
-    EVP_CIPHER_CTX_free(ctx);
-
     return plainlen;
 }
 
