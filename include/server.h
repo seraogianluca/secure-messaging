@@ -47,7 +47,7 @@ bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser p
 SocketServer serverSocket(SOCK_STREAM); //TCP
 Crypto crypto(MAX_CLIENTS);
 
-// ---------- KEY ESTABLISHMENT ---------- //
+// ---------- UTILITY ---------- //
 
 unsigned int readPassword(unsigned char* username, unsigned int usernameLen, unsigned char* password) {
 
@@ -187,9 +187,7 @@ string authentication(int sd, vector<unsigned char> &messageReceived) {
         plaintext = new(nothrow) unsigned char[bufferLen];
         if(!plaintext)
             throw runtime_error("An error occurred while allocating the buffer");
-        cout << "!!!Critic instruction: encrypt using public key." << endl;
         plainlen = crypto.publicKeyDecryption(buffer.data(), bufferLen, plaintext,prvkey);
-        cout << "!!!Critic instruction: worked." << endl;
     
         // Read Hash from file
         passwordLen = readPassword((unsigned char *)usernameStr.c_str(), usernameStr.length(), buffer.data());
@@ -206,7 +204,6 @@ string authentication(int sd, vector<unsigned char> &messageReceived) {
         delete[] plaintext;
         return usernameStr;
     } catch(const exception& e) {
-        cout << e.what() << endl;
         if(plaintext != nullptr) delete[] plaintext;
         throw;
     }

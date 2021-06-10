@@ -153,9 +153,7 @@ void keyEstablishmentServer(unsigned int keyPos, string username, string passwor
         cout << "!!!Critic instruction: serialize public key." << endl;
         plaintextLen = crypto.serializePublicKey(clientPrvKeyDH, plaintext.data());
         cout << "!!!Critic instruction: worked." << endl;
-        cout << "!!!Critic instruction: encrypt using public key." << endl;
         ciphertextLen = crypto.publicKeyEncryption(plaintext.data(), plaintextLen, ciphertext.data(), serverPubKey);
-        cout << "!!!Critic instruction: worked." << endl;
         socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), ciphertextLen);
 
         // Receive peer's public key
@@ -163,9 +161,7 @@ void keyEstablishmentServer(unsigned int keyPos, string username, string passwor
         if(ciphertextLen == 0) {
             throw runtime_error("Error receiving the ciphertext of the server PubKey");
         }
-        cout << "!!!Critic instruction: encrypt using public key." << endl;
         plaintextLen = crypto.publicKeyDecryption(ciphertext.data(), ciphertextLen, plaintext.data(), clientPrvKey);
-        cout << "!!!Critic instruction: worked." << endl;
         cout << "!!!Critic instruction: deserialize public key." << endl;
         crypto.deserializePublicKey(plaintext.data(), plaintextLen, clientPubKeyDH);
         cout << "!!!Critic instruction: worked." << endl;

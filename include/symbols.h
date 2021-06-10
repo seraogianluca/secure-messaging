@@ -12,6 +12,9 @@
 #define MAX_MESSAGE_SIZE 10000
 #define MAX_CLIENTS 10
 
+#define SERVER_SECRET 0
+#define CLIENT_SECRET 1
+
 // Nonces
 #define NONCE_SIZE 16
 
@@ -29,4 +32,7 @@
 
 //Public key criptography
 #define CIPHER EVP_aes_128_cbc()
+
+#define NO_USER_ONLINE "_no_user_online"
+
 
