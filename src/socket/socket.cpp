@@ -9,7 +9,6 @@ SocketClient::SocketClient(int socketType) {
     
     cout << "Socket correctly created" << endl;
     address.sin_family = AF_INET;
-    address.sin_port = htons(this->port);
 
     if(inet_pton(AF_INET, SERVER, &this->address.sin_addr)<=0)
         throw runtime_error("Invalid address/ Address not supported");

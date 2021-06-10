@@ -35,8 +35,7 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
 void keyEstablishment(int sd, unsigned int keyPos);
 
 // Request To Talk
-string extractUsernameReceiver(unsigned char *msg, unsigned int msgLen, unsigned char *nonceA, onlineUser peerA);
-void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, unsigned char *nonceA);
+void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, array<unsigned char, NONCE_SIZE> nonceA);
 unsigned int extractNonces(onlineUser peerB, unsigned char *nonces);
 void sendM4(unsigned char* nonces, uint64_t noncesLen, onlineUser peerB, onlineUser peerA);
 void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciphertext, unsigned int ciphertextLen);
@@ -290,170 +289,38 @@ void keyEstablishment(int sd, unsigned int keyPos){
 
 // ---------- REQUEST TO TALK ---------- //
 
-string extractUsernameReceiver(unsigned char *msg, unsigned int msgLen, unsigned char *nonceA, onlineUser peerA) {
-    unsigned char *bufferB = NULL;
-    unsigned char *usernameB = NULL;
-    unsigned int bufferBLen;
-    unsigned int usernameBLen;
-    try {
-        if(memcmp(msg, OP_REQUEST_TO_TALK, 1) != 0) {
-            throw runtime_error("Request to talk failed.");
-        }
-        cout << "Request to talk coming from user " << peerA.username << endl;
-        bufferB = new(nothrow) unsigned char[msgLen];
-        if(!bufferB)
-            throw runtime_error("An error occurred while allocating the buffer");
-        crypto.setSessionKey(peerA.key_pos);
-        bufferBLen = crypto.decryptMessage(msg+1, msgLen-1, bufferB); //Not consider the OPCODE
-        usernameBLen = bufferBLen-NONCE_SIZE;
-        usernameB = new(nothrow) unsigned char[usernameBLen];
-        if(!usernameB)
-            throw runtime_error("An error occurred while allocating the buffer");
-        memcpy(usernameB,bufferB,usernameBLen);
-        memcpy(nonceA,bufferB+usernameBLen,NONCE_SIZE);
-
-        cout << "Request from " << peerA.username << " to " << usernameB << endl;
-        delete[] bufferB;
-        delete[] usernameB;
-        return string((const char *)usernameB);
-    } catch(const exception& e) {
-        cout << "Error in extractUsernameReceiver(): " << e.what() << endl; 
-        if(bufferB != nullptr) delete[] bufferB;
-        if(usernameB != nullptr) delete[] usernameB;
-        throw;
-    }
-}
-
-void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, unsigned char *nonceA) {
+void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, array<unsigned char, NONCE_SIZE> nonceA) {
     EVP_PKEY *pubkeyA;
     uint64_t peerALen;
-    unsigned char *buffer = NULL;
-    unsigned char *pubkeyBuffer = NULL;
-    unsigned char *ciphertext = NULL;
-    unsigned int bufferLen;
+    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int bufferLen = 0;
     unsigned int pubkeyBufferLen;
     unsigned int ciphertextLen;
-    unsigned int start = 0;
     try {
-        buffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer");
         peerALen = peerA.username.length();
-        memcpy(buffer,&peerALen,sizeof(uint64_t));
-        start += sizeof(uint64_t);
-        memcpy(buffer + start, peerA.username.c_str(), peerALen);
-        start += peerALen;
-        crypto.readPublicKey(peerA.username,pubkeyA);
-        pubkeyBuffer = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!pubkeyBuffer)
-            throw runtime_error("An error occurred while allocating the buffer");
-        pubkeyBufferLen = crypto.serializePublicKey(pubkeyA,pubkeyBuffer);
-        memcpy(buffer + start,pubkeyBuffer,pubkeyBufferLen);
+        memcpy(buffer.data(),&peerALen,sizeof(uint64_t));
+        bufferLen += sizeof(uint64_t);
+        copy_n(peerA.username.c_str(), peerA.username.length(), buffer.begin() + bufferLen);
+        bufferLen += peerA.username.length();
 
-        start += pubkeyBufferLen;
-        memcpy(buffer + start, nonceA, NONCE_SIZE);
-        bufferLen = sizeof(uint64_t) + peerALen + pubkeyBufferLen + NONCE_SIZE;
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer");
+        crypto.readPublicKey(peerA.username, pubkeyA);
+        pubkeyBufferLen = crypto.serializePublicKey(pubkeyA,tempBuffer.data());
+
+        copy_n(tempBuffer.begin(), pubkeyBufferLen, buffer.begin() + bufferLen);
+        bufferLen += pubkeyBufferLen;
+        copy_n(nonceA.begin(), NONCE_SIZE, buffer.begin() + bufferLen);
+        bufferLen += NONCE_SIZE;
 
         crypto.setSessionKey(peerB.key_pos);
-        ciphertextLen = crypto.encryptMessage(buffer,bufferLen,ciphertext);
+        ciphertextLen = crypto.encryptMessage(buffer.data(), bufferLen, tempBuffer.data());
 
-        // Append OPCODE as clear text
-        memcpy(buffer, OP_REQUEST_TO_TALK, 1);
-        memcpy(buffer+1,ciphertext,ciphertextLen);
-        serverSocket.sendMessage(peerB.sd,buffer,ciphertextLen+1);
-        delete[] buffer;
-        delete[] pubkeyBuffer;
-        delete[] ciphertext;
+        copy_n(OP_REQUEST_TO_TALK, 1, buffer.begin());
+        copy_n(tempBuffer.begin(), ciphertextLen, buffer.begin() + 1);
+        serverSocket.sendMessage(peerB.sd, buffer.begin(), ciphertextLen + 1);
     } catch(const exception& e) {
-        if(buffer != nullptr) delete[] buffer;
-        if(pubkeyBuffer != nullptr) delete[] pubkeyBuffer;
-        if(ciphertext != nullptr) delete[] ciphertext;
         throw;
-    }
-    
-}
-
-unsigned int extractNonces(onlineUser peerB, unsigned char *nonces) {
-    unsigned char *ciphertext = NULL;
-    unsigned char *plaintext = NULL;
-    unsigned int ciphertextLen;
-    unsigned int plaintextLen;
-    unsigned int noncesLen;
-    try {
-        cout << "Extract Nonces" << endl;
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer");
-        ciphertextLen = serverSocket.receiveMessage(peerB.sd, ciphertext);
-        crypto.setSessionKey(peerB.key_pos);
-        plaintext = new(nothrow) unsigned char[ciphertextLen];
-        if(!plaintext)
-            throw runtime_error("An error occurred while allocating the buffer");
-        plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
-        if(memcmp(plaintext, "OK", 2) != 0){
-            throw runtime_error("Request to talk failed.");
-        }
-        noncesLen = plaintextLen - 2;
-        memcpy(nonces,plaintext+2,noncesLen);
-        delete[] ciphertext;
-        delete[] plaintext;
-        return noncesLen;
-    } catch(const exception& e) {
-        cout << e.what() << '\n';
-        if (ciphertext != nullptr) delete[] ciphertext;
-        if (plaintext != nullptr) delete[] plaintext;
-        return 0;
-    }
-    
-}
-
-void sendM4(unsigned char* nonces, uint64_t noncesLen, onlineUser peerB, onlineUser peerA) {
-    EVP_PKEY *pubkeyB;
-    unsigned char *buffer; 
-    unsigned char *pubkeyBBuff;
-    unsigned char *ciphertext;
-    unsigned int bufferLen;
-    unsigned int start;
-    unsigned int pubkeyBBuffLen; 
-    unsigned int ciphertextLen;
-    try {
-        buffer = new unsigned char[MAX_MESSAGE_SIZE];
-        start = 0;
-        memcpy(buffer,&noncesLen,8);
-        start += 8;
-        memcpy(buffer + start, "OK", 2);
-        start += 2;
-        memcpy(buffer + start, nonces, noncesLen);
-        start += noncesLen;
-
-        crypto.readPublicKey(peerB.username, pubkeyB);
-        pubkeyBBuff = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!pubkeyBBuff)
-            throw runtime_error("An error occurred while allocating the buffer");
-        pubkeyBBuffLen = crypto.serializePublicKey(pubkeyB, pubkeyBBuff);
-        memcpy(buffer + start, pubkeyBBuff, pubkeyBBuffLen);
-        start += pubkeyBBuffLen;
-
-        bufferLen = 8 + 2 + noncesLen + pubkeyBBuffLen;
-
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer");
-        crypto.setSessionKey(peerA.key_pos);
-        ciphertextLen = crypto.encryptMessage(buffer, bufferLen, ciphertext);
-        serverSocket.sendMessage(peerA.sd, ciphertext, ciphertextLen);
-        delete[] buffer;
-        delete[] pubkeyBBuff;
-        delete[] ciphertext;
-    } catch(const exception& e) {
-        if(buffer != nullptr) delete[] buffer;
-        if(pubkeyBBuff != nullptr) delete[] pubkeyBBuff;
-        if(ciphertext != nullptr) delete[] ciphertext;
-        throw;
-    }
+    } 
 }
 
 void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciphertext, unsigned int ciphertextLen) {
@@ -481,88 +348,77 @@ void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciph
     }
 }
 
-void refuseRequestToTalk(onlineUser peer) {
-    unsigned char plaintext[2];
-    unsigned char *ciphertext = NULL;
-    unsigned int plaintextLen = 2;
-    unsigned int ciphertextLen;
-    try {
-        memcpy(plaintext, "NO", 2);
-        crypto.setSessionKey(0);
-        ciphertext = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(ciphertext != nullptr)
-            throw runtime_error("An error occurred while allocating the buffer");
-        ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
-        serverSocket.sendMessage(peer.sd, ciphertext, ciphertextLen);
-        delete[] ciphertext;
-    } catch(const exception& e) {
-        if(ciphertext != nullptr) delete[] ciphertext;
-    }
-}
-
 bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat &chat) {
+    EVP_PKEY *pubkeyB;
+    string usernameB;
     onlineUser peerB;
-    uint64_t nonces_len;
-    unsigned char *nonceA = NULL;
-    unsigned char *nonces = NULL;
-    unsigned char *ciphertext;
-    unsigned int ciphertextLen;
+    array<unsigned char, NONCE_SIZE> nonceA;
+    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int bufferLen;
+    unsigned int tempBufferLen;
+    unsigned int usernameLen;
     try {
         
-        nonceA = new(nothrow) unsigned char[NONCE_SIZE];
-        if(!nonceA)
-            throw runtime_error("An error occurred while allocating the buffer");
-        string usernameB = extractUsernameReceiver(msg, msgLen, nonceA, peerA);
+        cout << "Request to talk coming from user " << peerA.username << endl;
+
+        // Get receiver username
+        crypto.setSessionKey(peerA.key_pos);
+        bufferLen = crypto.decryptMessage(msg + 1, msgLen - 1, buffer.data());
+        usernameLen = bufferLen - NONCE_SIZE;
+        usernameB = string(buffer.begin(), buffer.begin() + usernameLen);
         peerB = getUser(onlineUsers, usernameB);
+        cout << "Request from " << peerA.username << " to " << usernameB << endl;
 
         // Encrypt Message M2 OPCODE||{PKa||Na}SB
+        copy_n(buffer.begin() + usernameLen, NONCE_SIZE, nonceA.begin());
+
         sendPublicKeyToB(peerA, peerB, nonceA);
+
         cout << "Waiting for M3..." << endl;
 
-        // Decrypt Message M3 {OK||{Na||Nb}PKa}SB
-        nonces = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!nonces)
-            throw runtime_error("An error occurred while allocating the buffer");
-        nonces_len = extractNonces(peerB, nonces);
+        // Decrypt Message M3 {OK||len||{Na||Nb}PKa}SB
+        bufferLen = serverSocket.receiveMessage(peerB.sd, buffer.data());
+        crypto.setSessionKey(peerB.key_pos);
+        tempBufferLen = crypto.decryptMessage(buffer.data(), bufferLen, tempBuffer.data());
 
-        if (nonces_len == 0) {
-            refuseRequestToTalk(peerA);
-            cout << "The request to talk has been refused." << endl;
+        if(equal(tempBuffer.begin(), tempBuffer.begin() + 2, "OK")) {
+            cout << "\nSending M4..." << endl;
+            crypto.readPublicKey(peerB.username, pubkeyB);
+
+            bufferLen = crypto.serializePublicKey(pubkeyB, buffer.data());
+            copy_n(buffer.begin(), bufferLen, tempBuffer.begin() + tempBufferLen);
+            tempBufferLen += bufferLen;
+         
+            crypto.setSessionKey(peerA.key_pos);
+            bufferLen = crypto.encryptMessage(tempBuffer.data(), tempBufferLen, buffer.data());
+            serverSocket.sendMessage(peerA.sd, buffer.data(), bufferLen);
+        } else {
+            forward(peerB, peerA, buffer.data(), bufferLen);
             return false;
         }
-        
-        // Encrypt Message M4 {nonLen||OK||{Na||Nb}PKa||PKb} --> nonLen = 64 bits
-        cout << "\nSending M4..." << endl;
-        sendM4(nonces, nonces_len, peerB, peerA);
-        cout << "\nM4 sent" << endl << endl;
 
         // Decrypt Message M5 and Encrypt M6
-        ciphertext = new unsigned char[MAX_MESSAGE_SIZE];
-        ciphertextLen = serverSocket.receiveMessage(peerA.sd, ciphertext);
-        forward(peerA, peerB, ciphertext, ciphertextLen);
+        bufferLen = serverSocket.receiveMessage(peerA.sd, buffer.data());
+        forward(peerA, peerB, buffer.data(), bufferLen);
 
         // Decrypt Message M7 and Encrypt M8
-        ciphertextLen = serverSocket.receiveMessage(peerB.sd, ciphertext);
-        forward(peerB, peerA, ciphertext, ciphertextLen);
+        bufferLen = serverSocket.receiveMessage(peerB.sd, buffer.data());
+        forward(peerB, peerA, buffer.data(), bufferLen);
 
         cout << "Create an active chat" << endl;
         chat.a = peerA;
         chat.b = peerB;
 
         // Decrypt key of A and encrypt key for B
-        ciphertextLen = serverSocket.receiveMessage(peerA.sd, ciphertext);
-        forward(peerA, peerB, ciphertext, ciphertextLen);
+        bufferLen = serverSocket.receiveMessage(peerA.sd, buffer.data());
+        forward(peerA, peerB, buffer.data(), bufferLen);
 
         // Decrypt key of B and encrypt key for A
-        ciphertextLen = serverSocket.receiveMessage(peerB.sd, ciphertext);
-        forward(peerB, peerA, ciphertext, ciphertextLen);
-        delete[] nonceA;
-        delete[] nonces;
-        delete[] ciphertext;
+        bufferLen = serverSocket.receiveMessage(peerB.sd, buffer.data());
+        forward(peerB, peerA, buffer.data(), bufferLen);
         return true;
     } catch(const exception& e) {
-        if (nonceA != nullptr) delete[] nonceA;
-        if (nonces != nullptr) delete[] nonces;
         throw;
     }
 }

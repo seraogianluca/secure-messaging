@@ -364,8 +364,6 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
         ret = EVP_DecryptFinal(ctx, buffer + len, &len);
     } catch(const exception& e) {
         delete[] ciphr_msg;
-        //QUESTION: che differenza c'è tra free e cleanup?
-        //EVP_CIPHER_CTX_cleanup(ctx);
         EVP_CIPHER_CTX_free(ctx);
         throw;
     }
