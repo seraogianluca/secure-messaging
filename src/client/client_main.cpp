@@ -28,7 +28,6 @@ int main(int argc, char *const argv[]) {
         username = readFromStdout("Insert username: ");
         password = readPassword();
         authentication(username, password);
-        keyEstablishment(0);
         crypto.setSessionKey(0);
 
         cout << "-----------------------------" << endl << endl;
@@ -130,6 +129,7 @@ int main(int argc, char *const argv[]) {
         }
     } catch (const exception &e) {
         if(buffer != nullptr) delete[] buffer;
+        cout << "Exit due to an error:\n" << endl;
         cerr << e.what() << endl;
         return 0;
     }

@@ -47,11 +47,11 @@ int main(int argc, char* const argv[]) {
                                 cout << "\n-------Authentication-------" << endl;
                                 messageReceived.erase(messageReceived.begin()); // TODO
                                 string username = authentication(sd, messageReceived);
-                                keyEstablishment(sd, i);
-                                cout << "-----------------------------" << endl << endl;
                                 user.username = username;
                                 user.sd = sd;
                                 user.key_pos = i;
+                                keyEstablishment(user, i);
+                                cout << "-----------------------------" << endl << endl;
                                 onlineUsers.push_back(user);
                                 sendOnlineUsers(onlineUsers, user);
                             }
