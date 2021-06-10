@@ -273,7 +273,6 @@ void keyEstablishment(onlineUser client, unsigned int keyPos){
         // Send public key to peer
         plaintextLen = crypto.serializePublicKey(serverPrvKeyDH, plaintext.data());
         ciphertextLen = crypto.publicKeyEncryption(plaintext.data(), plaintextLen, ciphertext.data(), clientPubKey);      
-        cout << "Ciphertext Len: " << ciphertextLen << endl;  
         serverSocket.sendMessage(client.sd, ciphertext.data(), ciphertextLen);
 
         // Secret derivation

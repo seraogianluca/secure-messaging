@@ -11,7 +11,7 @@ int main(int argc, char* const argv[]) {
             if(serverSocket.isFDSet(serverSocket.getMasterFD())) {
                 serverSocket.acceptNewConnection();
             } else {
-                for (unsigned int i = 0; i < MAX_CLIENTS; i++)  {  
+                for(unsigned int i = 0; i < MAX_CLIENTS; i++)  {  
                     int sd = serverSocket.getClient(i);
                     if (serverSocket.isFDSet(sd)) {
                         //Check if it was for closing , and also read the 
@@ -34,12 +34,20 @@ int main(int argc, char* const argv[]) {
                             //Somebody disconnected , get his details and print 
                             serverSocket.disconnectHost(sd, i);
                             // Remove its chat from the active chats
-                            onlineUser userDisconnected = onlineUsers.at(i);
-                            deleteUser(userDisconnected, onlineUsers);
-                            deleteActiveChat(userDisconnected, activeChats);
+                            try {
+                                onlineUser userDisconnected = onlineUsers.at(i);
+                                deleteUser(userDisconnected, onlineUsers);
+                                deleteActiveChat(userDisconnected, activeChats);
+                            } catch(...) {
+                                cout << "Somethig went wrong during connection." << endl;
+                            }
                         } else {
                             int operationCode = messageReceived[0] - '0';
-                            if (operationCode < 0 || operationCode > 4) { throw runtime_error("Operation Code not valid");}
+                            if (operationCode < 0 || operationCode > 4) {
+                                cout << "Operation code not valid." << endl;
+                                break;
+                            }     
+
                             cout << "Operation code: " << operationCode << endl;
 
                             if (operationCode == 0) {
@@ -54,8 +62,7 @@ int main(int argc, char* const argv[]) {
                                 cout << "-----------------------------" << endl << endl;
                                 onlineUsers.push_back(user);
                                 sendOnlineUsers(onlineUsers, user);
-                            }
-                            if (operationCode == 1){
+                            } else if (operationCode == 1) {
                                 cout << "-------Starting close connection--------" << endl;
                                 user = onlineUsers.at(i);
                                 cout << "Sender Username: " << user.username << endl;
@@ -71,8 +78,7 @@ int main(int argc, char* const argv[]) {
                                     cout << "No receiver for the user " << user.username << endl;
                                 }
                                 cout << "--------Connection closed------------" << endl;
-                            }
-                            if (operationCode == 2) {
+                            } else if (operationCode == 2) {
                                 // Request to talk
                                 cout << "\n-------Request to Talk-------" << endl;
                                 activeChat chat = activeChat();
@@ -84,8 +90,7 @@ int main(int argc, char* const argv[]) {
                                     cout << "No chat has been created" << endl;
                                 }
                                 cout << "------------------------------" << endl;
-                            }
-                            if (operationCode == 3) {
+                            } else if (operationCode == 3) {
                                 //Message Forwarding
                                 //Remove OP code
                                 user = onlineUsers.at(i);
@@ -101,8 +106,7 @@ int main(int argc, char* const argv[]) {
                                 } else {
                                     cout << "No receiver for the user " << user.username << endl;
                                 }
-                            }
-                            if (operationCode == 4) {
+                            } else if (operationCode == 4) {
                                 cout << "\n----Online User List Request----" << endl;
                                 user = onlineUsers.at(i);
                                 sendOnlineUsers(onlineUsers, user);

@@ -45,12 +45,14 @@ int main(int argc, char *const argv[]) {
             
             select(maxfd+1, &fds, NULL, NULL, NULL); 
 
-            if (FD_ISSET(0, &fds)) {  
+            if(FD_ISSET(0, &fds)) {  
                 cin >> option;
                 cin.ignore();
             }
 
-            if (FD_ISSET(socketClient.getMasterFD(), &fds)) option = 3;
+            if(FD_ISSET(socketClient.getMasterFD(), &fds)) option = 3;
+
+
 
             switch(option) {
                 case 1:
