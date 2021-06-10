@@ -133,7 +133,7 @@ void authentication(string username, string password) {
     }
 }
 
-// ---------- KEY ESTABLISHMENT ---------- //
+// ---------- KEY ESTABLISHMENT CLIENT-SERVER---------- //
 void keyEstablishmentServer(unsigned int keyPos, string username, string password, EVP_PKEY* serverPubKey) {
     EVP_PKEY *clientPrvKeyDH = NULL;
     EVP_PKEY *clientPubKeyDH = NULL;
@@ -180,46 +180,25 @@ void keyEstablishmentServer(unsigned int keyPos, string username, string passwor
     }
 }
 
+
+// ---------- KEY ESTABLISHMENT PEER-TO-PEER---------- //
 void sendKey(string username, string password, EVP_PKEY *pubKey, EVP_PKEY *prvKeyDH) {
-    unsigned char *buffer = NULL;
-    unsigned char *ciphertext = NULL;
-    unsigned char *encryptBuffer = NULL;
+    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
     unsigned int bufferLen;
     unsigned int ciphertextLen;
-    unsigned int encryptBufferLen;
     try {
         // Generate public key
-        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        bufferLen = crypto.serializePublicKey(prvKeyDH, buffer);
+        bufferLen = crypto.serializePublicKey(prvKeyDH, buffer.data());
 
         // Encrypting with peer's public key
-        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        ciphertextLen = crypto.publicKeyEncryption(buffer, bufferLen, ciphertext, pubKey);
+        ciphertextLen = crypto.publicKeyEncryption(buffer.data(), bufferLen, ciphertext.data(), pubKey);
 
         // Send public key to peer
-        crypto.setSessionKey(0);
-        encryptBuffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!encryptBuffer)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        encryptBufferLen = crypto.encryptMessage(ciphertext, ciphertextLen, encryptBuffer);
-
-        // Send message to server for forwarding
-        socketClient.sendMessage(socketClient.getMasterFD(), encryptBuffer, encryptBufferLen);
-
-        delete[] buffer;
-        delete[] ciphertext;
-        delete[] encryptBuffer;
-    }catch(const exception& e) {
-        if(buffer != nullptr) delete[] buffer;
-        if(ciphertext != nullptr) delete[] ciphertext;
-        if(encryptBuffer != nullptr) delete[] encryptBuffer;
+        crypto.setSessionKey(SERVER_SECRET);
+        bufferLen = crypto.encryptMessage(ciphertext.data(), ciphertextLen, buffer.data());
+        socketClient.sendMessage(socketClient.getMasterFD(), buffer.data(), bufferLen);
+    } catch(const exception& e) {
         throw;
     }
 }
@@ -227,36 +206,23 @@ void sendKey(string username, string password, EVP_PKEY *pubKey, EVP_PKEY *prvKe
 void receiveKey(string username, string password, EVP_PKEY *prvKeyDH) {
     EVP_PKEY *prvKey = NULL;
     EVP_PKEY *pubKeyDH = NULL;
-    unsigned char *ciphertext = NULL;
-    unsigned char *plaintext = NULL;
-    unsigned char *keyPeerStream = NULL;
+    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
     unsigned char *secret = NULL;
-    unsigned int ciphertextLen;
+    unsigned int bufferLen;
     unsigned int plaintextLen;
-    unsigned int keyPeerStreamLen;
 
     try {
         // Receive peer's public key
-        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer.");
 
-        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
-        crypto.setSessionKey(0);
+        bufferLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer.data());
+        crypto.setSessionKey(SERVER_SECRET);
 
-        plaintext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!plaintext)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
+        plaintextLen = crypto.decryptMessage(buffer.data(), bufferLen, plaintext.data());
         crypto.readPrivateKey(username, password, prvKey);
 
-        keyPeerStream = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!keyPeerStream)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        keyPeerStreamLen = crypto.publicKeyDecryption(plaintext, plaintextLen, keyPeerStream, prvKey);
-        crypto.deserializePublicKey(keyPeerStream, keyPeerStreamLen, pubKeyDH);
+        bufferLen = crypto.publicKeyDecryption(plaintext.data(), plaintextLen, buffer.data(), prvKey);
+        crypto.deserializePublicKey(buffer.data(), bufferLen, pubKeyDH);
 
         // Secret derivation
         secret = new (nothrow) unsigned char[DIGEST_LEN];
@@ -266,14 +232,8 @@ void receiveKey(string username, string password, EVP_PKEY *prvKeyDH) {
         crypto.secretDerivation(prvKeyDH, pubKeyDH, secret);
         crypto.insertKey(secret, 1);
 
-        delete[] ciphertext;
-        delete[] plaintext;
-        delete[] keyPeerStream;
         delete[] secret;
     } catch(const exception& e) {
-        if(ciphertext != nullptr) delete[] ciphertext;
-        if(plaintext != nullptr) delete[] plaintext;
-        if(keyPeerStream != nullptr) delete[] keyPeerStream;
         if(secret != nullptr) delete[] secret;
         throw;
     }
