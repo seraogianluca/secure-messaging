@@ -42,7 +42,6 @@ void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciph
 void refuseRequestToTalk(onlineUser peer);
 bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat &chat);
 
-
 SocketServer serverSocket(SOCK_STREAM); //TCP
 Crypto crypto(MAX_CLIENTS);
 
@@ -320,9 +319,7 @@ void sendPublicKeyToB(onlineUser peerA, onlineUser peerB, array<unsigned char, N
         crypto.setSessionKey(peerB.key_pos);
         ciphertextLen = crypto.encryptMessage(buffer.data(), bufferLen, tempBuffer.data());
 
-        copy_n(OP_REQUEST_TO_TALK, 1, buffer.begin());
-        copy_n(tempBuffer.begin(), ciphertextLen, buffer.begin() + 1);
-        serverSocket.sendMessage(peerB.sd, buffer.begin(), ciphertextLen + 1);
+        serverSocket.sendMessage(peerB.sd, tempBuffer.begin(), ciphertextLen);
     } catch(const exception& e) {
         throw;
     } 

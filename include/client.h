@@ -487,12 +487,8 @@ void extractPubKeyA(array<unsigned char, NONCE_SIZE> &nonceA, string &peerAUsern
     try {
         ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext.data());
 
-        if(!equal(ciphertext.begin(), ciphertext.begin() + 1, OP_REQUEST_TO_TALK)) {
-            throw runtime_error("Request to talk operation not successful: wrong OP");
-        }
-
         crypto.setSessionKey(0);
-        plaintextLen = crypto.decryptMessage(ciphertext.data() + 1, ciphertextLen-1, plaintext.data()); 
+        plaintextLen = crypto.decryptMessage(ciphertext.data(), ciphertextLen, plaintext.data()); 
 
         memcpy(&peerALen, plaintext.data(), sizeof(uint64_t));
 
