@@ -20,9 +20,9 @@ The messages are exchanged between two clients through the server, which acts as
 ---------------
 
 // Message M2
-----------------------------------------
-|IV|encrypted_key|username|cert_s|nc|ns|
-----------------------------------------
+-------------------------------
+|IV|encrypted_key|cert_s|nc|ns|
+-------------------------------
 
 // Message M3
 -------------------------------
