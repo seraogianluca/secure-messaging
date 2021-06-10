@@ -40,7 +40,7 @@ unsigned int extractNonces(onlineUser peerB, unsigned char *nonces);
 void sendM4(unsigned char* nonces, uint64_t noncesLen, onlineUser peerB, onlineUser peerA);
 void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciphertext, unsigned int ciphertextLen);
 void refuseRequestToTalk(onlineUser peer);
-bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat &chat);
+bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat &chat, vector<activeChat> activeChats);
 
 SocketServer serverSocket(SOCK_STREAM); //TCP
 Crypto crypto(MAX_CLIENTS);
@@ -349,7 +349,7 @@ void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciph
     }
 }
 
-bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat &chat) {
+bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat &chat, vector<activeChat> activeChats) {
     EVP_PKEY *pubkeyB;
     string usernameB;
     onlineUser peerB;
@@ -370,6 +370,19 @@ bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser p
         usernameB = string(buffer.begin(), buffer.begin() + usernameLen);
         peerB = getUser(onlineUsers, usernameB);
         cout << "Request from " << peerA.username << " to " << usernameB << endl;
+
+        for(activeChat c : activeChats) {
+            if(c.a.username.compare(peerB.username) == 0 || c.b.username.compare(peerB.username) == 0) {
+                cout << "User " << peerB.username << " busy." << endl;
+
+                copy_n("NO", 2, tempBuffer.data());
+                crypto.setSessionKey(peerA.key_pos);
+                bufferLen = crypto.encryptMessage(tempBuffer.data(), 2, buffer.data());
+                serverSocket.sendMessage(peerA.sd, buffer.data(), bufferLen);
+
+                return false;
+            }
+        }
 
         // Encrypt Message M2 OPCODE||{PKa||Na}SB
         copy_n(buffer.begin() + usernameLen, NONCE_SIZE, nonceA.begin());

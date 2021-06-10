@@ -82,8 +82,8 @@ int main(int argc, char* const argv[]) {
                                 // Request to talk
                                 cout << "\n-------Request to Talk-------" << endl;
                                 activeChat chat = activeChat();
-                                bool success = requestToTalkProtocol(messageReceived.data(), message_len, onlineUsers.at(i), onlineUsers, chat);
-                                if (success) {
+                                bool success = requestToTalkProtocol(messageReceived.data(), message_len, onlineUsers.at(i), onlineUsers, chat, activeChats);
+                                if(success) {
                                     activeChats.push_back(chat);
                                     cout << "New chat active between " << chat.a.username << " and " << chat.b.username << endl;
                                 } else {
