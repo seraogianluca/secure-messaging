@@ -421,12 +421,11 @@ void sendNoncesToB(EVP_PKEY* pubKeyB, array<unsigned char,NONCE_SIZE> nonceB) {
 void finalizeRequestToTalk() {
     array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
     array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
-    unsigned int plaintextLen;
     unsigned int ciphertextLen;
 
     try {
         ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext.data());
-        plaintextLen = crypto.decryptMessage(ciphertext.data(), ciphertextLen, plaintext.data());
+        crypto.decryptMessage(ciphertext.data(), ciphertextLen, plaintext.data());
 
         if(!equal(plaintext.begin(), plaintext.begin() + 2, "OK")) {
             throw runtime_error("Request to talk operation not successful: error occurred receiving M8 of the protocol");
