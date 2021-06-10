@@ -58,7 +58,7 @@ Before starting a chat with another user, a user must send him a request to talk
 
 1) CLIENT A -> SERVER: Client A sends a message to the server which has the user's username he wants to chat with and a nonce to guarantee freshness against replay attack. The request to talk has OPCODE = 2. The username and the nonce are encrypted.
 
-2) SERVER -> CLIENT B: The server knows that it must forward a request to talk to client B, whose username is known from the message previously received and decrypted. The first 64 bits of the message are composed of the sender username length. Then, there are the username sender, its public key and the nonce. Everything but the OPCODE is encrypted.
+2) SERVER -> CLIENT B: The server knows that it must forward a request to talk to client B, whose username is known from the message previously received and decrypted. The first 64 bits of the message are composed of the sender username length. Then, there are the username sender, its public key and the nonce. 
 
 3) CLIENT B -> SERVER: Client B can accept or refuse the request to talk sent by client A.  If the request is accepted, it sends an "OK" message with client A's nonce, its one and the their length after encryption. Nonces are encrypted with client A's public key. If the request is refused, client B sends a "NO" message.
 
@@ -85,9 +85,9 @@ At the end of this process, the server adds the two clients to an active chat st
 -----------------------
 
 // Message M2
------------------------------------------
-|2|IV|usernameA_len|usernameA|PKa|na|TAG|
------------------------------------------
+---------------------------------------
+|IV|usernameA_len|usernameA|PKa|na|TAG|
+---------------------------------------
 
 // Message M3 (Request to talk accepted)
 -------------------------------------------------
