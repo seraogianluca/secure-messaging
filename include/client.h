@@ -662,139 +662,76 @@ void receiveRequestToTalk(string username, string password, string &peerAUsernam
 
 // ---------- MESSAGE UTILITY ---------- //
 void sendMessage(string message) {
-    unsigned char *ciphertext = NULL;
-    unsigned char *serverCT;
-    unsigned char *msg;
-    unsigned char *buffer;
-    unsigned int msgLen;
+    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
+    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
     unsigned int ciphertextLen;
-    unsigned int serverCTLen;
+    unsigned int bufferLen;
 
     try {
-        msgLen = message.length();
-        msg = (unsigned char*)message.c_str();
-        if(msgLen > MAX_MESSAGE_SIZE) 
+        if(message.length() > MAX_MESSAGE_SIZE) 
             throw runtime_error("Message size is greater than the maximum");
         
-        crypto.setSessionKey(1);
-        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer.");
-        
-        ciphertextLen = crypto.encryptMessage(msg, msgLen, ciphertext);
-        crypto.setSessionKey(0);
+        crypto.setSessionKey(CLIENT_SECRET);        
+        ciphertextLen = crypto.encryptMessage((unsigned char*)message.c_str(), message.length(), ciphertext.data());
+        crypto.setSessionKey(SERVER_SECRET);
 
-        serverCT = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!serverCT)
-            throw runtime_error("An error occurred while allocating the buffer.");
+        bufferLen = crypto.encryptMessage(ciphertext.data(), ciphertextLen, buffer.data());
+        copy_n(OP_MESSAGE, 1, ciphertext.data());
+        copy_n(buffer.begin(), bufferLen, ciphertext.data() + 1);
 
-        serverCTLen = crypto.encryptMessage(ciphertext, ciphertextLen, serverCT);
-        
-        buffer = new (nothrow) unsigned char[serverCTLen+1];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        memcpy(buffer,OP_MESSAGE,1);
-        memcpy(buffer + 1,serverCT,serverCTLen);
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer, serverCTLen + 1);
-
-        delete[] ciphertext;
-        delete[] serverCT;
-        delete[] buffer;
+        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), bufferLen + 1);
     } catch(const exception& e) {
-        if(ciphertext != nullptr) delete[] ciphertext;
-        if(serverCT != nullptr) delete[] serverCT;
-        if(buffer != nullptr) delete[] buffer;
         throw;
     }
 }
 
 string receiveMessage(){
-    unsigned char *ciphertext = NULL;
-    unsigned char *plaintext = NULL;
-    unsigned char *text;
+    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
+    array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
     unsigned int cipherlen;
     unsigned int plainlen;
-    unsigned int textLen;
 
     try {
-        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer.");
+        cipherlen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext.data());
+        
+        crypto.setSessionKey(SERVER_SECRET);
+        plainlen = crypto.decryptMessage(ciphertext.data(), cipherlen, plaintext.data());
+        
+        crypto.setSessionKey(CLIENT_SECRET);
 
-        cipherlen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext);
-        crypto.setSessionKey(0);
-
-        plaintext = new (nothrow) unsigned char[cipherlen];
-        if(!plaintext)
-            throw runtime_error("An error occurred while allocating the buffer.");
-    
-        plainlen = crypto.decryptMessage(ciphertext, cipherlen, plaintext);
-        crypto.setSessionKey(1);
-
-        text = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!text)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        textLen = crypto.decryptMessage(plaintext, plainlen, text);
-        text[textLen] = '\0';
-
-
-        delete[] ciphertext;
-        delete[] plaintext;
-        delete[] text;
+        cipherlen = crypto.decryptMessage(plaintext.data(), plainlen, ciphertext.data());
+        ciphertext[cipherlen] = '\0';
+        
     } catch(const exception& e) {
-        if(ciphertext != nullptr) delete[] ciphertext;
-        if(plaintext != nullptr) delete[] ciphertext;
-        if(text != nullptr) delete[] ciphertext;
         return "";
     }
 
-    return string((const char*)text);  
+    return string((const char*)ciphertext.data());  
 }
 
 // ---------- CLOSE CONNECTION ---------- //
 void sendCloseConnection(string username) {
     string msg;
-    unsigned char *ciphertext = NULL;
-    unsigned char *serverCT = NULL;
-    unsigned char *buffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
+    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
     unsigned int ciphertextLen;
-    unsigned int serverCTLen;
+    unsigned int bufferLen;
 
     try {
-        crypto.setSessionKey(1);
-        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer.");
-        
+        crypto.setSessionKey(CLIENT_SECRET);        
         msg = "!deh";
-        ciphertextLen = crypto.encryptMessage((unsigned char*)msg.c_str(), msg.length(), ciphertext);
-        crypto.setSessionKey(0);
-
-        serverCT = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!serverCT)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        serverCTLen = crypto.encryptMessage(ciphertext, ciphertextLen, serverCT);
+        ciphertextLen = crypto.encryptMessage((unsigned char*)msg.c_str(), msg.length(), ciphertext.data());
         
-        buffer = new (nothrow) unsigned char[serverCTLen + 1];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer.");
+        crypto.setSessionKey(SERVER_SECRET);
+        bufferLen = crypto.encryptMessage(ciphertext.data(), ciphertextLen, buffer.data());
 
-        memcpy(buffer,OP_LOGOUT,1);
-        memcpy(buffer + 1,serverCT,serverCTLen);
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer, serverCTLen+1);
-        crypto.removeKey(1);
-        crypto.setSessionKey(0);
-
-        delete[] ciphertext;
-        delete[] serverCT;
-        delete[] buffer;
+        copy_n(OP_LOGOUT, 1, ciphertext.data());
+        copy_n(buffer.data(), bufferLen, ciphertext.data() + 1);
+        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), bufferLen + 1);
+        
+        crypto.removeKey(CLIENT_SECRET);
+        crypto.setSessionKey(SERVER_SECRET);
     } catch(const exception& e) {
-        if(ciphertext != nullptr) delete[] ciphertext;
-        if(serverCT != nullptr) delete[] serverCT;
-        if(buffer != nullptr) delete[] buffer;
         throw;
     }
 }

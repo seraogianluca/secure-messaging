@@ -60,7 +60,7 @@ Before starting a chat with another user, a user must send him a request to talk
 
 2) SERVER -> CLIENT B: The server knows that it must forward a request to talk to client B, whose username is known from the message previously received and decrypted. The first 64 bits of the message are composed of the sender username length. Then, there are the username sender, its public key and the nonce. Everything but the OPCODE is encrypted.
 
-3) CLIENT B -> SERVER: Client B can accept or refuse the request to talk sent by client A.  If the request is accepted, it sends an "OK" message with client A's nonce and its one. Nonces are encrypted with client A's public key. If the request is refused, client B sends a "NO" message.
+3) CLIENT B -> SERVER: Client B can accept or refuse the request to talk sent by client A.  If the request is accepted, it sends an "OK" message with client A's nonce, its one and the their length after encryption. Nonces are encrypted with client A's public key. If the request is refused, client B sends a "NO" message.
 
 4) SERVER -> CLIENT A: If an "OK" message is received, the server adds client B's public key, then forwards it to client A. If client B refused the request to talk, the server forwards the "NO" message to client A.
 
@@ -90,9 +90,9 @@ At the end of this process, the server adds the two clients to an active chat st
 -----------------------------------------
 
 // Message M3 (Request to talk accepted)
-----------------------------------
-|IV|OK|IV|encrypted_key|na|nb|TAG|
-----------------------------------
+-------------------------------------------------
+|IV|OK|enc_nonces_len|IV|encrypted_key|na|nb|TAG|
+-------------------------------------------------
 
 // Message M3 - M4 (Request to talk refused)
 -----------
@@ -101,13 +101,13 @@ At the end of this process, the server adds the two clients to an active chat st
 
 // Message M4
 -----------------------------------------------------
-|IV|enc_nonces_len|OK|IV|encrypted_key|na|nb|PKb|TAG|
+|IV|OK|enc_nonces_len|IV|encrypted_key|na|nb|PKb|TAG|
 -----------------------------------------------------
 
 // Message M5 - M6
-----------------------------------
-|IV|OK|IV|encrypted_key|na|nb|TAG|
-----------------------------------
+-------------------------------
+|IV|OK|IV|encrypted_key|nb|TAG|
+-------------------------------
 
 // Message M7 - M8
 -----------
