@@ -145,7 +145,6 @@ int Crypto::publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsign
     try{        
         if(EVP_SealInit(ctx, CIPHER, &encrypted_key, &encrypted_key_len, iv, &pubkey, 1)==0)
             throw runtime_error("Public Key Encryption - An error occurred initializing the envelope.");
-        cout << "Seal Update" << endl;
         if(EVP_SealUpdate(ctx, ciphertext, &outlen, (unsigned char *)msg, msg_len)==0)
             throw runtime_error("Public Key Encryption - An error occurred updating the envelope.");
 

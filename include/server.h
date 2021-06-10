@@ -341,7 +341,7 @@ void forward(onlineUser peerSender, onlineUser peerReceiver, unsigned char *ciph
             throw runtime_error("An error occurred while allocating the buffer");
         plaintextLen = crypto.decryptMessage(ciphertext, ciphertextLen, plaintext);
 
-        cout << "***    Forwarding message to the receiver " << peerReceiver.username << "..." << endl;
+        cout << "***    Forwarding message to the receiver " << peerReceiver.username << endl;
         crypto.setSessionKey(peerReceiver.key_pos);
         ciphertextLen = crypto.encryptMessage(plaintext, plaintextLen, ciphertext);
         serverSocket.sendMessage(peerReceiver.sd, ciphertext, ciphertextLen);
@@ -379,16 +379,12 @@ bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser p
         copy_n(buffer.begin() + usernameLen, NONCE_SIZE, nonceA.begin());
 
         sendPublicKeyToB(peerA, peerB, nonceA);
-
-        cout << "Waiting for M3..." << endl;
-
         // Decrypt Message M3 {OK||len||{Na||Nb}PKa}SB
         bufferLen = serverSocket.receiveMessage(peerB.sd, buffer.data());
         crypto.setSessionKey(peerB.key_pos);
         tempBufferLen = crypto.decryptMessage(buffer.data(), bufferLen, tempBuffer.data());
 
         if(equal(tempBuffer.begin(), tempBuffer.begin() + 2, "OK")) {
-            cout << "\nSending M4..." << endl;
             crypto.readPublicKey(peerB.username, pubkeyB);
 
             bufferLen = crypto.serializePublicKey(pubkeyB, buffer.data());
