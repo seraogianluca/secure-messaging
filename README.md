@@ -144,7 +144,7 @@ When the shared secret is established, the chat starts.
 The chat is **back and forth**: the first who can send a message is the one who sent the request to talk, in our example is the client A. Client B waits for a message from client A and, only after receiving it, it can reply.
 
 ## Compile and test
-Just `make` (or `make all`) to compile the code. We tested the code on gcc 9.3.0 and clang 12.0.5. Openssl >= 1.1 is required (check the makefile for the install path on mac). After compiling, two files are created (`server_main.out` and `client_main.out`). Just open at least two terminal windows and execute them.
+Just `make` (or `make all`) to compile the code. We tested it on gcc 9.3.0 and clang 12.0.5. Openssl >= 1.1 is required (check the makefile for the install path on mac). After compiling, two files are created (`server_main.out` and `client_main.out`). Just open at least two terminal windows and execute them.
 
 ## Miscellanea
 
