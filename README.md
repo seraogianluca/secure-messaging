@@ -1,5 +1,7 @@
 # Secure messaging
 
+[![CodeFactor](https://www.codefactor.io/repository/github/seraogianluca/secure-messaging/badge)](https://www.codefactor.io/repository/github/seraogianluca/secure-messaging)
+
 ## Introduction
 
 Secure messaging is a chatting application that offers confidentiality, integrity and reliability. It achieves confidentiality and integrity through authenticated encryption, whereas reliability with TCP communications.
@@ -34,7 +36,7 @@ The messages are exchanged between two clients through the server, which acts as
 
 Once the client and server are authenticated, they establish a session key. The ephemeral Diffie-Hellman protocol is used to guarantee the perfect forward secrecy. First, the parameters "p" and "g" are generated. Then, the client generates the parameter "a", computes the public key and sends it to the server. The server generates the parameter "b", computes its public key and derives the shared secret. Later, it sends its public key to the client that, in turn, derives the secret. The messages are encrypted with the respective public key. In the end, they share a session key.
 
-![key establishment](resources/ke_client-server-1.png "Client-Server Key Establishment")
+![key establishment](resources/ke_client_server.png "Client-Server Key Establishment")
 
 ### Message format
 
@@ -72,7 +74,7 @@ Before starting a chat with another user, a user must send him a request to talk
 
 At the end of this process, the server adds the two clients to an active chat structure to keep chatting, and the clients start a key exchange protocol.
 
-![request to talk](resources/request-to-talk.png)
+![request to talk](resources/req_to_talk.png)
 
 ### Message Format
 
