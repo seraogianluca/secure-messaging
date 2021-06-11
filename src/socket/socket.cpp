@@ -116,8 +116,7 @@ int SocketClient::receiveMessage(int sd, unsigned char *buffer) {
         if(message_len == -1 && ((errno != EWOULDBLOCK) || (errno != EAGAIN))) {
             perror("Receive Error");
             throw runtime_error("Receive failed");
-        }
-        
+        }  
     } while (message_len < 0);
     
     buffer[message_len] = '\0';

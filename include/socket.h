@@ -15,7 +15,6 @@ using namespace std;
 
 class SocketClient {
     private:
-
     protected:
         int socketType;
         struct sockaddr_in address;
@@ -34,7 +33,6 @@ class SocketClient {
 };
 
 class SocketServer: public SocketClient {
-    
     private:
         int client_socket[MAX_CLIENTS];
         fd_set readfds;

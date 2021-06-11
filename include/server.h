@@ -48,7 +48,6 @@ Crypto crypto(MAX_CLIENTS);
 // ---------- UTILITY ---------- //
 
 unsigned int readPassword(unsigned char* username, unsigned int usernameLen, unsigned char* password) {
-
     ifstream file("./resources/credentials.txt");
     string line;
     string delimiter = " ";
@@ -215,7 +214,6 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
     unsigned int certLen;
     unsigned int encryptedMsgLen;
     try{
-
         crypto.loadCertificate(cert,"server_cert");
         certBuff = new(nothrow) unsigned char[MAX_MESSAGE_SIZE];
 
@@ -241,7 +239,6 @@ void sendCertificate(int sd, unsigned char* username, unsigned int usernameLen, 
         if(encryptMsg != nullptr) delete[] encryptMsg;
         throw;
     }
-    
 }
 
 // ---------- KEY ESTABLISHMENT ---------- //
@@ -358,10 +355,8 @@ bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser p
     unsigned int bufferLen;
     unsigned int tempBufferLen;
     unsigned int usernameLen;
-    try {
-        
+    try {        
         cout << "Request to talk coming from user " << peerA.username << endl;
-
         // Get receiver username
         crypto.setSessionKey(peerA.key_pos);
         bufferLen = crypto.decryptMessage(msg + 1, msgLen - 1, buffer.data());

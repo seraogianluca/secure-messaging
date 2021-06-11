@@ -1,7 +1,6 @@
 #include "include/crypto.h"
 
 Crypto::Crypto(int num_keys) {
-
     iv = new (nothrow) unsigned char[IV_SIZE];
 
     if(!iv)

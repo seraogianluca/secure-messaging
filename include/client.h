@@ -326,7 +326,6 @@ void receiveOnlineUsersList(vector<string> &onlineUsers) {
             cout << "** No other users online" << endl;
             onlineUsers.clear();
         }
-        
     } catch(const exception& e) {
         if (buffer != nullptr) delete[] buffer;
         if (plaintext != nullptr) delete[] plaintext;
@@ -394,7 +393,6 @@ bool extractPubKeyB(EVP_PKEY *&pubKeyB, array<unsigned char, NONCE_SIZE> nonce, 
         } else {
             throw runtime_error("Request to talk operation not successful: OK is missing (error occurred receiving M4 of the protocol).");
         }
-
     } catch(const exception& e) {
         throw;
     }
@@ -406,7 +404,6 @@ void sendNoncesToB(EVP_PKEY* pubKeyB, array<unsigned char,NONCE_SIZE> nonceB) {
     unsigned int ciphertextLen;
 
     try {            
-
         ciphertextLen = crypto.publicKeyEncryption(nonceB.data(), NONCE_SIZE, ciphertext.data(), pubKeyB);
         copy_n("OK", 2, message.begin());
         copy_n(ciphertext.begin(), ciphertextLen, message.begin() + 2);
@@ -430,7 +427,6 @@ void finalizeRequestToTalk() {
         if(!equal(plaintext.begin(), plaintext.begin() + 2, "OK")) {
             throw runtime_error("Request to talk operation not successful: error occurred receiving M8 of the protocol");
         }
-
     } catch(const exception& e) {
         throw;
     }
@@ -496,12 +492,10 @@ void refuseRequestToTalk() {
     unsigned int ciphertextLen;
 
     try {
-
         copy_n("NO", 2, plaintext.data());
         crypto.setSessionKey(0);
         ciphertextLen = crypto.encryptMessage(plaintext.data(), 2, ciphertext.data());
         socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), ciphertextLen);
-
     } catch(const exception& e) {
         throw;
     }
@@ -663,7 +657,6 @@ string receiveMessage(){
 
         cipherlen = crypto.decryptMessage(plaintext.data(), plainlen, ciphertext.data());
         ciphertext[cipherlen] = '\0';
-        
     } catch(const exception& e) {
         return "";
     }

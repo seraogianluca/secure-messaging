@@ -25,7 +25,6 @@ void auth_encrypt_test() {
         ciphertext_len = crypto->encryptMessage(msg, plaintext_len, ciphertext);
         cout << "Ciphertext:" << endl;
         BIO_dump_fp(stdout, (const char*)ciphertext, ciphertext_len);
-
     } catch(const exception& e) {
         delete crypto;
         delete[] ciphertext;

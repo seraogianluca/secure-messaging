@@ -22,6 +22,7 @@ class Crypto {
 
         // Diffie-Hellman
         void buildParameters(EVP_PKEY *&dh_params);
+        
     public:
         Crypto(int num_keys);
         ~Crypto();
