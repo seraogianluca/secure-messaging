@@ -36,7 +36,7 @@ The messages are exchanged between two clients through the server, which acts as
 
 Once the client and server are authenticated, they establish a session key. The ephemeral Diffie-Hellman protocol is used to guarantee the perfect forward secrecy. First, the parameters "p" and "g" are generated. Then, the client generates the parameter "a", computes the public key and sends it to the server. The server generates the parameter "b", computes its public key and derives the shared secret. Later, it sends its public key to the client that, in turn, derives the secret. The messages are encrypted with the respective public key. In the end, they share a session key.
 
-![key establishment](resources/ke_client_server.png "Client-Server Key Establishment")
+![key establishment](resources/ke_cl_ser.png "Client-Server Key Establishment")
 
 ### Message format
 
