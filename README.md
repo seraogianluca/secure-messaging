@@ -34,7 +34,6 @@ The messages are exchanged between two clients through the server, which acts as
 
 Once the client and server are authenticated, they establish a session key. The ephemeral Diffie-Hellman protocol is used to guarantee the perfect forward secrecy. First, the parameters "p" and "g" are generated. Then, the client generates the parameter "a", computes the public key and sends it to the server. The server generates the parameter "b", computes its public key and derives the shared secret. Later, it sends its public key to the client that, in turn, derives the secret. The messages are encrypted with the respective public key. In the end, they share a session key.
 
-
 ![key establishment](resources/ke_client-server.png "Client-Server Key Establishment")
 
 ### Message format
@@ -51,7 +50,6 @@ Once the client and server are authenticated, they establish a session key. The 
 -------------------------
 ```
 
-
 ## Request to talk
 
 Before starting a chat with another user, a user must send him a request to talk, which can be accepted or not by the receiver. All the messages exchanged between client and server are encrypted with the established session key, as we have said in the previous paragraph. The request to talk protocol works in the following way:
@@ -64,7 +62,7 @@ Before starting a chat with another user, a user must send him a request to talk
 
 4) SERVER -> CLIENT A: If an "OK" message is received, the server adds client B's public key, then forwards it to client A. If client B refused the request to talk, the server forwards the "NO" message to client A.
 
-5) CLIENT A -> SERVER: Client A verifies the nonce. If verification is successful, it sends to the server an "OK" message with the nonces. Everything is encrypted with client B's public key. If client B refuses to talk, client A receives the "NO" message, and the protocol stops here.
+5) CLIENT A -> SERVER: Client A verifies the nonce. If verification is successful, it sends to the server an "OK" message with client B's nonce. Everything is encrypted with client B's public key. If client B refuses to talk, client A receives the "NO" message, and the protocol stops here.
 
 6) SERVER -> CLIENT B: The server forwards the message.
 
@@ -142,6 +140,9 @@ When the shared secret is established, the chat starts.
 ## Chat
 
 The chat is **back and forth**: the first who can send a message is the one who sent the request to talk, in our example is the client A. Client B waits for a message from client A and, only after receiving it, it can reply.
+
+## Compile and test
+Just `make` (or `make all`) to compile the code. We tested the code on gcc 9.3.0 and clang 12.0.5. Openssl >= 1.1 is required (check the makefile for the install path on mac). After compiling, two files are created (`server_main.out` and `client_main.out`). Just open at least two terminal windows and execute them.
 
 ## Miscellanea
 
