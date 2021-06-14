@@ -58,7 +58,11 @@ class Crypto {
         //TODO: may be private
         void computeHash(unsigned char *msg, unsigned int msg_size, unsigned char *digest);
 
-        //Diffie-Hellmann
+        // Diffie-Hellmann
         void keyGeneration(EVP_PKEY *&my_prvkey);
         void secretDerivation(EVP_PKEY *my_pubkey, EVP_PKEY *peer_pubkey, unsigned char *buffer);
+
+        // Digital Signature
+        int sign(unsigned char *message, unsigned int messageLen, unsigned char *buffer, EVP_PKEY *prvKey);
+        bool verifySignature(unsigned char *signature, unsigned int signLen, unsigned char *message, unsigned int messageLen, EVP_PKEY *pubKey);
 };

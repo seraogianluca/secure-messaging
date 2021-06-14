@@ -604,3 +604,60 @@ void Crypto::secretDerivation(EVP_PKEY *my_prvkey, EVP_PKEY *peer_pubkey, unsign
     computeHash(secret, secretlen, buffer);
     OPENSSL_free(secret);
 }
+
+int Crypto::sign(unsigned char *message, unsigned int messageLen, unsigned char *buffer, EVP_PKEY *prvKey) {
+    unsigned char *signature; 
+    unsigned int signLen;
+    signature = new(nothrow) unsigned char[EVP_PKEY_size(prvKey)];
+    if(!signature) {
+        throw runtime_error("Buffer not allocated correctly");
+    }
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        throw runtime_error("Context not initialized");
+    }
+    try {
+        if(EVP_SignInit(ctx, EVP_sha256()) != 1) {
+            throw runtime_error("Error inizializing the sign");
+        }
+        if(EVP_SignUpdate(ctx, message, messageLen) != 1) {
+            throw runtime_error("Error updating the sign");
+        }
+        if(EVP_SignFinal(ctx, signature, &signLen, prvKey) != 1){
+            throw runtime_error("Error finalizing the sign");
+        }
+        memcpy(buffer, signature, signLen);
+        delete[] signature;
+        EVP_MD_CTX_free(ctx);
+    } catch(const exception& e) {
+        delete[] signature;
+        EVP_MD_CTX_free(ctx);
+        throw;
+    }
+    return signLen;
+}
+
+bool Crypto::verifySignature(unsigned char *signature, unsigned int signLen, unsigned char *message, unsigned int messageLen, EVP_PKEY *pubKey) {
+    int ret;
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        throw runtime_error("Context not initialized");
+    }
+    try {
+        if(EVP_VerifyInit(ctx, EVP_sha256()) != 1){
+            throw runtime_error("Error initializing the signature verification");
+        }
+        if(EVP_VerifyUpdate(ctx, message, messageLen) != 1) {
+            throw runtime_error("Error updating the signature verification");
+        }
+        ret = EVP_VerifyFinal(ctx, signature, signLen, pubKey); 
+        EVP_MD_CTX_free(ctx);
+        if(ret != 1) { 
+            return false;
+        }
+    } catch(const exception& e) {
+        EVP_MD_CTX_free(ctx);
+        throw;
+    }
+    return true;
+}
