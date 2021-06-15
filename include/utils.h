@@ -49,6 +49,6 @@ void receive(Socket *socket, int sd, vector<unsigned char> &buffer) {
 }
 
 void send(Socket *socket, int sd, vector<unsigned char> &buffer) {
-    size = socket->sendMessage(sd, buffer.data(), buffer.size());
+    socket->sendMessage(sd, buffer.data(), buffer.size());
     buffer.clear();
 }
