@@ -1,6 +1,8 @@
 #include <array>
 #include <vector>
 #include <algorithm>
+#include "socket.h"
+#include "symbols.h"
 
 template<size_t contentSize>
 void append(std::array<unsigned char, contentSize> content, unsigned int contentLen, std::vector<unsigned char> &buffer) {
@@ -35,4 +37,19 @@ int extract(std::vector<unsigned char> &content, std::array<unsigned char, buffe
     content.erase(content.begin(), content.begin() + size);
 
     return size;
+}
+
+template<size_t msgSize>
+void receive(Socket *socket, int sd, vector<unsigned char> &buffer) {
+    std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
+    unsigned int size;
+
+    size = socket->receiveMessage(sd, msg.data());
+    buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
+}
+
+template<size_t msgSize>
+void send(Socket *socket, int sd, vector<unsigned char> &buffer) {
+    size = socket->sendMessage(sd, buffer.data(), buffer.size());
+    buffer.clear();
 }
