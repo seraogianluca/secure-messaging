@@ -151,3 +151,9 @@ Just `make` (or `make all`) to compile the code. We tested it on gcc 9.3.0 and c
 - The communications are performed using TCP to guarantee its reliability.
 - Each client can open a chat at a time. The server allows at most ten users online. It keeps a structure for the online users and a structure for the active chats.
 - A user in an active chat can close the communication by typing "!deh". In this case, the server will forward the message to the other side and removes the chat from the active ones.
+
+## Authors
+
+- **[Gianluca Serao](https://github.com/seraogianluca)**
+- **[Lorenzo Pasco](https://github.com/lorepas)**
+- **[Antonio Acquavia](https://github.com/thorongil05)**
