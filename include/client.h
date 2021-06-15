@@ -9,7 +9,7 @@
 void keyEstablishmentServer(unsigned int keyPos, string username, string password, EVP_PKEY* serverPubKey);
 
 //TODO: serve costruttore con parametri di default per fare solo dichiarazione
-Crypto crypto(2);
+Crypto crypto;
 SocketClient socketClient(SOCK_STREAM);
 
 void setStdinEcho(bool enable = true) {

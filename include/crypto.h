@@ -8,24 +8,81 @@
 #include <openssl/x509.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <openssl/bn.h>
 #include "symbols.h"
 
 using namespace std;
-//TODO: mettere una funzione per stampare gli errori
+
+struct session {
+    unsigned char *session_key;
+    unsigned char iv[IV_SIZE];
+    uint16_t counter;
+    
+    session(){}
+
+    session(unsigned char *sk){
+        session_key = new (nothrow) unsigned char[DIGEST_LEN];
+        if(!session_key){
+            throw runtime_error("Buffer not initialized.");
+        }
+        memcpy(session_key, sk, DIGEST_LEN);
+        counter = 0;
+    }
+
+    void generateIV() {
+        if(RAND_poll() != 1)
+            throw runtime_error("An error occurred in RAND_poll."); 
+        if(RAND_bytes(iv, IV_SIZE) != 1)
+            throw runtime_error("An error occurred in RAND_bytes.");
+        increment(counter);
+    }
+
+    void increment(uint16_t &value){
+        cout<<"Prima:\t"<<value<<endl;
+        if(value == UINT16_MAX){
+            value = 0;
+        } else {
+            value++;
+        }
+        cout<<"Dopo:\t"<<value<<endl;
+    }
+
+    void getCounter(unsigned char *buffer){
+        unsigned char sizeArray[2];
+        cout<<"GET COUNTER"<<endl;
+        cout<<"Counte\t"<<counter;
+        sizeArray[0] = counter & 0xFF; //low part
+        sizeArray[1] = counter >> 8;   //higher part
+        memcpy(buffer, sizeArray, 2);
+        cout<<"Buffer"<<endl;
+        BIO_dump_fp(stdout, (const char*)buffer, sizeof(uint16_t));
+        cout<<"*******"<<endl;
+    }
+
+    bool verifyFreshness(unsigned char *counterReceived){
+        uint16_t tmp = counter;
+        uint16_t cr = counterReceived[0] | uint16_t(counterReceived[1]) << 8;
+        increment(tmp);
+        cout<<"COUNTER\t"<<counter<<endl;
+        cout<<"CR7\t"<<cr<<endl;
+        cout<<"COUNTER RECEIVED"<<endl;
+        BIO_dump_fp(stdout, (const char*)counterReceived, sizeof(uint16_t));
+        if(tmp == cr){
+            increment(counter);
+            return true;
+        }
+        return false;
+    }
+};
+
 class Crypto {
     private:
-        vector< vector<unsigned char> > keys;
-        unsigned char *session_key;
-        unsigned char *iv;
-
-        void generateIV();
-
+        vector<session> sessions;
+        unsigned int currentSession = 0;
         // Diffie-Hellman
         void buildParameters(EVP_PKEY *&dh_params);
         
     public:
-        Crypto(int num_keys);
-        ~Crypto();
 
         void insertKey(unsigned char *key, unsigned int pos);
         void removeKey(unsigned int pos);

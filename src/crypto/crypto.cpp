@@ -1,65 +1,22 @@
 #include "include/crypto.h"
 
-Crypto::Crypto(int num_keys) {
-    iv = new (nothrow) unsigned char[IV_SIZE];
-
-    if(!iv)
-        throw runtime_error("An error occurred while allocating iv.");
-
-    for(int i = 0; i < IV_SIZE; i++) {
-        iv[i] = 0;
-    }
-
-    session_key = new (nothrow) unsigned char[DIGEST_LEN];
-
-    if(!session_key) {
-        delete[] iv;
-        throw runtime_error("An error occurred while allocating session key.");
-    }
-
-    for(int i = 0; i < DIGEST_LEN; i++) {
-        session_key[i] = 0;
-    }        
-}
-
-Crypto::~Crypto() {
-    delete[] iv;
-    delete[] session_key;
-    keys.clear();
-}
-
 void Crypto::insertKey(unsigned char *key, unsigned int pos) {
-    vector<unsigned char> temp(key, key + DIGEST_LEN);
-    keys.insert(keys.begin() + pos, temp);
+    session s(key);
+    sessions.insert(sessions.begin() + pos, s);
 }
 
 void Crypto::removeKey(unsigned int pos) {
-    keys.erase(keys.begin() + pos, keys.begin() + pos + 1);
+    sessions.erase(sessions.begin() + pos, sessions.begin() + pos + 1);
 }
 
-void Crypto::setSessionKey(unsigned int key) {
-    try {
-        vector<unsigned char> temp = keys.at(key);
-
-        for(int i = 0; i < DIGEST_LEN; i++) {
-            session_key[i] = temp.at(i);
-        }
-    } catch(const exception& e) {
-        throw;
-    }
+void Crypto::setSessionKey(unsigned int pos) {
+    currentSession = pos;
 }
 
 void Crypto::generateNonce(unsigned char* nonce) {
     if(RAND_poll() != 1)
         throw runtime_error("An error occurred in RAND_poll."); 
     if(RAND_bytes(nonce, NONCE_SIZE) != 1)
-        throw runtime_error("An error occurred in RAND_bytes.");
-}
-
-void Crypto::generateIV() {
-    if(RAND_poll() != 1)
-        throw runtime_error("An error occurred in RAND_poll."); 
-    if(RAND_bytes(iv, IV_SIZE) != 1)
         throw runtime_error("An error occurred in RAND_bytes.");
 }
 
@@ -252,33 +209,47 @@ void Crypto::getPublicKeyFromCertificate(X509 *cert, EVP_PKEY *&pubkey){
 }
 
 int Crypto::encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned char *buffer) {
-    unsigned char ciphertext[msg_len + TAG_SIZE];
+    unsigned char *ciphertext;
+    unsigned char bufferCounter[sizeof(uint16_t)];
     unsigned char tag[TAG_SIZE];
     EVP_CIPHER_CTX *ctx = NULL;
     unsigned int start = 0;
     int len = 0;
     int ciphr_len = 0;
+    session s;
 
     ctx = EVP_CIPHER_CTX_new();
     if(!ctx)
-        throw runtime_error("An error occurred while creating the context.");   
+        throw runtime_error("An error occurred while creating the context."); 
+    
+    ciphertext = new (nothrow) unsigned char[msg_len + TAG_SIZE + sizeof(uint16_t)];
+
+    if(!ciphertext){
+        throw runtime_error("An error occurred initilizing the buffer");
+    }
 
     try {
-        generateIV();
+        s = sessions.at(currentSession);
+        s.generateIV();
 
-        // QUESTION: Bisogna fare la free in questi casi di errore?
-        if(EVP_EncryptInit(ctx, AUTH_ENCR, session_key, iv) != 1)
+        if(EVP_EncryptInit(ctx, AUTH_ENCR, s.session_key, s.iv) != 1)
             throw runtime_error("An error occurred while initializing the context.");
             
         //AAD: header in the clear that contains the IV
-        if(EVP_EncryptUpdate(ctx, NULL, &len, iv, IV_SIZE) != 1)
+        if(EVP_EncryptUpdate(ctx, NULL, &len, s.iv, IV_SIZE) != 1)
             throw runtime_error("An error occurred in adding AAD header.");
-            
-        if(EVP_EncryptUpdate(ctx, ciphertext, &len, msg, msg_len) != 1)
+
+        s.getCounter(bufferCounter);
+
+        if(EVP_EncryptUpdate(ctx, ciphertext, &len, bufferCounter, sizeof(uint16_t)) != 1)
             throw runtime_error("An error occurred while encrypting the message.");
         ciphr_len = len;
+            
+        if(EVP_EncryptUpdate(ctx, ciphertext+sizeof(uint16_t), &len, msg, msg_len) != 1)
+            throw runtime_error("An error occurred while encrypting the message.");
+        ciphr_len += len;
 
-        if(EVP_EncryptFinal(ctx, ciphertext + len, &len) != 1)
+        if(EVP_EncryptFinal(ctx, ciphertext + ciphr_len, &len) != 1)
             throw runtime_error("An error occurred while finalizing the ciphertext.");
         ciphr_len += len;
 
@@ -286,7 +257,7 @@ int Crypto::encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
         if(EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, TAG_SIZE, tag) != 1)
             throw runtime_error("An error occurred while getting the tag.");
         
-        memcpy(buffer+start, iv, IV_SIZE);
+        memcpy(buffer+start, s.iv, IV_SIZE);
         start += IV_SIZE;
         memcpy(buffer+start, ciphertext, ciphr_len);
         start += ciphr_len;
@@ -304,12 +275,15 @@ int Crypto::encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
 int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned char *buffer) {
     unsigned char recv_iv[IV_SIZE];
     unsigned char recv_tag[TAG_SIZE];
+    unsigned char bufferCounter[sizeof(uint16_t)];
     unsigned char *ciphr_msg;
+    unsigned char *tempBuffer;
     EVP_CIPHER_CTX *ctx;
     unsigned int ciphr_len = 0;
     int ret = 0;
     int len = 0;
     int pl_len = 0;
+    session s;
 
 
     if (msg_len < (IV_SIZE + TAG_SIZE))
@@ -321,6 +295,10 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
     if(!ciphr_msg)
         throw runtime_error("An error occurred while allocating the array for the ciphertext.");
 
+    tempBuffer = new (nothrow) unsigned char[ciphr_len];
+    if(!tempBuffer)
+        throw runtime_error("An error occurred while allocating the temporary array for the ciphertext.");
+
     ctx = EVP_CIPHER_CTX_new();
     if(!ctx) {
         delete[] ciphr_msg;
@@ -331,28 +309,37 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
         memcpy(recv_iv, msg, IV_SIZE);
         memcpy(recv_tag,msg+msg_len-TAG_SIZE, TAG_SIZE);
         memcpy(ciphr_msg, msg+IV_SIZE, ciphr_len);
+        s = sessions.at(currentSession);
 
-        if(!EVP_DecryptInit(ctx, AUTH_ENCR, session_key, recv_iv))
+        if(!EVP_DecryptInit(ctx, AUTH_ENCR, s.session_key, recv_iv))
             throw runtime_error("An error occurred while initializing the context.");
         
         if(!EVP_DecryptUpdate(ctx, NULL, &len, recv_iv, IV_SIZE))
             throw runtime_error("An error occurred while getting AAD header.");
             
-        if(!EVP_DecryptUpdate(ctx, buffer, &len, ciphr_msg, ciphr_len))
+        if(!EVP_DecryptUpdate(ctx, tempBuffer, &len, ciphr_msg, ciphr_len))
             throw runtime_error("An error occurred while decrypting the message");
         pl_len = len;
         
         if(!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, TAG_SIZE, recv_tag))
             throw runtime_error("An error occurred while setting the expected tag.");
         
-        ret = EVP_DecryptFinal(ctx, buffer + len, &len);
+        ret = EVP_DecryptFinal(ctx, tempBuffer + len, &len);
+
+        memcpy(bufferCounter, tempBuffer, sizeof(uint16_t));
+        if(!s.verifyFreshness(bufferCounter)){
+            throw runtime_error("Freshness not confirmed.");
+        }
+        memcpy(buffer, tempBuffer + sizeof(uint16_t), ciphr_len - sizeof(uint16_t));
     } catch(const exception& e) {
         delete[] ciphr_msg;
+        delete[] tempBuffer;
         EVP_CIPHER_CTX_free(ctx);
         throw;
     }
 
     delete[] ciphr_msg;
+    delete[] tempBuffer;
     EVP_CIPHER_CTX_free(ctx);
     
     if(ret > 0)

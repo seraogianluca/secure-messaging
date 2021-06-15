@@ -43,7 +43,7 @@ void refuseRequestToTalk(onlineUser peer);
 bool requestToTalkProtocol(unsigned char *msg, unsigned int msgLen, onlineUser peerA, vector<onlineUser> onlineUsers, activeChat &chat, vector<activeChat> activeChats);
 
 SocketServer serverSocket(SOCK_STREAM); //TCP
-Crypto crypto(MAX_CLIENTS);
+Crypto crypto;
 
 // ---------- UTILITY ---------- //
 
