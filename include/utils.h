@@ -44,16 +44,29 @@ int extract(std::vector<unsigned char> &content, std::array<unsigned char, buffe
     return size;
 }
 
-template<size_t msgSize>
-void receive(Socket *socket, int sd, vector<unsigned char> &buffer) {
+
+void receive(SocketClient socket, int sd, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
     unsigned int size;
 
-    size = socket->receiveMessage(sd, msg.data());
+    size = socket.receiveMessage(sd, msg.data());
     buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
 }
 
-void send(Socket *socket, int sd, vector<unsigned char> &buffer) {
-    socket->sendMessage(sd, buffer.data(), buffer.size());
+void send(SocketClient socket, int sd, vector<unsigned char> &buffer) {
+    socket.sendMessage(sd, buffer.data(), buffer.size());
+    buffer.clear();
+}
+
+void receive(SocketServer socket, int sd, vector<unsigned char> &buffer) {
+    std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
+    unsigned int size;
+
+    size = socket.receiveMessage(sd, msg.data());
+    buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
+}
+
+void send(SocketServer socket, int sd, vector<unsigned char> &buffer) {
+    socket.sendMessage(sd, buffer.data(), buffer.size());
     buffer.clear();
 }
