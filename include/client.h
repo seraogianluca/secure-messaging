@@ -91,7 +91,7 @@ void authentication(ClientContext ctx, string username, EVP_PKEY *prvKeyClient) 
         // M1: 0, username, nc
         ctx.crypto->generateNonce(nonceClient.data());
         buffer.push_back(OP_LOGIN);
-        append((unsigned char *)username.c_str(), username.length(), buffer);
+        append(username, buffer);
         append(nonceClient, NONCE_SIZE, buffer);
         send(ctx.clientSocket, buffer);
 
@@ -143,7 +143,7 @@ void authentication(ClientContext ctx, string username, EVP_PKEY *prvKeyClient) 
 
         tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), prvKeyClient);
         
-        append(tempBuffer.data(), tempBufferLen, buffer);
+        append(tempBuffer, tempBufferLen, buffer);
 
         send(ctx.clientSocket, buffer);
 
