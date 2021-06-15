@@ -2,7 +2,6 @@
 #include <vector>
 #include <algorithm>
 #include <openssl/bio.h>
-#include "socket.h"
 #include "symbols.h"
 
 void printBuffer(std::vector<unsigned char> buffer) {
@@ -24,6 +23,22 @@ void append(std::array<unsigned char, contentSize> content, unsigned int content
 
     buffer.insert(buffer.end(), sizeArray, sizeArray + 2);
     buffer.insert(buffer.end(), content.begin(), content.begin() + contentLen);
+}
+
+void append(unsigned char *content, unsigned int contentLen, std::vector<unsigned char> &buffer) {
+    unsigned char sizeArray[2];
+    uint16_t size = 0;
+
+    if (contentLen > UINT16_MAX)
+        throw std::runtime_error("Content too big.");
+
+    size = (uint16_t)contentLen;
+
+    sizeArray[0] = size & 0xFF; //low part
+    sizeArray[1] = size >> 8;   //higher part
+
+    buffer.insert(buffer.end(), sizeArray, sizeArray + 2);
+    buffer.insert(buffer.end(), content, content + contentLen);
 }
 
 template<size_t bufferSize>

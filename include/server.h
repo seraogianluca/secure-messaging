@@ -96,7 +96,7 @@ struct serverContext {
     }
 };
 
-void receive(SocketClient socket, int sd, vector<unsigned char> &buffer) {
+void receive(SocketServer socket, int sd, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
     unsigned int size;
 
@@ -104,7 +104,7 @@ void receive(SocketClient socket, int sd, vector<unsigned char> &buffer) {
     buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
 }
 
-void send(SocketClient socket, int sd, vector<unsigned char> &buffer) {
+void send(SocketServer socket, int sd, vector<unsigned char> &buffer) {
     socket.sendMessage(sd, buffer.data(), buffer.size());
     buffer.clear();
 }

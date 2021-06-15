@@ -5,6 +5,9 @@ void showMenu();
 void insertCommand();
 
 int main(int argc, char *const argv[]) {
+    ClientContext context;
+    EVP_PKEY *prvKeyClient;
+
     string input;
     string peer;
     string username;
@@ -20,23 +23,16 @@ int main(int argc, char *const argv[]) {
         buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
         if(!buffer) throw runtime_error("Buffer not allocated.");
 
+        context.crypto->readPrivateKey(prvKeyClient);
+
         cout << "\n-------Authentication-------" << endl;
-
-        socketClient.makeConnection();
-        socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
-        cout << "Connection confirmed: " << buffer << endl;
-        username = readFromStdout("Insert username: ");
-        password = readPassword();
-        authentication(username, password);
-        crypto.setSessionKey(0);
-
+        authentication(context, "anto", prvKeyClient);
         cout << "-----------------------------" << endl << endl;
 
-        receiveOnlineUsersList(onlineUsers);    
         while (true) {
-            maxfd = (socketClient.getMasterFD() > STDIN_FILENO) ? socketClient.getMasterFD() : STDIN_FILENO;
+            maxfd = (context.clientSocket->getMasterFD() > STDIN_FILENO) ? context.clientSocket->getMasterFD() : STDIN_FILENO;
             FD_ZERO(&fds);
-            FD_SET(socketClient.getMasterFD(), &fds); 
+            FD_SET(context.clientSocket->getMasterFD(), &fds); 
             FD_SET(STDIN_FILENO, &fds); 
 
             showMenu();
@@ -50,79 +46,21 @@ int main(int argc, char *const argv[]) {
                 cin.ignore();
             }
 
-            if(FD_ISSET(socketClient.getMasterFD(), &fds)) option = 3;
+            if(FD_ISSET(context.clientSocket->getMasterFD(), &fds)) option = 3;
 
 
 
             switch(option) {
                 case 1:
-                    askOnlineUserList();
-                    receiveOnlineUsersList(onlineUsers);
+                    cout << "--------- Online User List ---------" << endl;
                     break;
                 case 2:
                     cout << "\n-------Request to talk-------" << endl;
                     peer = readFromStdout("Insert username: ");
 
-                    if(!checkUserOnline(peer, onlineUsers)) {
-                        cout << "No user online with this username: insert a valid username or ask for the list of online users." << endl;
-                        cout << "-----------------------------" << endl;
-                        break;
-                    }
-
-                    if(!sendRequestToTalk(peer, username, password))
-                        break;
-                    cout << "-----------------------------" << endl;
-
-                    while(true){
-                        message = readFromStdout(username + ": ");
-
-                        if(message.compare("!deh") == 0){
-                            cout << "You closed the chat." << endl;
-                            sendCloseConnection(username);
-                            break;
-                        }
-
-                        sendMessage(message);
-                        message = receiveMessage();
-
-                        if(message.compare("!deh") == 0){
-                            cout << peer << " closed the chat." << endl;
-                            crypto.removeKey(1);
-                            crypto.setSessionKey(0);
-                            break;
-                        }
-
-                        cout << peer << ": " << message << endl;
-                    }
-
                     break;
                 case 3:
                     cout << "\n-------Received request to talk-------" << endl;
-                    if(!receiveRequestToTalk(username, password, peer))
-                        break;
-                    cout << "------------------------------------------" << endl;
-
-                    while(true){
-                        message = receiveMessage();
-
-                        if(message.compare("!deh") == 0){
-                            cout << peer << " closed the chat." << endl;
-                            crypto.removeKey(1);
-                            crypto.setSessionKey(0);
-                            break;
-                        }
-
-                        cout << peer << ": " << message << endl;
-                        message = readFromStdout(username + ": ");
-
-                        if(message.compare("!deh") == 0){
-                            cout << "You closed the chat." << endl;
-                            sendCloseConnection(username);
-                            break;
-                        }
-
-                        sendMessage(message);
-                    }
                     break;
                 case 0:
                     cout << "Bye." << endl;

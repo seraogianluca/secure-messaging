@@ -1,33 +1,38 @@
+#include <cstring>
+#include <termios.h>
 #include "socket.h"
 #include "crypto.h"
-#include <iterator>
-#include <array>
-#include <cstring>
-#include <algorithm>
-#include <termios.h>
 #include "utils.h"
 
-struct clientContext {
+struct ClientContext {
     vector<string> onlineUsers;
     SocketClient *clientSocket;
     Crypto *crypto;
 
-    clientContext() {
+    ClientContext() {
         clientSocket = new SocketClient(SOCK_STREAM);
         crypto = new Crypto();
     }
+
+    void addOnlineUser(string username) {
+        onlineUsers.push_back(username);
+    }
+
+    void clearOnlineUsers() {
+        onlineUsers.clear();
+    }
 };
 
-void receive(SocketServer socket, int sd, vector<unsigned char> &buffer) {
+void receive(SocketClient *socket, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
     unsigned int size;
 
-    size = socket.receiveMessage(sd, msg.data());
+    size = socket->receiveMessage(socket->getMasterFD(), msg.data());
     buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
 }
 
-void send(SocketServer socket, int sd, vector<unsigned char> &buffer) {
-    socket.sendMessage(sd, buffer.data(), buffer.size());
+void send(SocketClient *socket, vector<unsigned char> &buffer) {
+    socket->sendMessage(socket->getMasterFD(), buffer.data(), buffer.size());
     buffer.clear();
 }
 
@@ -65,4 +70,100 @@ string readFromStdout(string message) {
     } while (value.length() == 0);
     
     return value;
+}
+
+void authentication(ClientContext ctx, string username, EVP_PKEY *prvKeyClient) {
+    vector<unsigned char> buffer;
+    vector<unsigned char> signature;
+    array<unsigned char, NONCE_SIZE> nonceClient;
+    array<unsigned char, NONCE_SIZE> nonceServer;
+    array<unsigned char, MAX_MESSAGE_SIZE> pubKeyDHBuffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    EVP_PKEY *pubKeyServer;
+    EVP_PKEY *prvKeyDHClient;
+    EVP_PKEY *pubKeyDHServer;
+    X509 *cert;
+    unsigned int tempBufferLen;
+    unsigned int pubKeyDHServerLen;
+    unsigned int pubKeyDHClientLen;
+
+    try {
+        // M1: 0, username, nc
+        ctx.crypto->generateNonce(nonceClient.data());
+        buffer.push_back(OP_LOGIN);
+        append((unsigned char *)username.c_str(), username.length(), buffer);
+        append(nonceClient, NONCE_SIZE, buffer);
+        send(ctx.clientSocket, buffer);
+
+        // Receive M2: 0, cert, g^b mod p, ns, <0, g^b mod p, nc > pKs
+        receive(ctx.clientSocket, buffer);
+        if (buffer.at(0) != OP_LOGIN) {
+            // TODO: Handle Error!
+            throw runtime_error("Opcode not valid");
+        }
+        buffer.erase(buffer.begin());
+        tempBufferLen = extract(buffer, tempBuffer);
+        ctx.crypto->deserializeCertificate(tempBufferLen, tempBuffer.data(), cert);
+
+        if(!ctx.crypto->verifyCertificate(cert)) {
+            // TODO: 
+            throw runtime_error("Certificate not valid.");
+        }
+
+        ctx.crypto->getPublicKeyFromCertificate(cert, pubKeyServer);
+
+        pubKeyDHServerLen = extract(buffer, pubKeyDHBuffer);
+        extract(buffer, nonceServer);
+        tempBufferLen = extract(buffer, tempBuffer);
+
+        signature.push_back(OP_LOGIN);
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHServerLen);
+        signature.insert(signature.end(), nonceClient.begin(), nonceClient.end());
+
+        bool signatureVerification = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), pubKeyServer);
+        if(!signatureVerification) {
+            // TODO: Send Message to other client
+            throw runtime_error("Sign verification failed");
+        }
+
+        ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHServerLen, pubKeyDHServer);
+
+        // Send M3: 0, g^a mod p, ns, < 0, g^a mod b,  ns>
+        buffer.clear();
+        buffer.push_back(OP_LOGIN);
+
+        ctx.crypto->keyGeneration(prvKeyDHClient);
+        pubKeyDHClientLen = ctx.crypto->serializePublicKey(prvKeyDHClient, pubKeyDHBuffer.data());
+        append(pubKeyDHBuffer, pubKeyDHClientLen, buffer);
+
+        signature.clear();
+        signature.push_back(OP_LOGIN);
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHClientLen);
+        signature.insert(signature.begin(), nonceServer.begin(), nonceServer.end());
+
+        tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), prvKeyClient);
+        
+        append(tempBuffer.data(), tempBufferLen, buffer);
+
+        send(ctx.clientSocket, buffer);
+
+        // Receive M4: 
+        receive(ctx.clientSocket, buffer);
+        if (buffer.at(0) != OP_LOGIN) {
+            // TODO: Handle Error!
+            throw runtime_error("Authentication Failed");
+        }
+        buffer.erase(buffer.begin());
+        cout << "Authentication succeeded" << endl;
+        
+        ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHServerLen, pubKeyDHServer);
+        ctx.crypto->secretDerivation(prvKeyDHClient, pubKeyDHServer, tempBuffer.data());
+        ctx.crypto->insertKey(tempBuffer.data(), SERVER_SECRET);
+
+        ctx.crypto->setSessionKey(SERVER_SECRET);
+        tempBufferLen = ctx.crypto->decryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
+
+    } catch(const exception& e) {
+        throw;
+    }
 }

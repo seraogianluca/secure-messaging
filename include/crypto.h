@@ -8,7 +8,6 @@
 #include <openssl/x509.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
-#include <openssl/bn.h>
 #include "symbols.h"
 
 using namespace std;
@@ -18,8 +17,6 @@ struct session {
     unsigned char iv[IV_SIZE];
     uint16_t counter;
     
-    session(){}
-
     session(unsigned char *sk){
         session_key = new (nothrow) unsigned char[DIGEST_LEN];
         if(!session_key){
