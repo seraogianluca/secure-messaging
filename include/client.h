@@ -17,6 +17,19 @@ struct clientContext {
     }
 };
 
+void receive(SocketServer socket, int sd, vector<unsigned char> &buffer) {
+    std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
+    unsigned int size;
+
+    size = socket.receiveMessage(sd, msg.data());
+    buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
+}
+
+void send(SocketServer socket, int sd, vector<unsigned char> &buffer) {
+    socket.sendMessage(sd, buffer.data(), buffer.size());
+    buffer.clear();
+}
+
 void setStdinEcho(bool enable = true) {
     struct termios tty;
     tcgetattr(STDIN_FILENO, &tty);

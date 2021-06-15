@@ -96,6 +96,19 @@ struct serverContext {
     }
 };
 
+void receive(SocketClient socket, int sd, vector<unsigned char> &buffer) {
+    std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
+    unsigned int size;
+
+    size = socket.receiveMessage(sd, msg.data());
+    buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
+}
+
+void send(SocketClient socket, int sd, vector<unsigned char> &buffer) {
+    socket.sendMessage(sd, buffer.data(), buffer.size());
+    buffer.clear();
+}
+
 // Utility
 unsigned int readPassword(unsigned char* username, unsigned int usernameLen, unsigned char* password) {
     ifstream file("./resources/credentials.txt");
