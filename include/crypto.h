@@ -38,35 +38,24 @@ struct session {
     }
 
     void increment(uint16_t &value){
-        cout<<"Prima:\t"<<value<<endl;
         if(value == UINT16_MAX){
             value = 0;
         } else {
             value++;
         }
-        cout<<"Dopo:\t"<<value<<endl;
     }
 
     void getCounter(unsigned char *buffer){
         unsigned char sizeArray[2];
-        cout<<"GET COUNTER"<<endl;
-        cout<<"Counte\t"<<counter;
         sizeArray[0] = counter & 0xFF; //low part
         sizeArray[1] = counter >> 8;   //higher part
         memcpy(buffer, sizeArray, 2);
-        cout<<"Buffer"<<endl;
-        BIO_dump_fp(stdout, (const char*)buffer, sizeof(uint16_t));
-        cout<<"*******"<<endl;
     }
 
     bool verifyFreshness(unsigned char *counterReceived){
         uint16_t tmp = counter;
         uint16_t cr = counterReceived[0] | uint16_t(counterReceived[1]) << 8;
         increment(tmp);
-        cout<<"COUNTER\t"<<counter<<endl;
-        cout<<"CR7\t"<<cr<<endl;
-        cout<<"COUNTER RECEIVED"<<endl;
-        BIO_dump_fp(stdout, (const char*)counterReceived, sizeof(uint16_t));
         if(tmp == cr){
             increment(counter);
             return true;

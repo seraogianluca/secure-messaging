@@ -216,7 +216,6 @@ int Crypto::encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
     unsigned int start = 0;
     int len = 0;
     int ciphr_len = 0;
-    session s;
 
     ctx = EVP_CIPHER_CTX_new();
     if(!ctx)
@@ -229,7 +228,7 @@ int Crypto::encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
     }
 
     try {
-        s = sessions.at(currentSession);
+        session& s = sessions.at(currentSession);
         s.generateIV();
 
         if(EVP_EncryptInit(ctx, AUTH_ENCR, s.session_key, s.iv) != 1)
@@ -283,7 +282,6 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
     int ret = 0;
     int len = 0;
     int pl_len = 0;
-    session s;
 
 
     if (msg_len < (IV_SIZE + TAG_SIZE))
@@ -309,7 +307,7 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
         memcpy(recv_iv, msg, IV_SIZE);
         memcpy(recv_tag,msg+msg_len-TAG_SIZE, TAG_SIZE);
         memcpy(ciphr_msg, msg+IV_SIZE, ciphr_len);
-        s = sessions.at(currentSession);
+        session& s = sessions.at(currentSession);
 
         if(!EVP_DecryptInit(ctx, AUTH_ENCR, s.session_key, recv_iv))
             throw runtime_error("An error occurred while initializing the context.");
