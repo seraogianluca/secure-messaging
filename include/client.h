@@ -8,6 +8,7 @@
 #include "utils.h"
 
 struct clientContext {
+    vector<string> onlineUsers;
     SocketClient *clientSocket;
     Crypto *crypto;
 
