@@ -1,8 +1,13 @@
 #include <array>
 #include <vector>
 #include <algorithm>
+#include <openssl/bio.h>
 #include "socket.h"
 #include "symbols.h"
+
+void printBuffer(std::vector<unsigned char> buffer) {
+    BIO_dump_fp(stdout, (const char*)buffer.data(), buffer.size());
+}
 
 template<size_t contentSize>
 void append(std::array<unsigned char, contentSize> content, unsigned int contentLen, std::vector<unsigned char> &buffer) {
