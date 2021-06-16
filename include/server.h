@@ -271,8 +271,7 @@ void authentication(ServerContext ctx, int sd, vector<unsigned char> startMessag
 
         bool verification = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), pubKeyClient);
 
-        // TODO: rimettere il !
-        if(verification) {
+        if(!verification) {
             throw runtime_error("Signature not verified or message not fresh.");
         }
 
