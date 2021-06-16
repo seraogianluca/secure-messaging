@@ -32,6 +32,7 @@ struct ClientContext {
     }
 };
 
+void sendOnlineUsersListRequest(ClientContext &ctx);
 void receiveOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageReceived);
 
 void receive(SocketClient *socket, vector<unsigned char> &buffer) {
@@ -218,6 +219,20 @@ void authentication(ClientContext &ctx, string username) {
     }
 }
 
+void sendOnlineUsersListRequest(ClientContext &ctx) {
+    vector<unsigned char> buffer;
+    string message = "I want online users";
+    try {
+        buffer.push_back(OP_ONLINE_USERS);
+        buffer.insert(buffer.end(), message.begin(), message.end());
+        encrypt(ctx.crypto, SERVER_SECRET, buffer);
+        buffer.insert(buffer.begin(), OP_ONLINE_USERS, 1);
+        printBuffer("Buffer: ", buffer);
+    } catch(const exception& e) {
+        throw runtime_error("Error sending the online users list request");
+    }
+}
+
 void receiveOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageReceived) {
     vector<unsigned char> buffer;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
@@ -226,7 +241,7 @@ void receiveOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageRec
         tempBufferLen = ctx.crypto->decryptMessage(messageReceived.data(), messageReceived.size(), tempBuffer.data());
 
         buffer.clear();
-        buffer.insert(buffer.begin(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen-2);
+        buffer.insert(buffer.begin(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
         buffer.erase(buffer.begin());
 
         while(buffer.size() != 0) {

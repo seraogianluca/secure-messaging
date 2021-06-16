@@ -7,7 +7,7 @@
 #define OP_LOGOUT ((unsigned char *)"1")
 #define OP_REQUEST_TO_TALK '2'
 #define OP_MESSAGE ((unsigned char *)"3")
-#define OP_ONLINE_USERS ((unsigned char *) "4")
+#define OP_ONLINE_USERS '4'
 #define OP_ERROR '5'
 
 #define MAX_MESSAGE_SIZE 10000

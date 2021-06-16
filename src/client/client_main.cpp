@@ -59,7 +59,9 @@ int main(int argc, char *const argv[]) {
 
             switch(option) {
                 case 1:
-                    cout << "--------- Online User List ---------" << endl;
+                    cout << "\n--------- Online User List ---------" << endl;
+                    sendOnlineUsersListRequest(context);
+                    cout << "-------------------------------------" << endl;
                     break;
                 case 2:
                     cout << "\n-------Request to talk-------" << endl;
