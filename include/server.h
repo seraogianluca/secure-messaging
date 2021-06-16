@@ -81,7 +81,7 @@ struct ServerContext {
 
     bool isUserChatting(string username){
         for(activeChat chat: activeChats) {
-            if(chat.a.username.compare(username) == 0 || chat.a.username.compare(username) == 0){
+            if(chat.a.username.compare(username) == 0 || chat.b.username.compare(username) == 0){
                 return true;
             }
         }
@@ -335,14 +335,13 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
 
         // Receive M3 FROM B
         receive(ctx.serverSocket, ctx.crypto, receiver, buffer);
-        if(buffer.at(0) == OP_ERROR){
+        if(buffer.at(0) == OP_ERROR) {
             cout << "Request to talk refused" << endl;
-            buffer.erase(buffer.begin());
-            send(ctx.serverSocket, ctx.crypto, receiver, buffer);
+            send(ctx.serverSocket, ctx.crypto, sender, buffer);
             return;
         } else if(buffer.at(0) != OP_REQUEST_TO_TALK){
             errorMessage("Error in the initialization of the RTT", buffer);
-            send(ctx.serverSocket, ctx.crypto, receiver, buffer);
+            send(ctx.serverSocket, ctx.crypto, sender, buffer);
             return;
         }
 
@@ -354,10 +353,10 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
 
         // Receive M5 FROM A
         receive(ctx.serverSocket, ctx.crypto, sender, buffer);
-        if(buffer.at(0) == OP_ERROR){
+        if(buffer.at(0) == OP_ERROR) {
             cout << "Error in request to talk" << endl;
             errorMessage("Error in request to talk", buffer);
-            send(ctx.serverSocket, ctx.crypto, receiver, buffer);
+            send(ctx.serverSocket, ctx.crypto, sender, buffer);
             errorMessage("Error in request to talk", buffer);
             send(ctx.serverSocket, ctx.crypto, receiver, buffer);
             return;

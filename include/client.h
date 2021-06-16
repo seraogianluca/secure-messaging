@@ -275,9 +275,7 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
                 cout << "Request refused" << endl;
                 buffer.clear();
                 errorMessage("Request to talk refused", buffer);
-                encrypt(ctx.crypto, SERVER_SECRET, buffer);
-                buffer.insert(buffer.begin(), OP_ERROR);
-                send(ctx.clientSocket, buffer);
+                send(ctx.clientSocket, ctx.crypto, buffer);
                 cout << "Request to talk refused" << endl;
                 return;
             } else {
@@ -386,9 +384,11 @@ void sendRequestToTalk(ClientContext &ctx){
         // <- M4: 2||{M3||PK_b} SA
         receive(ctx.clientSocket, ctx.crypto, buffer);
         if(buffer.at(0) == OP_ERROR) {
-            cout<<extract(buffer)<<endl;
+            buffer.erase(buffer.begin());
+            cout << extract(buffer) << endl;
             return;
         }
+
         buffer.erase(buffer.begin());
         pubKeyDHLen = extract(buffer, pubKeyDHBuffer);
         ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHLen, keyDHB);
@@ -426,7 +426,8 @@ void sendRequestToTalk(ClientContext &ctx){
         // M7: <- 2||{2{success}AB}
         receive(ctx.clientSocket, ctx.crypto, buffer);
         if(buffer.at(0) == OP_ERROR){
-            cout<<extract(buffer)<<endl;
+            buffer.erase(buffer.begin());
+            cout << extract(buffer) << endl;
             return;
         }
 
