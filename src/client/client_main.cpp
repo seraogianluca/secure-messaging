@@ -17,12 +17,9 @@ int main(int argc, char *const argv[]) {
     string username;
     string password;
     string message;
-    //unsigned char *buffer = NULL;
     vector<string> onlineUsers;
    
     try {
-        //buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        //if(!buffer) throw runtime_error("Buffer not allocated.");
         cout << "\n-------Authentication-------" << endl;
         context.clientSocket->makeConnection();
         receive(context.clientSocket, buffer);
@@ -30,8 +27,9 @@ int main(int argc, char *const argv[]) {
         buffer.clear();
         username = readFromStdout("Insert username: ");
         password = readPassword();
+        context.username = username;
         context.crypto->readPrivateKey(username, password, context.prvKeyClient);
-        authentication(context, username);
+        authentication(context);
         cout << "-----------------------------" << endl << endl;
 
         while (true) {
@@ -60,17 +58,18 @@ int main(int argc, char *const argv[]) {
             switch(option) {
                 case 1:
                     cout << "\n--------- Online User List ---------" << endl;
-                    sendOnlineUsersListRequest(context);
+                    onlineUsersListRequest(context);
                     cout << "-------------------------------------" << endl;
                     break;
                 case 2:
-                    cout << "\n-------Request to talk-------" << endl;
-                    //peer = readFromStdout("Insert username: ");
+                    cout << "\n------------Request to talk-----------" << endl;
                     sendRequestToTalk(context);
+                    cout << "---------------------------------------" << endl;
                     break;
                 case 3:
                     cout << "\n-------Received request to talk-------" << endl;
                     receiveRequestToTalk(context, buffer);
+                    cout << "---------------------------------------" << endl;
                     break;
                 case 0:
                     cout << "Bye." << endl;
@@ -80,13 +79,10 @@ int main(int argc, char *const argv[]) {
             }
         }
     } catch (const exception &e) {
-        //if(buffer != nullptr) delete[] buffer;
         cout << "Exit due to an error:\n" << endl;
         cerr << e.what() << endl;
         return 0;
     }
-
-    //delete[] buffer;
     return 0;
 }
 
