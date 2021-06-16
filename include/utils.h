@@ -104,17 +104,18 @@ std::string extract(std::vector<unsigned char> &content) {
     return buffer;
 }
 
-void errorMessage(std::string errorMessage, vector<unsigned char> &buffer) {
+void errorMessage(std::string errorMessage, std::vector<unsigned char> &buffer) {
+    buffer.clear();
     buffer.insert(buffer.end(), OP_ERROR);
     append(errorMessage, buffer);
 }
 
-void encrypt(Crypto *crypto, unsigned int key, vector<unsigned char> &buffer) {
-    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+void encrypt(Crypto *crypto, unsigned int key, std::vector<unsigned char> &buffer) {
+    std::array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
     unsigned int tempBufferLen;
 
     try {
-        crypto->setSessionKey(SERVER_SECRET);
+        crypto->setSessionKey(key);
         tempBufferLen = crypto->encryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
 
         buffer.clear();
@@ -124,12 +125,12 @@ void encrypt(Crypto *crypto, unsigned int key, vector<unsigned char> &buffer) {
     }
 }
 
-void decrypt(Crypto *crypto, unsigned int key, vector<unsigned char> &buffer) {
-    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+void decrypt(Crypto *crypto, unsigned int key, std::vector<unsigned char> &buffer) {
+    std::array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
     unsigned int tempBufferLen;
 
     try {
-        crypto->setSessionKey(SERVER_SECRET);
+        crypto->setSessionKey(key);
         tempBufferLen = crypto->decryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
 
         buffer.clear();
