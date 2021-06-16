@@ -341,7 +341,7 @@ void requestToTalk(ServerContext ctx, vector<unsigned char> msg, onlineUser send
         // Send M2 TO B
         buffer.push_back(OP_REQUEST_TO_TALK);
         append(sender.username, buffer);
-        append(nonce, buffer);
+        append(nonce, NONCE_SIZE, buffer);
         send(ctx.serverSocket, ctx.crypto, receiver, buffer);
 
         // Receive M3 FROM B
