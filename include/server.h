@@ -94,7 +94,15 @@ struct ServerContext {
                 return user;
             }
         }
+        throw runtime_error("The user is not online");
+    }
 
+    onlineUser getUser(int sd){
+        for (onlineUser user : onlineUsers) {
+            if(user.sd == sd) {
+                return user;
+            }
+        }
         throw runtime_error("The user is not online");
     }
 

@@ -59,7 +59,8 @@ int main(int argc, char* const argv[]) {
                             } else if (operationCode == 2) {
                                 // Request to talk
                                 cout << "\n-------Request to Talk-------" << endl;
-                                // TODO: 
+                                user = ctx.getUser(sd);
+                                requestToTalk(ctx, messageReceived, user);
                                 cout << "------------------------------" << endl;
                             } else if (operationCode == 3) {
                                 //Message Forwarding

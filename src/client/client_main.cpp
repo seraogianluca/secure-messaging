@@ -23,15 +23,15 @@ int main(int argc, char *const argv[]) {
     try {
         //buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
         //if(!buffer) throw runtime_error("Buffer not allocated.");
-
-        context.crypto->readPrivateKey(context.prvKeyClient);
-
         cout << "\n-------Authentication-------" << endl;
         context.clientSocket->makeConnection();
         receive(context.clientSocket, buffer);
         cout << "Connection confirmed: " << buffer.data() << endl;
         buffer.clear();
-        authentication(context, "anto");
+        username = readFromStdout("Insert username: ");
+        password = readPassword();
+        context.crypto->readPrivateKey(username, password, context.prvKeyClient);
+        authentication(context, username);
         cout << "-----------------------------" << endl << endl;
 
         while (true) {
@@ -63,8 +63,8 @@ int main(int argc, char *const argv[]) {
                     break;
                 case 2:
                     cout << "\n-------Request to talk-------" << endl;
-                    peer = readFromStdout("Insert username: ");
-
+                    //peer = readFromStdout("Insert username: ");
+                    sendRequestToTalk(context);
                     break;
                 case 3:
                     cout << "\n-------Received request to talk-------" << endl;

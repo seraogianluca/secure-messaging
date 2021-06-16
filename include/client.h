@@ -353,7 +353,7 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
     }
 }
 
-void sendRequestToTalk(ClientContext ctx, string usernameB){
+void sendRequestToTalk(ClientContext ctx){
     array<unsigned char, NONCE_SIZE> nonce;
     array<unsigned char, NONCE_SIZE> peerNonce;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
