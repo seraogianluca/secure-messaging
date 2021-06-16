@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <openssl/bio.h>
 #include "symbols.h"
+#include "crypto.h"
 
 void printBuffer(std::vector<unsigned char> buffer) {
     BIO_dump_fp(stdout, (const char*)buffer.data(), buffer.size());
@@ -95,4 +96,34 @@ std::string extract(std::vector<unsigned char> &content) {
 void errorMessage(std::string errorMessage, vector<unsigned char> &buffer) {
     buffer.insert(buffer.end(), OP_ERROR);
     append(errorMessage, buffer);
+}
+
+void encrypt(Crypto *crypto, unsigned int key, vector<unsigned char> &buffer) {
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int tempBufferLen;
+
+    try {
+        crypto->setSessionKey(SERVER_SECRET);
+        tempBufferLen = crypto->encryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
+
+        buffer.clear();
+        buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+    } catch(const std::exception& e) {
+        throw;
+    }
+}
+
+void decrypt(Crypto *crypto, unsigned int key, vector<unsigned char> &buffer) {
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int tempBufferLen;
+
+    try {
+        crypto->setSessionKey(SERVER_SECRET);
+        tempBufferLen = crypto->decryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
+
+        buffer.clear();
+        buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+    } catch(const std::exception& e) {
+        throw;
+    }
 }
