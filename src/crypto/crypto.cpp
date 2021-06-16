@@ -340,9 +340,10 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
     delete[] tempBuffer;
     EVP_CIPHER_CTX_free(ctx);
     
-    if(ret > 0)
-        pl_len += len; 
-    else
+    if(ret > 0){
+        pl_len += len;
+        pl_len -= sizeof(uint16_t);
+    } else
         pl_len = -1;
 
     return pl_len;

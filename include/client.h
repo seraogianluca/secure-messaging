@@ -279,6 +279,7 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
 
     try {
         // Receive request
+        msg.erase(msg.begin());
         tempBufferLen = ctx.crypto->decryptMessage(msg.data(), msg.size(), tempBuffer.data());
 
         if(tempBuffer.at(0) != OP_REQUEST_TO_TALK) {
@@ -331,7 +332,7 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
         signature.insert(signature.end(), peerNonce.begin(), peerNonce.end());
         tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), ctx.prvKeyClient);
         append(tempBuffer, tempBufferLen, buffer);
-
+        printBuffer(buffer);
         send(ctx.clientSocket, ctx.crypto, buffer);
 
         // Receive peer's public key
@@ -415,23 +416,22 @@ void sendRequestToTalk(ClientContext &ctx){
 
         // <- M4: 2||{M3||PK_b} SA
         receive(ctx.clientSocket, ctx.crypto, buffer);
+        printBuffer(buffer);
         if(buffer.at(0) == OP_ERROR) {
             cout<<extract(buffer)<<endl;
             return;
         }
         buffer.erase(buffer.begin());
-
         pubKeyDHLen = extract(buffer, pubKeyDHBuffer);
         ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHLen, keyDHB);
-
+        
         extract(buffer, peerNonce);
         signedPartLen = extract(buffer, signedPart); //extraction of the signed part
 
         signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHLen);
         signature.insert(signature.end(), nonce.begin(), nonce.end());
-
         tempBufferLen = extract(buffer, tempBuffer);
-        ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHLen, pubKeyB);
+        ctx.crypto->deserializePublicKey(tempBuffer.data(), tempBufferLen, pubKeyB);
 
         bool signatureVerification = ctx.crypto->verifySignature(signedPart.data(), signedPartLen, signature.data(), signature.size(), pubKeyB);
         if(!signatureVerification) {
@@ -440,7 +440,7 @@ void sendRequestToTalk(ClientContext &ctx){
             cout<<"Signed not verified"<<endl;
             return;
         }
-
+        cout<<"Firma verificata oficial"<<endl;
         // M5: 2||{2||g^a mod p||<g^a mod p || n_b>PK_a}SA ->
         buffer.clear();
         ctx.crypto->keyGeneration(keyDHA);

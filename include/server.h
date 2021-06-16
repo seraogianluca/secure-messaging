@@ -368,6 +368,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
         ctx.crypto->readPublicKey(usernameB, pubKeyB);
         tempBufferLen = ctx.crypto->serializePublicKey(pubKeyB, tempBuffer.data());
         append(tempBuffer, tempBufferLen, buffer);
+        printBuffer(buffer);
         send(ctx.serverSocket, ctx.crypto, sender, buffer);
 
         // Receive M5 FROM A
