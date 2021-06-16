@@ -294,6 +294,21 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
     }
 }
 
+void receiveOnlineUsersRequest(ServerContext &ctx, onlineUser user, vector<unsigned char> receivedMessage) {
+    try {
+        receivedMessage.erase(receivedMessage.begin());
+        decrypt(ctx.crypto, user.key_pos, receivedMessage);
+        if(receivedMessage[0] != OP_ONLINE_USERS) {
+            throw runtime_error("OP Code not valid");
+        }
+        sendOnlineUsersList(ctx, user);
+    } catch(const exception& e) {
+        errorMessage(e.what(), receivedMessage);
+        send(ctx.serverSocket, user.sd, receivedMessage);
+        throw runtime_error(e.what());
+    }   
+}
+
 void sendOnlineUsersList(ServerContext &ctx, onlineUser user) {
     vector<unsigned char> buffer;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;

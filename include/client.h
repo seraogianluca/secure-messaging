@@ -15,6 +15,11 @@ struct ClientContext {
     }
 
     void addOnlineUser(string username) {
+        for(string onlineUser : onlineUsers) {
+            if(username.compare(onlineUser) == 0) {
+                return;
+            }
+        }
         onlineUsers.push_back(username);
     }
 
@@ -33,7 +38,7 @@ struct ClientContext {
 };
 
 void sendOnlineUsersListRequest(ClientContext &ctx);
-void receiveOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageReceived);
+void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageReceived);
 
 void receive(SocketClient *socket, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
@@ -209,7 +214,7 @@ void authentication(ClientContext &ctx, string username) {
         ctx.crypto->insertKey(tempBuffer.data(), SERVER_SECRET);
         ctx.crypto->setSessionKey(SERVER_SECRET);
 
-        receiveOnlineUsersList(ctx, buffer);
+        printOnlineUsersList(ctx, buffer);
     } catch(const exception& e) {
         cout << "Error: " << e.what();
         // Send error message to the server
@@ -226,36 +231,33 @@ void sendOnlineUsersListRequest(ClientContext &ctx) {
         buffer.push_back(OP_ONLINE_USERS);
         buffer.insert(buffer.end(), message.begin(), message.end());
         encrypt(ctx.crypto, SERVER_SECRET, buffer);
-        buffer.insert(buffer.begin(), OP_ONLINE_USERS, 1);
-        printBuffer("Buffer: ", buffer);
+        buffer.insert(buffer.begin(), OP_ONLINE_USERS);
+        send(ctx.clientSocket, buffer);
+
+        receive(ctx.clientSocket, buffer);
+        buffer.erase(buffer.begin());
+        printOnlineUsersList(ctx, buffer);
     } catch(const exception& e) {
         throw runtime_error("Error sending the online users list request");
     }
 }
 
-void receiveOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageReceived) {
-    vector<unsigned char> buffer;
-    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
-    unsigned int tempBufferLen;
+void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> buffer) {
+    // The buffer parameter has been added to reuse this method in the authentication.
     try {
-        tempBufferLen = ctx.crypto->decryptMessage(messageReceived.data(), messageReceived.size(), tempBuffer.data());
-
-        buffer.clear();
-        buffer.insert(buffer.begin(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+        decrypt(ctx.crypto, SERVER_SECRET, buffer);
         buffer.erase(buffer.begin());
 
         while(buffer.size() != 0) {
             string name = extract(buffer);
             ctx.addOnlineUser(name);
         }
-
         cout << "\nOnline Users: " << endl;
         for (string user : ctx.onlineUsers) {
             cout << user << endl;
         }
-        
     } catch(const exception& e) {
-        cerr << e.what() << '\n';
+        throw runtime_error("Error occurred printing the online users list");
     }
 }
 

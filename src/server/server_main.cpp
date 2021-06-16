@@ -67,7 +67,8 @@ int main(int argc, char* const argv[]) {
                                 // TODO:
                             } else if (operationCode == 4) {
                                 cout << "\n----Online User List Request----" << endl;
-                                
+                                user = ctx.getUser(sd);
+                                receiveOnlineUsersRequest(ctx, user, messageReceived);
                                 cout << "---------------------------------" << endl;
                             } else if (operationCode == 5) {
                                 cout << "\n----Error on a client----" << endl;
