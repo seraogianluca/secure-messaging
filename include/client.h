@@ -54,14 +54,10 @@ void send(SocketClient *socket, vector<unsigned char> &buffer) {
 }
 
 void receive(SocketClient *socket, Crypto *crypto, vector<unsigned char> &buffer) {
-    std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
     unsigned char opCode;
-    unsigned int size;
 
     try {
-        size = socket->receiveMessage(socket->getMasterFD(), msg.data());
-        buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
-
+        receive(socket, buffer);
         opCode = buffer.at(0);
         buffer.erase(buffer.begin());
         decrypt(crypto, SERVER_SECRET, buffer);
@@ -79,12 +75,9 @@ void send(SocketClient *socket, Crypto *crypto, vector<unsigned char> &buffer) {
     unsigned char opCode;
     try {
         opCode = buffer.at(0);
-
         encrypt(crypto, SERVER_SECRET, buffer);
         buffer.insert(buffer.begin(), opCode);
-
-        socket->sendMessage(socket->getMasterFD(), buffer.data(), buffer.size());
-        buffer.clear();
+        send(socket, buffer);
     } catch(const exception& e) {
         throw;
     }
