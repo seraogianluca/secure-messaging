@@ -94,6 +94,7 @@ std::string extract(std::vector<unsigned char> &content) {
 }
 
 void errorMessage(std::string errorMessage, std::vector<unsigned char> &buffer) {
+    buffer.clear();
     buffer.insert(buffer.end(), OP_ERROR);
     append(errorMessage, buffer);
 }

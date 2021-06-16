@@ -44,6 +44,43 @@ void send(SocketClient *socket, vector<unsigned char> &buffer) {
     }
 }
 
+void receive(SocketClient *socket, Crypto *crypto, vector<unsigned char> &buffer) {
+    std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
+    unsigned char opCode;
+    unsigned int size;
+
+    try {
+        size = socket->receiveMessage(socket->getMasterFD(), msg.data());
+        buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
+
+        opCode = buffer.at(0);
+        buffer.erase(buffer.begin());
+        decrypt(crypto, SERVER_SECRET, buffer);
+
+        if(buffer.at(0) != opCode) {
+            cout << "Message tampered" << endl;
+            throw runtime_error("Message tampered");
+        }
+    } catch(const exception& e) {
+        throw;
+    }
+}
+
+void send(SocketClient *socket, Crypto *crypto, vector<unsigned char> &buffer) {
+    unsigned char opCode;
+    try {
+        opCode = buffer.at(0);
+
+        encrypt(crypto, SERVER_SECRET, buffer);
+        buffer.insert(buffer.begin(), opCode);
+
+        socket->sendMessage(socket->getMasterFD(), buffer.data(), buffer.size());
+        buffer.clear();
+    } catch(const exception& e) {
+        throw;
+    }
+}
+
 void setStdinEcho(bool enable = true) {
     struct termios tty;
     tcgetattr(STDIN_FILENO, &tty);
@@ -196,13 +233,11 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
 
     try {
         // Receive request
-        //TODO: decrypt function
         tempBufferLen = ctx.crypto->decryptMessage(msg.data(), msg.size(), tempBuffer.data());
 
         if(tempBuffer.at(0) != OP_REQUEST_TO_TALK) {
             errorMessage("Request to talk failed", buffer);
-            encrypt(ctx.crypto, SERVER_SECRET, buffer);
-            send(ctx.clientSocket, buffer);
+            send(ctx.clientSocket, ctx.crypto, buffer);
             throw runtime_error("Request to talk failed");
         }
 
@@ -215,7 +250,7 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
         cout << "Do you want to accept the request? (y/n):" << endl;
         do {
             getline(cin, input);
-            if(input.length() == 0){
+            if(input.length() == 0) {
                 cout << "Insert at least a character." << endl;
             } else if(input.compare("y") == 0) {
                 cout << "Request accepted" << endl;
@@ -225,6 +260,7 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
                 buffer.clear();
                 errorMessage("Request to talk refused", buffer);
                 encrypt(ctx.crypto, SERVER_SECRET, buffer);
+                buffer.insert(buffer.begin(), OP_ERROR);
                 send(ctx.clientSocket, buffer);
                 cout << "Request to talk refused" << endl;
                 return;
@@ -250,27 +286,13 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
         tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), ctx.prvKeyClient);
         append(tempBuffer, tempBufferLen, buffer);
 
-        encrypt(ctx.crypto, SERVER_SECRET, buffer);
-        buffer.insert(buffer.begin(), OP_REQUEST_TO_TALK);
-        send(ctx.clientSocket, buffer);
+        send(ctx.clientSocket, ctx.crypto, buffer);
 
         // Receive peer's public key
-        receive(ctx.clientSocket, buffer);
-        if(buffer.at(0) != OP_REQUEST_TO_TALK) {
-            errorMessage("Request to talk failed", buffer);
-            encrypt(ctx.crypto, SERVER_SECRET, buffer);
-            send(ctx.clientSocket, buffer);
-            throw runtime_error("Request to talk failed");
-        }
-
-        decrypt(ctx.crypto, SERVER_SECRET, buffer);
-        if(buffer.at(0) != OP_REQUEST_TO_TALK) {
-            errorMessage("Request to talk failed", buffer);
-            encrypt(ctx.crypto, SERVER_SECRET, buffer);
-            send(ctx.clientSocket, buffer);
-            throw runtime_error("Request to talk failed");
-        } else if(buffer.at(0) == OP_ERROR) {
-            //print error message
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) == OP_ERROR) {
+            buffer.erase(buffer.begin());
+            cout << extract(buffer) << endl;
             return;
         }
 
@@ -288,10 +310,8 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
         verify = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), peerPubKey);
         
         if(!verify) {
-            buffer.clear();
             errorMessage("Signature not verified", buffer);
-            encrypt(ctx.crypto, SERVER_SECRET, buffer);
-            send(ctx.clientSocket, buffer);
+            send(ctx.clientSocket, ctx.crypto, buffer);
             throw runtime_error("Signature not verified");
         }
 
@@ -300,16 +320,13 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
         ctx.crypto->insertKey(tempBuffer.data(), CLIENT_SECRET);
 
         buffer.clear();
-        buffer.push_back(OP_REQUEST_TO_TALK);
         append("Success", buffer);
         encrypt(ctx.crypto, CLIENT_SECRET, buffer);
-        encrypt(ctx.crypto, SERVER_SECRET, buffer);
         buffer.insert(buffer.begin(), OP_REQUEST_TO_TALK);
-        send(ctx.clientSocket, buffer);
+        send(ctx.clientSocket, ctx.crypto, buffer);
     } catch(const exception& e) {
         errorMessage("Request to talk failed", buffer);
-        encrypt(ctx.crypto, SERVER_SECRET, buffer);
-        send(ctx.clientSocket, buffer);
+        send(ctx.clientSocket, ctx.crypto, buffer);
         throw;
     }
 }
