@@ -6,6 +6,7 @@
 
 struct ClientContext {
     vector<string> onlineUsers;
+    EVP_PKEY *prvKeyClient;
     SocketClient *clientSocket;
     Crypto *crypto;
 
@@ -34,6 +35,28 @@ void receive(SocketClient *socket, vector<unsigned char> &buffer) {
 void send(SocketClient *socket, vector<unsigned char> &buffer) {
     socket->sendMessage(socket->getMasterFD(), buffer.data(), buffer.size());
     buffer.clear();
+}
+
+void encrypt(Crypto *crypto, unsigned int key, vector<unsigned char> &buffer) {
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int tempBufferLen;
+
+    crypto->setSessionKey(SERVER_SECRET);
+    tempBufferLen = crypto->encryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
+
+    buffer.clear();
+    buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+}
+
+void decrypt(Crypto *crypto, unsigned int key, vector<unsigned char> &buffer) {
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int tempBufferLen;
+
+    crypto->setSessionKey(SERVER_SECRET);
+    tempBufferLen = crypto->decryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
+
+    buffer.clear();
+    buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
 }
 
 void setStdinEcho(bool enable = true) {
@@ -166,4 +189,86 @@ void authentication(ClientContext ctx, string username, EVP_PKEY *prvKeyClient) 
     } catch(const exception& e) {
         throw;
     }
+}
+
+void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
+    array<unsigned char, NONCE_SIZE> nonce;
+    array<unsigned char, NONCE_SIZE> peerNonce;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    vector<unsigned char> buffer;
+    vector<unsigned char> signature;
+    unsigned int tempBufferLen = 0;
+    EVP_PKEY *keyDH = NULL;
+    string peerUsername;
+    string input;
+    bool accepted = false;
+    try {
+        // Receive request
+        //TODO: decrypt function
+        tempBufferLen = ctx.crypto->decryptMessage(msg.data(), msg.size(), tempBuffer.data());
+
+        if(tempBuffer.at(0) != OP_REQUEST_TO_TALK) {
+            errorMessage("Request to talk failed", buffer);
+            send(ctx.clientSocket, buffer);
+            throw runtime_error("Request to talk failed");
+        }
+
+        // Get peer username
+        buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+        buffer.erase(buffer.begin());
+        peerUsername = extract(buffer);
+        cout << peerUsername << " sent you a request to talk" << endl;
+
+        // Accept or refuse request
+        cout << "Do you want to accept the request? (y/n):" << endl;
+        do {
+            getline(cin, input);
+            if(input.length() == 0){
+                cout << "Insert at least a character." << endl;
+            } else if(input.compare("y") == 0) {
+                cout << "Request accepted" << endl;
+                accepted = true;
+                break;
+            } else if (input.compare("n") == 0) {
+                cout << "Request refused" << endl;
+                accepted = false;
+                break;
+            } else {
+                cout << "Insert a valid answer" << endl;
+            }       
+        } while (input.length() == 0);
+
+        if(accepted) {
+            extract(buffer, peerNonce);
+        } else {
+            buffer.clear();
+            errorMessage("Request to talk refused", buffer);
+            send(ctx.clientSocket, buffer);
+            cout << "Request to talk refused" << endl;
+            return;
+        }
+
+        // Send nonce and DH public key
+        ctx.crypto->generateNonce(nonce.data());
+        ctx.crypto->keyGeneration(keyDH);
+
+        buffer.clear();
+        buffer.push_back(OP_REQUEST_TO_TALK);
+
+        tempBufferLen = ctx.crypto->serializePublicKey(keyDH, tempBuffer.data());
+        append(tempBuffer, tempBufferLen, buffer);
+        append(nonce, NONCE_SIZE, buffer);
+
+        signature.insert(signature.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+        signature.insert(signature.end(), peerNonce.begin(), peerNonce.end());
+        tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), ctx.prvKeyClient);
+        append(tempBuffer, tempBufferLen, buffer);
+
+        encrypt(ctx.crypto, SERVER_SECRET, buffer);
+        send(ctx.clientSocket, buffer);
+
+    } catch(const exception& e) {
+        throw;
+    }
+    
 }

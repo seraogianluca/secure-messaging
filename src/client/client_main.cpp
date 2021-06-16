@@ -6,24 +6,25 @@ void insertCommand();
 
 int main(int argc, char *const argv[]) {
     ClientContext context;
-    EVP_PKEY *prvKeyClient;
+    vector<unsigned char> buffer;
+    fd_set fds;
+    int maxfd;
+    int option = -1;
+
 
     string input;
     string peer;
     string username;
     string password;
     string message;
-    unsigned char *buffer = NULL;
+    //unsigned char *buffer = NULL;
     vector<string> onlineUsers;
-    fd_set fds;
-    int maxfd;
-    int option = -1;
-
+   
     try {
-        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!buffer) throw runtime_error("Buffer not allocated.");
+        //buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
+        //if(!buffer) throw runtime_error("Buffer not allocated.");
 
-        context.crypto->readPrivateKey(prvKeyClient);
+        context.crypto->readPrivateKey(context.prvKeyClient);
 
         cout << "\n-------Authentication-------" << endl;
         authentication(context, "anto", prvKeyClient);
@@ -46,9 +47,11 @@ int main(int argc, char *const argv[]) {
                 cin.ignore();
             }
 
-            if(FD_ISSET(context.clientSocket->getMasterFD(), &fds)) option = 3;
-
-
+            if(FD_ISSET(context.clientSocket->getMasterFD(), &fds)) {
+                receive(context.clientSocket, buffer);
+                
+                if(buffer.at(0) == OP_REQUEST_TO_TALK) option = 3;
+            }
 
             switch(option) {
                 case 1:
@@ -61,6 +64,7 @@ int main(int argc, char *const argv[]) {
                     break;
                 case 3:
                     cout << "\n-------Received request to talk-------" << endl;
+                    receiveRequestToTalk(context, buffer);
                     break;
                 case 0:
                     cout << "Bye." << endl;
@@ -70,13 +74,13 @@ int main(int argc, char *const argv[]) {
             }
         }
     } catch (const exception &e) {
-        if(buffer != nullptr) delete[] buffer;
+        //if(buffer != nullptr) delete[] buffer;
         cout << "Exit due to an error:\n" << endl;
         cerr << e.what() << endl;
         return 0;
     }
 
-    delete[] buffer;
+    //delete[] buffer;
     return 0;
 }
 

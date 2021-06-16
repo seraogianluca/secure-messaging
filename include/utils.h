@@ -43,7 +43,7 @@ void append(unsigned char *content, unsigned int contentLen, std::vector<unsigne
 }
 */
 
-void append(string content, std::vector<unsigned char> &buffer) {
+void append(std::string content, std::vector<unsigned char> &buffer) {
     unsigned char sizeArray[2];
     uint16_t size = 0;
 
@@ -77,7 +77,22 @@ int extract(std::vector<unsigned char> &content, std::array<unsigned char, buffe
     return size;
 }
 
-void errorMessage(string errorMessage, vector<unsigned char> &buffer) {
+std::string extract(std::vector<unsigned char> &content) {
+    std::string buffer;
+    unsigned char sizeArray[2];
+    uint16_t size = 0;
+
+    std::copy_n(content.begin(), 2, sizeArray);
+    size = sizeArray[0] | uint16_t(sizeArray[1]) << 8;
+    content.erase(content.begin(), content.begin() + 2);
+
+    buffer = std::string(content.begin(), content.begin() + size);
+    content.erase(content.begin(), content.begin() + size);
+
+    return buffer;
+}
+
+void errorMessage(std::string errorMessage, vector<unsigned char> &buffer) {
     buffer.insert(buffer.end(), OP_ERROR);
     append(errorMessage, buffer);
 }
