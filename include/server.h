@@ -123,6 +123,8 @@ struct ServerContext {
     }
 };
 
+void sendOnlineUsersList(ServerContext &ctx, onlineUser user);
+
 void receive(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
     unsigned int size;
@@ -283,24 +285,31 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         ctx.onlineUsers.push_back(user);
 
         // Send Online Users List
+        sendOnlineUsersList(ctx, user);
 
-        buffer.clear();
+    } catch(const exception& e) {
+        throw;
+    }
+}
+
+void sendOnlineUsersList(ServerContext &ctx, onlineUser user) {
+    vector<unsigned char> buffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int tempBufferLen;
+    try {
         buffer.push_back(OP_LOGIN);
-        for(onlineUser user : ctx.onlineUsers) {
+        for(onlineUser user: ctx.onlineUsers) {
             append(user.username, buffer);
         }
-
         ctx.crypto->setSessionKey(user.key_pos);
-
         tempBufferLen = ctx.crypto->encryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
-        
         buffer.clear();
         buffer.push_back(OP_LOGIN);
         buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
 
-        send(ctx.serverSocket, sd, buffer);
-
-    } catch(const exception& e) {
+        send(ctx.serverSocket, user.sd, buffer);
+    }
+    catch(const std::exception& e) {
         throw;
     }
 }

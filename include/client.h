@@ -32,6 +32,8 @@ struct ClientContext {
     }
 };
 
+void receiveOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageReceived);
+
 void receive(SocketClient *socket, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
     unsigned int size;
@@ -210,7 +212,19 @@ void authentication(ClientContext &ctx, string username) {
         ctx.crypto->insertKey(tempBuffer.data(), SERVER_SECRET);
         ctx.crypto->setSessionKey(SERVER_SECRET);
 
-        tempBufferLen = ctx.crypto->decryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
+        receiveOnlineUsersList(ctx, buffer);
+    } catch(const exception& e) {
+        cout << "Error: " << e.what();
+        throw;
+    }
+}
+
+void receiveOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageReceived) {
+    vector<unsigned char> buffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int tempBufferLen;
+    try {
+        tempBufferLen = ctx.crypto->decryptMessage(messageReceived.data(), messageReceived.size(), tempBuffer.data());
 
         buffer.clear();
         buffer.insert(buffer.begin(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen-2);
@@ -218,13 +232,16 @@ void authentication(ClientContext &ctx, string username) {
 
         while(buffer.size() != 0) {
             string name = extract(buffer);
-            cout << "Name: " << name << endl;
             ctx.addOnlineUser(name);
         }
 
+        cout << "\nOnline Users: " << endl;
+        for (string user : ctx.onlineUsers) {
+            cout << user << endl;
+        }
+        
     } catch(const exception& e) {
-        cout << "Error: " << e.what();
-        throw;
+        cerr << e.what() << '\n';
     }
 }
 
