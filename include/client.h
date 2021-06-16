@@ -223,12 +223,17 @@ void authentication(ClientContext ctx, string username) {
         tempBufferLen = ctx.crypto->decryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
 
         buffer.clear();
-        buffer.insert(buffer.begin(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+        buffer.insert(buffer.begin(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen-2);
         buffer.erase(buffer.begin());
+
+        printBuffer("Buffer: ", buffer);
+
+        while(buffer.size() != 0) {
+            string name = extract(buffer);
+            cout << "Name: " << name << endl;
+            ctx.addOnlineUser(name);
+        }
         
-        string name = extract(buffer);
-        cout << "Name: " << name << endl;
-        ctx.addOnlineUser(name);
 
     } catch(const exception& e) {
         cout << "Error: " << e.what();
@@ -367,7 +372,6 @@ void sendRequestToTalk(ClientContext ctx, string usernameB){
     EVP_PKEY *keyDHB = NULL;
     EVP_PKEY *keyDHA = NULL;
     EVP_PKEY *pubKeyB = NULL;
-    string usernameB;
 
     try {
         // Get user to connect with
