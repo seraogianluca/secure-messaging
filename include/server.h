@@ -194,7 +194,7 @@ unsigned int readPassword(unsigned char* username, unsigned int usernameLen, uns
     return 0;
 }
 
-void authentication(ServerContext ctx, int sd, vector<unsigned char> startMessage) {
+void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessage) {
     vector<unsigned char> buffer;
     vector<unsigned char> signature;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
@@ -248,7 +248,6 @@ void authentication(ServerContext ctx, int sd, vector<unsigned char> startMessag
 
         // Sending M2
         send(ctx.serverSocket, sd, buffer);
-        cout << "M2 sent correctly" << endl;
 
         // Receiving M3
         receive(ctx.serverSocket, sd, buffer);
@@ -274,18 +273,14 @@ void authentication(ServerContext ctx, int sd, vector<unsigned char> startMessag
         if(!verification) {
             throw runtime_error("Signature not verified or message not fresh.");
         }
-
         cout << "Signature verified." << endl;
 
         // Generate secret
         ctx.crypto->secretDerivation(prvKeyDHServer, pubKeyDHClient, tempBuffer.data());
-        printBuffer("O' Secret derivat: ", tempBuffer, DIGEST_LEN);
         ctx.crypto->insertKey(tempBuffer.data(), sd);
 
         onlineUser user(username, sd);
         ctx.onlineUsers.push_back(user);
-
-        cout << "Created a new online user" << endl;
 
         // Send Online Users List
 
@@ -295,19 +290,13 @@ void authentication(ServerContext ctx, int sd, vector<unsigned char> startMessag
             append(user.username, buffer);
         }
 
-        printBuffer("Online users: ", buffer);
-
         ctx.crypto->setSessionKey(user.key_pos);
 
         tempBufferLen = ctx.crypto->encryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
-
-        printBuffer("Encrypted stuff: ", tempBuffer, tempBufferLen);
         
         buffer.clear();
         buffer.push_back(OP_LOGIN);
         buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
-
-        printBuffer("Online users encrypted: ", buffer);
 
         send(ctx.serverSocket, sd, buffer);
 
@@ -316,7 +305,7 @@ void authentication(ServerContext ctx, int sd, vector<unsigned char> startMessag
     }
 }
     
-void requestToTalk(ServerContext ctx, vector<unsigned char> msg, onlineUser sender){
+void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sender){
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
     array<unsigned char, NONCE_SIZE> nonce;
     vector<unsigned char> buffer;

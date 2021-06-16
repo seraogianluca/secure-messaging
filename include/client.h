@@ -119,7 +119,7 @@ string readFromStdout(string message) {
     return value;
 }
 
-void authentication(ClientContext ctx, string username) {
+void authentication(ClientContext &ctx, string username) {
     vector<unsigned char> buffer;
     vector<unsigned char> signature;
     array<unsigned char, NONCE_SIZE> nonceClient;
@@ -156,7 +156,6 @@ void authentication(ClientContext ctx, string username) {
             // TODO: 
             throw runtime_error("Certificate not valid.");
         }
-
         cout << "The certificate is valid." << endl;
 
         ctx.crypto->getPublicKeyFromCertificate(cert, pubKeyServer);
@@ -179,8 +178,6 @@ void authentication(ClientContext ctx, string username) {
 
         ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHServerLen, pubKeyDHServer);
 
-        cout << "Message M2 has been received correctly." << endl;
-
         // Send M3: 0, g^a mod p, ns, < 0, g^a mod b,  ns>
         buffer.clear();
         buffer.push_back(OP_LOGIN);
@@ -200,11 +197,8 @@ void authentication(ClientContext ctx, string username) {
 
         send(ctx.clientSocket, buffer);
 
-        cout << "M3 correctly sent." << endl;
-
         // Receive M4: 
         receive(ctx.clientSocket, buffer);
-        printBuffer("Online users encrypted: ", buffer);
         if (buffer.at(0) != OP_LOGIN) {
             // TODO: Handle Error!
             throw runtime_error("Authentication Failed");
@@ -213,11 +207,7 @@ void authentication(ClientContext ctx, string username) {
         cout << "Authentication succeeded" << endl;
         
         ctx.crypto->secretDerivation(prvKeyDHClient, pubKeyDHServer, tempBuffer.data());
-
-        printBuffer("O' Secret derivat: ", tempBuffer, DIGEST_LEN);
-
         ctx.crypto->insertKey(tempBuffer.data(), SERVER_SECRET);
-
         ctx.crypto->setSessionKey(SERVER_SECRET);
 
         tempBufferLen = ctx.crypto->decryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
@@ -226,14 +216,11 @@ void authentication(ClientContext ctx, string username) {
         buffer.insert(buffer.begin(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen-2);
         buffer.erase(buffer.begin());
 
-        printBuffer("Buffer: ", buffer);
-
         while(buffer.size() != 0) {
             string name = extract(buffer);
             cout << "Name: " << name << endl;
             ctx.addOnlineUser(name);
         }
-        
 
     } catch(const exception& e) {
         cout << "Error: " << e.what();
@@ -241,7 +228,7 @@ void authentication(ClientContext ctx, string username) {
     }
 }
 
-void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
+void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
     array<unsigned char, NONCE_SIZE> nonce;
     array<unsigned char, NONCE_SIZE> peerNonce;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
@@ -358,7 +345,7 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
     }
 }
 
-void sendRequestToTalk(ClientContext ctx){
+void sendRequestToTalk(ClientContext &ctx){
     array<unsigned char, NONCE_SIZE> nonce;
     array<unsigned char, NONCE_SIZE> peerNonce;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
