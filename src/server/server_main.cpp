@@ -37,7 +37,9 @@ int main(int argc, char* const argv[]) {
                             //Somebody disconnected , get his details and print 
                             ctx.serverSocket->disconnectHost(sd, i);
                             // Remove its chat from the active chats
-                            // TODO
+                            user = ctx.getUser(sd);
+                            ctx.deleteUser(user);
+                            ctx.deleteActiveChat(user);
                         } else {
                             int operationCode = messageReceived[0] - '0';
                             if (operationCode < 0 || operationCode > 4) {
@@ -69,6 +71,7 @@ int main(int argc, char* const argv[]) {
                                 cout << "\n----Online User List Request----" << endl;
                                 user = ctx.getUser(sd);
                                 receiveOnlineUsersRequest(ctx, user, messageReceived);
+                                cout << "Request handled" << endl;
                                 cout << "---------------------------------" << endl;
                             } else if (operationCode == 5) {
                                 cout << "\n----Error on a client----" << endl;
