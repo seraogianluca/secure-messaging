@@ -372,6 +372,7 @@ void sendRequestToTalk(ClientContext ctx){
     EVP_PKEY *keyDHB = NULL;
     EVP_PKEY *keyDHA = NULL;
     EVP_PKEY *pubKeyB = NULL;
+    string usernameB;
 
     try {
         // Get user to connect with
