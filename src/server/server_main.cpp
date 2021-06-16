@@ -69,6 +69,10 @@ int main(int argc, char* const argv[]) {
                                 cout << "\n----Online User List Request----" << endl;
                                 
                                 cout << "---------------------------------" << endl;
+                            } else if (operationCode == 5) {
+                                cout << "\n----Error on a client----" << endl;
+                                // printBuffer(messageReceived);
+                                cout << "---------------------------------" << endl;
                             }
                         }
                     }  

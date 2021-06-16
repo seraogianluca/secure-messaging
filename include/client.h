@@ -147,7 +147,6 @@ void authentication(ClientContext &ctx, string username) {
         // Receive M2: 0, cert, g^b mod p, ns, <0, g^b mod p, nc > pKs
         receive(ctx.clientSocket, buffer);
         if (buffer.at(0) != OP_LOGIN) {
-            // TODO: Handle Error!
             throw runtime_error("Opcode not valid");
         }
         buffer.erase(buffer.begin());
@@ -155,7 +154,6 @@ void authentication(ClientContext &ctx, string username) {
         ctx.crypto->deserializeCertificate(tempBufferLen, tempBuffer.data(), cert);
 
         if(!ctx.crypto->verifyCertificate(cert)) {
-            // TODO: 
             throw runtime_error("Certificate not valid.");
         }
         cout << "The certificate is valid." << endl;
@@ -172,7 +170,6 @@ void authentication(ClientContext &ctx, string username) {
 
         bool signatureVerification = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), pubKeyServer);
         if(!signatureVerification) {
-            // TODO: Send Message to other client
             throw runtime_error("Sign verification failed");
         }
 
@@ -202,8 +199,7 @@ void authentication(ClientContext &ctx, string username) {
         // Receive M4: 
         receive(ctx.clientSocket, buffer);
         if (buffer.at(0) != OP_LOGIN) {
-            // TODO: Handle Error!
-            throw runtime_error("Authentication Failed");
+            throw runtime_error("Authentication Failed: the server interrupted the protocol");
         }
         buffer.erase(buffer.begin());
         cout << "Authentication succeeded" << endl;
@@ -215,6 +211,9 @@ void authentication(ClientContext &ctx, string username) {
         receiveOnlineUsersList(ctx, buffer);
     } catch(const exception& e) {
         cout << "Error: " << e.what();
+        // Send error message to the server
+        errorMessage(e.what(), buffer);
+        send(ctx.clientSocket, buffer);
         throw;
     }
 }

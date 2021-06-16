@@ -288,6 +288,8 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         sendOnlineUsersList(ctx, user);
 
     } catch(const exception& e) {
+        errorMessage(e.what(), buffer);
+        send(ctx.serverSocket, sd, buffer);
         throw;
     }
 }
@@ -310,7 +312,7 @@ void sendOnlineUsersList(ServerContext &ctx, onlineUser user) {
         send(ctx.serverSocket, user.sd, buffer);
     }
     catch(const std::exception& e) {
-        throw;
+        throw runtime_error("Error sending the online users list");
     }
 }
     
