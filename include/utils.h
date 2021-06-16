@@ -104,7 +104,7 @@ void encrypt(Crypto *crypto, unsigned int key, std::vector<unsigned char> &buffe
     unsigned int tempBufferLen;
 
     try {
-        crypto->setSessionKey(SERVER_SECRET);
+        crypto->setSessionKey(key);
         tempBufferLen = crypto->encryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
 
         buffer.clear();
@@ -119,7 +119,7 @@ void decrypt(Crypto *crypto, unsigned int key, std::vector<unsigned char> &buffe
     unsigned int tempBufferLen;
 
     try {
-        crypto->setSessionKey(SERVER_SECRET);
+        crypto->setSessionKey(key);
         tempBufferLen = crypto->decryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
 
         buffer.clear();

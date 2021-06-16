@@ -257,7 +257,7 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
 
         // Accept or refuse request
         cout << "Do you want to accept the request? (y/n):" << endl;
-        do {
+        while(true) {
             getline(cin, input);
             if(input.length() == 0) {
                 cout << "Insert at least a character." << endl;
@@ -276,7 +276,7 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
             } else {
                 cout << "Insert a valid answer" << endl;
             }       
-        } while (input.length() == 0);
+        }
 
         // Send nonce and DH public key
         extract(buffer, peerNonce);
@@ -321,7 +321,8 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
         if(!verify) {
             errorMessage("Signature not verified", buffer);
             send(ctx.clientSocket, ctx.crypto, buffer);
-            throw runtime_error("Signature not verified");
+            cout<<"Signature not verified"<<endl;
+            return;
         }
 
         ctx.crypto->deserializePublicKey(keyBufferDH.data(), keyBufferDHLen, peerKeyDH);
@@ -334,8 +335,100 @@ void receiveRequestToTalk(ClientContext ctx, vector<unsigned char> msg) {
         buffer.insert(buffer.begin(), OP_REQUEST_TO_TALK);
         send(ctx.clientSocket, ctx.crypto, buffer);
     } catch(const exception& e) {
-        errorMessage("Request to talk failed", buffer);
-        send(ctx.clientSocket, ctx.crypto, buffer);
         throw;
     }
+}
+
+void sendRequestToTalk(ClientContext ctx, string usernameB){
+    array<unsigned char, NONCE_SIZE> nonce;
+    array<unsigned char, NONCE_SIZE> peerNonce;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> signedPart;
+    array<unsigned char, MAX_MESSAGE_SIZE> pubKeyDHBuffer;
+    vector<unsigned char> buffer;
+    vector<unsigned char> signature;
+    unsigned int tempBufferLen = 0;
+    unsigned int signedPartLen = 0;
+    unsigned int pubKeyDHLen = 0;
+    EVP_PKEY *keyDHB = NULL;
+    EVP_PKEY *keyDHA = NULL;
+    EVP_PKEY *pubKeyB = NULL;
+    string usernameB;
+
+    try {
+        // Get user to connect with
+        cout << "Who do you want to chat with?" << endl;
+        while(true) {
+            getline(cin, usernameB);
+            if(usernameB.length() == 0){
+                cout << "Insert at least a character." << endl;
+            } else if(ctx.userIsPresent(usernameB)) {
+                break;
+            } else {
+                cout << "Insert a valid username" << endl;
+            }       
+        }
+
+        // M1: 2||{2,usr_b, n_a}SA ->
+        buffer.push_back(OP_REQUEST_TO_TALK);
+        ctx.crypto->generateNonce(nonce.data());
+        append(usernameB, buffer);
+        append(nonce, NONCE_SIZE, buffer);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+
+        // <- M4: 2||{M3||PK_b} SA
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) == OP_ERROR) {
+            cout<<extract(buffer)<<endl;
+            return;
+        }
+        buffer.erase(buffer.begin());
+
+        pubKeyDHLen = extract(buffer, pubKeyDHBuffer);
+        ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHLen, keyDHB);
+
+        extract(buffer, peerNonce);
+        signedPartLen = extract(buffer, signedPart); //extraction of the signed part
+
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHLen);
+        signature.insert(signature.end(), nonce.begin(), nonce.end());
+
+        tempBufferLen = extract(buffer, tempBuffer);
+        ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHLen, pubKeyB);
+
+        bool signatureVerification = ctx.crypto->verifySignature(signedPart.data(), signedPartLen, signature.data(), signature.size(), pubKeyB);
+        if(!signatureVerification) {
+            errorMessage("Signed not verified", buffer);
+            send(ctx.clientSocket, ctx.crypto, buffer);
+            cout<<"Signed not verified"<<endl;
+            return;
+        }
+
+        // M5: 2||{2||g^a mod p||<g^a mod p || n_b>PK_a}SA ->
+        buffer.clear();
+        ctx.crypto->keyGeneration(keyDHA);
+        buffer.push_back(OP_REQUEST_TO_TALK);
+        pubKeyDHLen = ctx.crypto->serializePublicKey(keyDHA, pubKeyDHBuffer.data());
+        append(pubKeyDHBuffer, pubKeyDHLen, buffer);
+
+        signature.clear();
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHLen);
+        signature.insert(signature.end(), peerNonce.begin(), peerNonce.end());
+        signedPartLen = ctx.crypto->sign(signature.data(), signature.size(), signedPart.data(), ctx.prvKeyClient);
+        append(signedPart, signedPartLen, buffer);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+
+        // M7: <- 2||{{2||success}AB}
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) == OP_ERROR){
+            cout<<extract(buffer)<<endl;
+            return;
+        }
+        ctx.crypto->secretDerivation(keyDHA, keyDHB, pubKeyDHBuffer.data());
+        ctx.crypto->insertKey(pubKeyDHBuffer.data(), CLIENT_SECRET);
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        cout<<extract(buffer)<<endl;
+    } catch(const exception& e) {
+        throw;
+    }    
 }
