@@ -80,16 +80,16 @@ string readFromStdout(string message) {
     return value;
 }
 
-void authentication(ClientContext ctx, string username, EVP_PKEY *prvKeyClient) {
+void authentication(ClientContext ctx, string username) {
     vector<unsigned char> buffer;
     vector<unsigned char> signature;
     array<unsigned char, NONCE_SIZE> nonceClient;
     array<unsigned char, NONCE_SIZE> nonceServer;
     array<unsigned char, MAX_MESSAGE_SIZE> pubKeyDHBuffer;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
-    EVP_PKEY *pubKeyServer;
-    EVP_PKEY *prvKeyDHClient;
-    EVP_PKEY *pubKeyDHServer;
+    EVP_PKEY *pubKeyServer = NULL;
+    EVP_PKEY *prvKeyDHClient = NULL;
+    EVP_PKEY *pubKeyDHServer = NULL;
     X509 *cert;
     unsigned int tempBufferLen;
     unsigned int pubKeyDHServerLen;
@@ -118,6 +118,8 @@ void authentication(ClientContext ctx, string username, EVP_PKEY *prvKeyClient) 
             throw runtime_error("Certificate not valid.");
         }
 
+        cout << "The certificate is valid." << endl;
+
         ctx.crypto->getPublicKeyFromCertificate(cert, pubKeyServer);
 
         pubKeyDHServerLen = extract(buffer, pubKeyDHBuffer);
@@ -134,7 +136,11 @@ void authentication(ClientContext ctx, string username, EVP_PKEY *prvKeyClient) 
             throw runtime_error("Sign verification failed");
         }
 
+        cout << "The signature is correct." << endl;
+
         ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHServerLen, pubKeyDHServer);
+
+        cout << "Message M2 has been received correctly." << endl;
 
         // Send M3: 0, g^a mod p, ns, < 0, g^a mod b,  ns>
         buffer.clear();
@@ -147,16 +153,19 @@ void authentication(ClientContext ctx, string username, EVP_PKEY *prvKeyClient) 
         signature.clear();
         signature.push_back(OP_LOGIN);
         signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHClientLen);
-        signature.insert(signature.begin(), nonceServer.begin(), nonceServer.end());
-
-        tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), prvKeyClient);
+        signature.insert(signature.end(), nonceServer.begin(), nonceServer.end());
+        
+        tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), ctx.prvKeyClient);
         
         append(tempBuffer, tempBufferLen, buffer);
 
         send(ctx.clientSocket, buffer);
 
+        cout << "M3 correctly sent." << endl;
+
         // Receive M4: 
         receive(ctx.clientSocket, buffer);
+        printBuffer("Online users encrypted: ", buffer);
         if (buffer.at(0) != OP_LOGIN) {
             // TODO: Handle Error!
             throw runtime_error("Authentication Failed");
@@ -164,14 +173,26 @@ void authentication(ClientContext ctx, string username, EVP_PKEY *prvKeyClient) 
         buffer.erase(buffer.begin());
         cout << "Authentication succeeded" << endl;
         
-        ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHServerLen, pubKeyDHServer);
         ctx.crypto->secretDerivation(prvKeyDHClient, pubKeyDHServer, tempBuffer.data());
+
+        printBuffer("O' Secret derivat: ", tempBuffer, DIGEST_LEN);
+
         ctx.crypto->insertKey(tempBuffer.data(), SERVER_SECRET);
 
         ctx.crypto->setSessionKey(SERVER_SECRET);
+
         tempBufferLen = ctx.crypto->decryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
 
+        buffer.clear();
+        buffer.insert(buffer.begin(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+        buffer.erase(buffer.begin());
+        
+        string name = extract(buffer);
+        cout << "Name: " << name << endl;
+        ctx.addOnlineUser(name);
+
     } catch(const exception& e) {
+        cout << "Error: " << e.what();
         throw;
     }
 }

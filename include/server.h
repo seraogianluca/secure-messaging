@@ -4,14 +4,22 @@
 #include <iterator>
 #include <vector>
 #include <array>
-#include "crypto.h"
 #include "socket.h"
+#include "utils.h"
 
 
 struct onlineUser {
     string username;
     int sd;
     unsigned int key_pos;
+
+    onlineUser(){}
+
+    onlineUser(string usr, int _sd) {
+        username = usr;
+        sd = _sd;
+        key_pos = _sd;
+    }
 };
 
 struct activeChat {
@@ -19,13 +27,13 @@ struct activeChat {
     onlineUser b;
 };
 
-struct serverContext {
+struct ServerContext {
     vector<onlineUser> onlineUsers;
     vector<activeChat> activeChats;
     SocketServer *serverSocket;
     Crypto *crypto;
 
-    serverContext() {
+    ServerContext() {
         serverSocket = new SocketServer(SOCK_STREAM);
         crypto = new Crypto();
     }
@@ -96,16 +104,16 @@ struct serverContext {
     }
 };
 
-void receive(SocketServer socket, int sd, vector<unsigned char> &buffer) {
+void receive(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
     unsigned int size;
 
-    size = socket.receiveMessage(sd, msg.data());
+    size = socket->receiveMessage(sd, msg.data());
     buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
 }
 
-void send(SocketServer socket, int sd, vector<unsigned char> &buffer) {
-    socket.sendMessage(sd, buffer.data(), buffer.size());
+void send(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
+    socket->sendMessage(sd, buffer.data(), buffer.size());
     buffer.clear();
 }
 
@@ -131,4 +139,128 @@ unsigned int readPassword(unsigned char* username, unsigned int usernameLen, uns
         }
     }
     return 0;
+}
+
+void authentication(ServerContext ctx, int sd, vector<unsigned char> startMessage) {
+    vector<unsigned char> buffer;
+    vector<unsigned char> signature;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> pubKeyDHBuffer;
+    array<unsigned char, NONCE_SIZE> nonceServer;
+    array<unsigned char, NONCE_SIZE> nonceClient;
+    unsigned int tempBufferLen;
+    unsigned int pubKeyDHBufferLen;
+    EVP_PKEY *pubKeyClient = NULL;
+    EVP_PKEY *prvKeyServer = NULL;
+    EVP_PKEY *prvKeyDHServer = NULL;
+    EVP_PKEY *pubKeyDHClient = NULL;
+    X509 *cert;
+    try {
+
+        // Receive M1
+        ctx.crypto->generateNonce(nonceServer.data());
+        
+        if(startMessage[0] != OP_LOGIN) {
+            throw runtime_error("Opcode not valid!");
+        }
+        startMessage.erase(startMessage.begin());
+
+        // Extract username
+        string username = extract(startMessage);
+        // Extract nc
+        extract(startMessage, nonceClient);
+
+        // Building M2
+        buffer.push_back(OP_LOGIN);
+
+        // Add certificate buffer to message
+        ctx.crypto->readPrivateKey(prvKeyServer);
+        ctx.crypto->loadCertificate(cert, "server_cert");
+        tempBufferLen = ctx.crypto->serializeCertificate(cert, tempBuffer.data());
+        append(tempBuffer, tempBufferLen, buffer); 
+
+        // Add DH public key to message
+        ctx.crypto->keyGeneration(prvKeyDHServer);
+        pubKeyDHBufferLen = ctx.crypto->serializePublicKey(prvKeyDHServer, pubKeyDHBuffer.data());
+        append(pubKeyDHBuffer, pubKeyDHBufferLen, buffer);
+
+        append(nonceServer, NONCE_SIZE, buffer);
+
+        // Add digital signature
+        signature.push_back(OP_LOGIN);
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.data() + pubKeyDHBufferLen);
+        signature.insert(signature.end(), nonceClient.begin(), nonceClient.end());
+        tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), prvKeyServer);
+        append(tempBuffer, tempBufferLen, buffer);
+
+        // Sending M2
+        send(ctx.serverSocket, sd, buffer);
+        cout << "M2 sent correctly" << endl;
+
+        // Receiving M3
+        receive(ctx.serverSocket, sd, buffer);
+        if(buffer[0] != OP_LOGIN) {
+            throw runtime_error("Opcode not valid");
+        }
+        buffer.erase(buffer.begin());
+        pubKeyDHBufferLen = extract(buffer, pubKeyDHBuffer);
+        ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHBufferLen, pubKeyDHClient);
+
+        // Verify Signature and nonce
+        tempBufferLen = extract(buffer, tempBuffer);
+        
+        signature.clear();
+        signature.push_back(OP_LOGIN);
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHBufferLen);
+        signature.insert(signature.end(), nonceServer.begin(), nonceServer.end());
+
+        ctx.crypto->readPublicKey(username, pubKeyClient);
+
+        bool verification = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), pubKeyClient);
+
+        // TODO: rimettere il !
+        if(verification) {
+            throw runtime_error("Signature not verified or message not fresh.");
+        }
+
+        cout << "Signature verified." << endl;
+
+        // Generate secret
+        ctx.crypto->secretDerivation(prvKeyDHServer, pubKeyDHClient, tempBuffer.data());
+        printBuffer("O' Secret derivat: ", tempBuffer, DIGEST_LEN);
+        ctx.crypto->insertKey(tempBuffer.data(), sd);
+
+        onlineUser user(username, sd);
+        ctx.onlineUsers.push_back(user);
+
+        cout << "Created a new online user" << endl;
+
+        // Send Online Users List
+
+        buffer.clear();
+        buffer.push_back(OP_LOGIN);
+        for(onlineUser user : ctx.onlineUsers) {
+            append(user.username, buffer);
+        }
+
+        printBuffer("Online users: ", buffer);
+
+        ctx.crypto->setSessionKey(user.key_pos);
+
+        tempBufferLen = ctx.crypto->encryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
+
+        printBuffer("Encrypted stuff: ", tempBuffer, tempBufferLen);
+        
+        buffer.clear();
+        buffer.push_back(OP_LOGIN);
+        buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+
+        printBuffer("Online users encrypted: ", buffer);
+
+        send(ctx.serverSocket, sd, buffer);
+
+    } catch(const exception& e) {
+        throw;
+    }
+    
 }

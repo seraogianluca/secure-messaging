@@ -17,6 +17,8 @@ struct session {
     unsigned char iv[IV_SIZE];
     uint16_t counter;
     
+    session(){}
+
     session(unsigned char *sk){
         session_key = new (nothrow) unsigned char[DIGEST_LEN];
         if(!session_key){
@@ -69,6 +71,10 @@ class Crypto {
         void buildParameters(EVP_PKEY *&dh_params);
         
     public:
+
+        Crypto() {
+            sessions.resize(MAX_CLIENTS);
+        }
 
         void insertKey(unsigned char *key, unsigned int pos);
         void removeKey(unsigned int pos);

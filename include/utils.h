@@ -5,6 +5,17 @@
 #include "symbols.h"
 #include "crypto.h"
 
+void printBuffer(string message, std::vector<unsigned char> buffer) {
+    cout << message << endl;
+    BIO_dump_fp(stdout, (const char*)buffer.data(), buffer.size());
+}
+
+template<size_t contentSize>
+void printBuffer(string message, std::array<unsigned char, contentSize> content, unsigned int contentLen) {
+    cout << message << endl;
+    BIO_dump_fp(stdout, (const char*)content.data(), contentLen);
+}
+
 void printBuffer(std::vector<unsigned char> buffer) {
     BIO_dump_fp(stdout, (const char*)buffer.data(), buffer.size());
 }

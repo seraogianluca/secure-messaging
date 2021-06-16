@@ -27,7 +27,11 @@ int main(int argc, char *const argv[]) {
         context.crypto->readPrivateKey(context.prvKeyClient);
 
         cout << "\n-------Authentication-------" << endl;
-        authentication(context, "anto", prvKeyClient);
+        context.clientSocket->makeConnection();
+        receive(context.clientSocket, buffer);
+        cout << "Connection confirmed: " << buffer.data() << endl;
+        buffer.clear();
+        authentication(context, "anto");
         cout << "-----------------------------" << endl << endl;
 
         while (true) {
