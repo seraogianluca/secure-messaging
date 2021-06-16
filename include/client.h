@@ -22,6 +22,15 @@ struct ClientContext {
     void clearOnlineUsers() {
         onlineUsers.clear();
     }
+
+    bool userIsPresent(string username){
+        for(string user : onlineUsers){
+            if(user.compare(username) == 0){
+                return true;
+            }
+        }
+        return false;
+    }
 };
 
 void receive(SocketClient *socket, vector<unsigned char> &buffer) {
