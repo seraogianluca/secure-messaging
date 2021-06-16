@@ -127,13 +127,21 @@ void receive(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
     unsigned int size;
 
-    size = socket->receiveMessage(sd, msg.data());
-    buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
+    try {
+        size = socket->receiveMessage(sd, msg.data());
+        buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
+    } catch(const exception& e) {
+        throw;
+    }
 }
 
 void send(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
-    socket->sendMessage(sd, buffer.data(), buffer.size());
-    buffer.clear();
+    try {
+        socket->sendMessage(sd, buffer.data(), buffer.size());
+        buffer.clear();
+    } catch(const exception& e) {
+        throw;
+    }
 }
 
 void receive(SocketServer *socket, Crypto *crypto, onlineUser sender, vector<unsigned char> &buffer) {
@@ -166,32 +174,12 @@ void send(SocketServer *socket, Crypto *crypto, onlineUser receiver, vector<unsi
 
 void forward(ServerContext ctx, onlineUser sender, onlineUser receiver){
     vector<unsigned char> buffer;
-    receive(ctx.serverSocket, ctx.crypto, sender, buffer);
-    send(ctx.serverSocket, ctx.crypto, receiver, buffer);
-}
-
-// Utility
-unsigned int readPassword(unsigned char* username, unsigned int usernameLen, unsigned char* password) {
-    ifstream file("./resources/credentials.txt");
-    string line;
-    string delimiter = " ";
-    string pwd;
-    string usn;
-    const char* usernameChar = (const char*) username;
-    
-    while (getline(file, line)) {
-        usn = line.substr(0, line.find(delimiter));
-        if(usn.compare(usernameChar) == 0) {
-            pwd = line.substr(line.find(delimiter) + 1);
-            for (int i = 0; i < pwd.length()/2; i++) {
-                string substr = pwd.substr(i*2, 2);
-                unsigned char v = stoi(substr, 0, 16);
-                password[i] = v;
-            }
-            return pwd.length()/2;
-        }
+    try {
+        receive(ctx.serverSocket, ctx.crypto, sender, buffer);
+        send(ctx.serverSocket, ctx.crypto, receiver, buffer);
+    } catch(const std::exception& e) {
+        throw;
     }
-    return 0;
 }
 
 void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessage) {
@@ -326,11 +314,16 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
         }
         msg.erase(msg.begin());
         usernameB = extract(msg);
+
+        cout << sender.username << " wants to chat with " << usernameB << endl;
+
         if(ctx.isUserChatting(usernameB)){
+            cout << usernameB << " is busy" << endl;
             errorMessage("User is busy", buffer);
             send(ctx.serverSocket, ctx.crypto, sender, buffer);
             return;
         }
+
         receiver = ctx.getUser(usernameB);
         extract(msg, nonce);
 
@@ -343,7 +336,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
         // Receive M3 FROM B
         receive(ctx.serverSocket, ctx.crypto, receiver, buffer);
         if(buffer.at(0) == OP_ERROR){
-            cout<<"Request to talk refused"<<endl;
+            cout << "Request to talk refused" << endl;
             buffer.erase(buffer.begin());
             send(ctx.serverSocket, ctx.crypto, receiver, buffer);
             return;
@@ -357,14 +350,13 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
         ctx.crypto->readPublicKey(usernameB, pubKeyB);
         tempBufferLen = ctx.crypto->serializePublicKey(pubKeyB, tempBuffer.data());
         append(tempBuffer, tempBufferLen, buffer);
-        printBuffer(buffer);
         send(ctx.serverSocket, ctx.crypto, sender, buffer);
 
         // Receive M5 FROM A
         receive(ctx.serverSocket, ctx.crypto, sender, buffer);
-        if(buffer.at(0) != OP_ERROR){
+        if(buffer.at(0) == OP_ERROR){
+            cout << "Error in request to talk" << endl;
             errorMessage("Error in request to talk", buffer);
-            cout<<"Error in request to talk"<<endl;
             send(ctx.serverSocket, ctx.crypto, receiver, buffer);
             errorMessage("Error in request to talk", buffer);
             send(ctx.serverSocket, ctx.crypto, receiver, buffer);
@@ -383,6 +375,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
             send(ctx.serverSocket, ctx.crypto, sender, buffer);
             activeChat a(sender, receiver);
             ctx.activeChats.push_back(a);
+            cout << "Request to talk succeeded" << endl;
         } else {
             send(ctx.serverSocket, ctx.crypto, sender, buffer);
             cout<<"Error during the finalizing of the request to talk"<<endl;
