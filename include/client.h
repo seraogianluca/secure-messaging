@@ -308,9 +308,7 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
                 cout << "Request refused" << endl;
                 buffer.clear();
                 errorMessage("Request to talk refused", buffer);
-                encrypt(ctx.crypto, SERVER_SECRET, buffer);
-                buffer.insert(buffer.begin(), OP_ERROR);
-                send(ctx.clientSocket, buffer);
+                send(ctx.clientSocket, ctx.crypto, buffer);
                 cout << "Request to talk refused" << endl;
                 return;
             } else {
@@ -334,7 +332,6 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
         signature.insert(signature.end(), peerNonce.begin(), peerNonce.end());
         tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), ctx.prvKeyClient);
         append(tempBuffer, tempBufferLen, buffer);
-        printBuffer(buffer);
         send(ctx.clientSocket, ctx.crypto, buffer);
 
         // Receive peer's public key
@@ -347,15 +344,16 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
 
         buffer.erase(buffer.begin());
         keyBufferDHLen = extract(buffer, keyBufferDH);
+        ctx.crypto->deserializePublicKey(keyBufferDH.data(), keyBufferDHLen, peerKeyDH);
+        
         signature.clear();
         signature.insert(signature.end(), keyBufferDH.begin(), keyBufferDH.begin() + keyBufferDHLen);
         signature.insert(signature.end(), nonce.begin(), nonce.end());
+        
+        tempBufferLen = extract(buffer, tempBuffer);  
 
-        // Extract signed content
-        tempBufferLen = extract(buffer, tempBuffer);
-        // Extract public key and verify sign
         keyBufferLen = extract(buffer, keyBuffer);
-        ctx.crypto->deserializePublicKey(keyBuffer.data(), keyBufferLen, peerPubKey);        
+        ctx.crypto->deserializePublicKey(keyBuffer.data(), keyBufferLen, peerPubKey);     
         verify = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), peerPubKey);
         
         if(!verify) {
@@ -365,7 +363,6 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
             return;
         }
 
-        ctx.crypto->deserializePublicKey(keyBufferDH.data(), keyBufferDHLen, peerKeyDH);
         ctx.crypto->secretDerivation(keyDH, peerKeyDH, tempBuffer.data());
         ctx.crypto->insertKey(tempBuffer.data(), CLIENT_SECRET);
 
@@ -374,6 +371,7 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
         encrypt(ctx.crypto, CLIENT_SECRET, buffer);
         buffer.insert(buffer.begin(), OP_REQUEST_TO_TALK);
         send(ctx.clientSocket, ctx.crypto, buffer);
+        cout << "Request to talk: Success" << endl;
     } catch(const exception& e) {
         throw;
     }
@@ -418,11 +416,12 @@ void sendRequestToTalk(ClientContext &ctx){
 
         // <- M4: 2||{M3||PK_b} SA
         receive(ctx.clientSocket, ctx.crypto, buffer);
-        printBuffer(buffer);
         if(buffer.at(0) == OP_ERROR) {
-            cout<<extract(buffer)<<endl;
+            buffer.erase(buffer.begin());
+            cout << extract(buffer) << endl;
             return;
         }
+
         buffer.erase(buffer.begin());
         pubKeyDHLen = extract(buffer, pubKeyDHBuffer);
         ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHLen, keyDHB);
@@ -437,12 +436,12 @@ void sendRequestToTalk(ClientContext &ctx){
 
         bool signatureVerification = ctx.crypto->verifySignature(signedPart.data(), signedPartLen, signature.data(), signature.size(), pubKeyB);
         if(!signatureVerification) {
-            errorMessage("Signed not verified", buffer);
+            errorMessage("Signature not verified", buffer);
             send(ctx.clientSocket, ctx.crypto, buffer);
-            cout<<"Signed not verified"<<endl;
+            cout << "Signature not verified" << endl;
             return;
         }
-        cout<<"Firma verificata oficial"<<endl;
+
         // M5: 2||{2||g^a mod p||<g^a mod p || n_b>PK_a}SA ->
         buffer.clear();
         ctx.crypto->keyGeneration(keyDHA);
@@ -457,16 +456,19 @@ void sendRequestToTalk(ClientContext &ctx){
         append(signedPart, signedPartLen, buffer);
         send(ctx.clientSocket, ctx.crypto, buffer);
 
-        // M7: <- 2||{{2||success}AB}
+        // M7: <- 2||{2{success}AB}
         receive(ctx.clientSocket, ctx.crypto, buffer);
         if(buffer.at(0) == OP_ERROR){
-            cout<<extract(buffer)<<endl;
+            buffer.erase(buffer.begin());
+            cout << extract(buffer) << endl;
             return;
         }
+
+        buffer.erase(buffer.begin());
         ctx.crypto->secretDerivation(keyDHA, keyDHB, pubKeyDHBuffer.data());
         ctx.crypto->insertKey(pubKeyDHBuffer.data(), CLIENT_SECRET);
         decrypt(ctx.crypto, CLIENT_SECRET, buffer);
-        cout<<extract(buffer)<<endl;
+        cout << "Request to talk: " << extract(buffer) << endl;
     } catch(const exception& e) {
         throw;
     }    
