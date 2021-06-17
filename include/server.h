@@ -407,6 +407,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
 
 void chat(ServerContext &ctx, vector<unsigned char> msg, onlineUser sender){
     onlineUser receiver = ctx.getReceiver(sender);
-    printBuffer(msg);
+    msg.erase(msg.begin());
+    decrypt(ctx.crypto, sender.key_pos, msg);
     send(ctx.serverSocket, ctx.crypto, receiver, msg);
 }

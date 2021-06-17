@@ -484,19 +484,24 @@ void chatA(ClientContext &ctx, string sender, string receiver){
     while(true){
         message = readFromStdout(sender+" : ");
         if(message.compare("!deh") == 0){
+            append(message, buffer);
+            encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+            buffer.insert(buffer.begin(), OP_ERROR);
+            send(ctx.clientSocket, ctx.crypto, buffer);
             return;
         }
-        buffer.insert(buffer.end(), message.begin(), message.end());
+        append(message, buffer);
         encrypt(ctx.crypto, CLIENT_SECRET, buffer);
         buffer.insert(buffer.begin(), OP_MESSAGE);
         send(ctx.clientSocket, ctx.crypto, buffer);
 
         receive(ctx.clientSocket, ctx.crypto, buffer);
         if(buffer.at(0) != OP_MESSAGE){
-            break;
+            cout<<"Chat closed"<<endl;
+            return;
         }
-        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
         buffer.erase(buffer.begin());
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
         cout << receiver +": " << extract(buffer) << endl;
     }
 }
@@ -507,20 +512,23 @@ void chatB(ClientContext &ctx, string sender, string receiver){
     while(true){
         receive(ctx.clientSocket, ctx.crypto, buffer);
         if(buffer.at(0) != OP_MESSAGE){
-            break;
+            cout<<"Chat closed"<<endl;
+            return;
         }
-        printBuffer(buffer);
-        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
-        cout<<"dopo decrypt"<<endl;
-        printBuffer(buffer);
         buffer.erase(buffer.begin());
-        cout << receiver +": " << extract(buffer) << endl;
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        cout << receiver << ": " << extract(buffer) << endl;
 
         message = readFromStdout(sender+" : ");
         if(message.compare("!deh") == 0){
+            append(message, buffer);
+            encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+            buffer.insert(buffer.begin(), OP_ERROR);
+            send(ctx.clientSocket, ctx.crypto, buffer);
             return;
         }
-        buffer.insert(buffer.end(), message.begin(), message.end());
+        buffer.clear();
+        append(message, buffer);
         encrypt(ctx.crypto, CLIENT_SECRET, buffer);
         buffer.insert(buffer.begin(), OP_MESSAGE);
         send(ctx.clientSocket, ctx.crypto, buffer);
