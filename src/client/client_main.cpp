@@ -7,7 +7,6 @@ void insertCommand();
 int main(int argc, char *const argv[]) {
     ClientContext context;
     vector<unsigned char> buffer;
-    string peer;
     string username;
     string password;
     fd_set fds;
