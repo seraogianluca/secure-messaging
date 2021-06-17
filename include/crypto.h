@@ -67,11 +67,15 @@ class Crypto {
     private:
         vector<session> sessions;
         unsigned int currentSession = 0;
+
         // Diffie-Hellman
         void buildParameters(EVP_PKEY *&dh_params);
-        
-    public:
+        // Hash
+        void computeHash(unsigned char *msg, unsigned int msg_size, unsigned char *digest);
+        // Certificates
+        void loadCRL(X509_CRL*& crl);
 
+    public:
         Crypto() {
             sessions.resize(MAX_CLIENTS);
         }
@@ -93,19 +97,12 @@ class Crypto {
         void loadCertificate(X509*& cert, string path);
         int serializeCertificate(X509* cert, unsigned char* cert_buf);
         void deserializeCertificate(int cert_len,unsigned char* cert_buff, X509*& buff);
-        void loadCRL(X509_CRL*& crl);
         bool verifyCertificate(X509* cert_to_verify);
 
         // Public Key handling
         int serializePublicKey(EVP_PKEY *pub_key, unsigned char *pubkey_buf);
         void deserializePublicKey(unsigned char *pubkey_buf, unsigned int pubkey_size, EVP_PKEY *&pubkey);
-        int publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *pubkey);
-        int publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *prvkey);
         void getPublicKeyFromCertificate(X509 *cert, EVP_PKEY *&pubkey);
-        
-        // Hash
-        //TODO: may be private
-        void computeHash(unsigned char *msg, unsigned int msg_size, unsigned char *digest);
 
         // Diffie-Hellmann
         void keyGeneration(EVP_PKEY *&my_prvkey);

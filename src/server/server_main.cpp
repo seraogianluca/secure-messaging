@@ -1,10 +1,9 @@
 #include "include/server.h"
 
 int main(int argc, char* const argv[]) {
-    vector<onlineUser> onlineUsers;
-    vector<activeChat> activeChats;
     ServerContext ctx;
-
+    vector<unsigned char> messageReceived;
+    OnlineUser user;
 
     while(true) {
         try {
@@ -19,27 +18,21 @@ int main(int argc, char* const argv[]) {
                     if (ctx.serverSocket->isFDSet(sd)) {
                         //Check if it was for closing , and also read the 
                         //incoming message                         
-                        unsigned int message_len;  
-                        vector<unsigned char> messageReceived;
-                        messageReceived.reserve(MAX_MESSAGE_SIZE);
-                        unsigned char *messageReceivedBuffer = new unsigned char[MAX_MESSAGE_SIZE];
 
-                        onlineUser user = onlineUser();
-                        onlineUser receiver = onlineUser();
+                        receive(ctx.serverSocket, sd, messageReceived);
+                        cout << "Message received length: " << messageReceived.size() << endl;
 
-                        message_len = ctx.serverSocket->receiveMessage(sd, messageReceivedBuffer);
-                        messageReceived.insert(messageReceived.end(), messageReceivedBuffer, messageReceivedBuffer + message_len);
-                        delete[] messageReceivedBuffer;
-                        
-                        cout << "Message received length: " << message_len << endl;
-
-                        if (message_len == 0)  { 
-                            //Somebody disconnected , get his details and print 
-                            ctx.serverSocket->disconnectHost(sd, i);
-                            // Remove its chat from the active chats
-                            user = ctx.getUser(sd);
-                            ctx.deleteUser(user);
-                            ctx.deleteActiveChat(user);
+                        if (messageReceived.size() == 0)  {
+                            try {
+                                //Somebody disconnected , get his details and print 
+                                ctx.serverSocket->disconnectHost(sd, i);
+                                // Remove its chat from the active chats                        
+                                user = ctx.getUser(sd);
+                                ctx.deleteUser(user);
+                                ctx.deleteActiveChat(user);
+                            } catch(...) {
+                                cerr << "Something bad occurs at client on socket " << sd << endl;
+                            }
                         } else {
                             int operationCode = messageReceived[0] - '0';
                             if (operationCode < 0 || operationCode > 4) {
@@ -51,16 +44,16 @@ int main(int argc, char* const argv[]) {
 
                             if (operationCode == 0) {
                                 // Login
-                                cout << "\n-------Authentication-------" << endl;
+                                cout << endl << "-------Authentication-------" << endl;
                                 authentication(ctx, sd, messageReceived);
                                 cout << "-----------------------------" << endl;
                             } else if (operationCode == 1) {
-                                cout << "-------Starting close connection--------" << endl;
-                                // TODO: 
-                                cout << "--------Connection closed------------" << endl;
+                                cout << endl << "-------Close connection--------" << endl;
+                                logout(ctx, sd, i);
+                                cout << "------------------------------" << endl;
                             } else if (operationCode == 2) {
                                 // Request to talk
-                                cout << "\n-------Request to Talk-------" << endl;
+                                cout << endl << "-------Request to Talk-------" << endl;
                                 user = ctx.getUser(sd);
                                 requestToTalk(ctx, messageReceived, user);
                                 cout << "------------------------------" << endl;
@@ -68,7 +61,7 @@ int main(int argc, char* const argv[]) {
                                 //Message Forwarding
                                 // TODO:
                             } else if (operationCode == 4) {
-                                cout << "\n----Online User List Request----" << endl;
+                                cout << endl << "----Online User List Request----" << endl;
                                 user = ctx.getUser(sd);
                                 receiveOnlineUsersRequest(ctx, user, messageReceived);
                                 cout << "Request handled" << endl;
@@ -80,6 +73,8 @@ int main(int argc, char* const argv[]) {
                             }
                         }
                     }  
+
+                    messageReceived.clear();
                 }
             }
         } catch(const exception& e) { cerr << e.what() << endl; }

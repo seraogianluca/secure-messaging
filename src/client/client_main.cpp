@@ -7,17 +7,11 @@ void insertCommand();
 int main(int argc, char *const argv[]) {
     ClientContext context;
     vector<unsigned char> buffer;
+    string username;
+    string password;
     fd_set fds;
     int maxfd;
     int option = -1;
-
-
-    string input;
-    string peer;
-    string username;
-    string password;
-    string message;
-    vector<string> onlineUsers;
    
     try {
         cout << "\n-------Authentication-------" << endl;
@@ -52,7 +46,12 @@ int main(int argc, char *const argv[]) {
             if(FD_ISSET(context.clientSocket->getMasterFD(), &fds)) {
                 receive(context.clientSocket, buffer);
                 
-                if(buffer.at(0) == OP_REQUEST_TO_TALK) option = 3;
+                if(buffer.at(0) == OP_REQUEST_TO_TALK) {
+                    cout << "\n-------Received request to talk-------" << endl;
+                    receiveRequestToTalk(context, buffer);
+                    buffer.clear();
+                    cout << "---------------------------------------" << endl;
+                }
             }
 
             switch(option) {
@@ -66,13 +65,12 @@ int main(int argc, char *const argv[]) {
                     sendRequestToTalk(context);
                     cout << "---------------------------------------" << endl;
                     break;
-                case 3:
-                    cout << "\n-------Received request to talk-------" << endl;
-                    receiveRequestToTalk(context, buffer);
-                    cout << "---------------------------------------" << endl;
-                    break;
                 case 0:
                     cout << "Bye." << endl;
+                    buffer.clear();
+                    buffer.insert(buffer.begin(), OP_LOGOUT);
+                    append("logout", buffer);
+                    send(context.clientSocket, context.crypto, buffer);
                     return 0;
                 default:
                     cout << "Insert a valid command." << endl;

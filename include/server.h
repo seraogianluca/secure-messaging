@@ -5,33 +5,33 @@
 #include "utils.h"
 
 
-struct onlineUser {
+struct OnlineUser {
     string username;
     int sd;
     unsigned int key_pos;
 
-    onlineUser(){}
+    OnlineUser(){}
 
-    onlineUser(string usr, int _sd) {
+    OnlineUser(string usr, int _sd) {
         username = usr;
         sd = _sd;
         key_pos = _sd;
     }
 };
 
-struct activeChat {
-    onlineUser a;
-    onlineUser b;
+struct ActiveChat {
+    OnlineUser a;
+    OnlineUser b;
 
-    activeChat(onlineUser an, onlineUser bn){
+    ActiveChat(OnlineUser an, OnlineUser bn){
         a = an;
         b = bn;
     }
 };
 
 struct ServerContext {
-    vector<onlineUser> onlineUsers;
-    vector<activeChat> activeChats;
+    vector<OnlineUser> onlineUsers;
+    vector<ActiveChat> activeChats;
     SocketServer *serverSocket;
     Crypto *crypto;
 
@@ -40,11 +40,11 @@ struct ServerContext {
         crypto = new Crypto();
     }
 
-    void deleteUser(onlineUser user) {
+    void deleteUser(OnlineUser user) {
         bool found = false;
         int i = 0;
 
-        for (onlineUser usr : onlineUsers) {
+        for (OnlineUser usr : onlineUsers) {
             if (usr.username.compare(user.username) == 0){
                 found = true;
                 break;
@@ -60,10 +60,10 @@ struct ServerContext {
         throw runtime_error("User not found");
     }
 
-    void deleteActiveChat(onlineUser user) {
+    void deleteActiveChat(OnlineUser user) {
         int i = 0;
         bool found = false;
-        for (activeChat chat : activeChats) {
+        for (ActiveChat chat : activeChats) {
             if(chat.a.username.compare(user.username) == 0 || (chat.b.username.compare(user.username) == 0)) {
                 found = true;
                 break;
@@ -76,11 +76,11 @@ struct ServerContext {
             return;
         }
 
-        throw runtime_error("Chat not found.");
+        throw runtime_error("User was not chatting");
     }
 
     bool isUserChatting(string username){
-        for(activeChat chat: activeChats) {
+        for(ActiveChat chat: activeChats) {
             if(chat.a.username.compare(username) == 0 || chat.b.username.compare(username) == 0){
                 return true;
             }
@@ -88,27 +88,27 @@ struct ServerContext {
         return false;
     }
 
-    onlineUser getUser(string username){
-        for (onlineUser user : onlineUsers) {
+    OnlineUser getUser(string username){
+        for (OnlineUser user : onlineUsers) {
             if(username.compare(user.username) == 0) {
                 return user;
             }
         }
-        throw runtime_error("The user is not online");
+        throw runtime_error("User not authenticated");
     }
 
-    onlineUser getUser(int sd){
-        for (onlineUser user : onlineUsers) {
+    OnlineUser getUser(int sd){
+        for (OnlineUser user : onlineUsers) {
             if(user.sd == sd) {
                 return user;
             }
         }
-        throw runtime_error("The user is not online");
+        throw runtime_error("User not authenticated");
     }
 
-    onlineUser getReceiver(onlineUser sender) {
-        onlineUser receiver;
-        for (activeChat chat : activeChats) {
+    OnlineUser getReceiver(OnlineUser sender) {
+        OnlineUser receiver;
+        for (ActiveChat chat : activeChats) {
             if(chat.a.username.compare(sender.username) == 0) {
                 receiver = chat.b;
                 return receiver;
@@ -123,7 +123,7 @@ struct ServerContext {
     }
 };
 
-void sendOnlineUsersList(ServerContext &ctx, onlineUser user, unsigned char opCode);
+void sendOnlineUsersList(ServerContext &ctx, OnlineUser user, unsigned char opCode);
 
 void receive(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
@@ -146,7 +146,7 @@ void send(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
     }
 }
 
-void receive(SocketServer *socket, Crypto *crypto, onlineUser sender, vector<unsigned char> &buffer) {
+void receive(SocketServer *socket, Crypto *crypto, OnlineUser sender, vector<unsigned char> &buffer) {
     unsigned char opCode;
     try {
         receive(socket, sender.sd, buffer);
@@ -162,7 +162,7 @@ void receive(SocketServer *socket, Crypto *crypto, onlineUser sender, vector<uns
     }
 }
 
-void send(SocketServer *socket, Crypto *crypto, onlineUser receiver, vector<unsigned char> &buffer) {
+void send(SocketServer *socket, Crypto *crypto, OnlineUser receiver, vector<unsigned char> &buffer) {
     unsigned char opCode;
     try {
         opCode = buffer.at(0);
@@ -174,7 +174,7 @@ void send(SocketServer *socket, Crypto *crypto, onlineUser receiver, vector<unsi
     }
 }
 
-void forward(ServerContext ctx, onlineUser sender, onlineUser receiver){
+void forward(ServerContext ctx, OnlineUser sender, OnlineUser receiver){
     vector<unsigned char> buffer;
     try {
         receive(ctx.serverSocket, ctx.crypto, sender, buffer);
@@ -193,6 +193,7 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
     array<unsigned char, NONCE_SIZE> nonceClient;
     unsigned int tempBufferLen;
     unsigned int pubKeyDHBufferLen;
+    string username;
     EVP_PKEY *pubKeyClient = NULL;
     EVP_PKEY *prvKeyServer = NULL;
     EVP_PKEY *prvKeyDHServer = NULL;
@@ -209,7 +210,7 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         startMessage.erase(startMessage.begin());
 
         // Extract username
-        string username = extract(startMessage);
+        username = extract(startMessage);
         // Extract nc
         extract(startMessage, nonceClient);
 
@@ -269,7 +270,7 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         ctx.crypto->secretDerivation(prvKeyDHServer, pubKeyDHClient, tempBuffer.data());
         ctx.crypto->insertKey(tempBuffer.data(), sd);
 
-        onlineUser user(username, sd);
+        OnlineUser user(username, sd);
         ctx.onlineUsers.push_back(user);
 
         // Send Online Users List
@@ -282,7 +283,7 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
     }
 }
 
-void receiveOnlineUsersRequest(ServerContext &ctx, onlineUser user, vector<unsigned char> receivedMessage) {
+void receiveOnlineUsersRequest(ServerContext &ctx, OnlineUser user, vector<unsigned char> receivedMessage) {
     try {
         receivedMessage.erase(receivedMessage.begin());
         decrypt(ctx.crypto, user.key_pos, receivedMessage);
@@ -297,11 +298,11 @@ void receiveOnlineUsersRequest(ServerContext &ctx, onlineUser user, vector<unsig
     }   
 }
 
-void sendOnlineUsersList(ServerContext &ctx, onlineUser user, unsigned char opCode) {
+void sendOnlineUsersList(ServerContext &ctx, OnlineUser user, unsigned char opCode) {
     vector<unsigned char> buffer;
     try {
         buffer.push_back(opCode);
-        for(onlineUser user: ctx.onlineUsers) {
+        for(OnlineUser user: ctx.onlineUsers) {
             append(user.username, buffer);
         }
         ctx.crypto->setSessionKey(user.key_pos);
@@ -310,18 +311,18 @@ void sendOnlineUsersList(ServerContext &ctx, onlineUser user, unsigned char opCo
 
         send(ctx.serverSocket, user.sd, buffer);
     }
-    catch(const std::exception& e) {
+    catch(const exception& e) {
         throw runtime_error("Error sending the online users list");
     }
 }
     
-void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sender){
+void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sender){
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
     array<unsigned char, NONCE_SIZE> nonce;
     vector<unsigned char> buffer;
     unsigned int tempBufferLen = 0;
     string usernameB;
-    onlineUser receiver;
+    OnlineUser receiver;
     EVP_PKEY *pubKeyB = NULL;
     EVP_PKEY *pubKeyA = NULL;
     
@@ -394,7 +395,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
         receive(ctx.serverSocket, ctx.crypto, receiver, buffer);
         if(buffer.at(0) == OP_REQUEST_TO_TALK){
             send(ctx.serverSocket, ctx.crypto, sender, buffer);
-            activeChat a(sender, receiver);
+            ActiveChat a(sender, receiver);
             ctx.activeChats.push_back(a);
             cout << "Request to talk succeeded" << endl;
         } else {
@@ -404,4 +405,19 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
     } catch(const exception& e) {
         throw;
     }  
+}
+
+void logout(ServerContext &ctx, int sd, unsigned int i) {
+    OnlineUser user;
+
+    try {
+        user = ctx.getUser(sd);    
+        cout << user.username << " closed the connection" << endl;
+        ctx.serverSocket->disconnectHost(sd, i);
+        ctx.crypto->removeKey(user.key_pos);
+        ctx.deleteUser(user);
+        ctx.deleteActiveChat(user);
+    } catch(const exception& e) {
+        cerr << e.what() << '\n';
+    }
 }
