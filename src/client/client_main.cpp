@@ -7,6 +7,7 @@ void insertCommand();
 int main(int argc, char *const argv[]) {
     ClientContext context;
     vector<unsigned char> buffer;
+    string peer;
     string username;
     string password;
     fd_set fds;
@@ -50,6 +51,7 @@ int main(int argc, char *const argv[]) {
                     cout << "\n-------Received request to talk-------" << endl;
                     receiveRequestToTalk(context, buffer);
                     buffer.clear();
+                    chatB(context);
                     cout << "---------------------------------------" << endl;
                 }
             }
@@ -61,9 +63,10 @@ int main(int argc, char *const argv[]) {
                     cout << "-------------------------------------" << endl;
                     break;
                 case 2:
-                    cout << "\n------------Request to talk-----------" << endl;
+                    cout << "\n-------Request to talk-------" << endl;
+                    //peer = readFromStdout("Insert username: ");
                     sendRequestToTalk(context);
-                    cout << "---------------------------------------" << endl;
+                    chatA(context);
                     break;
                 case 0:
                     cout << "Bye." << endl;

@@ -35,7 +35,7 @@ int main(int argc, char* const argv[]) {
                             }
                         } else {
                             int operationCode = messageReceived[0] - '0';
-                            if (operationCode < 0 || operationCode > 4) {
+                            if (operationCode < 0 || operationCode > 5) {
                                 cout << "Operation code not valid." << endl;
                                 break;
                             }     
@@ -59,7 +59,8 @@ int main(int argc, char* const argv[]) {
                                 cout << "------------------------------" << endl;
                             } else if (operationCode == 3) {
                                 //Message Forwarding
-                                // TODO:
+                                user = ctx.getUser(sd);
+                                chat(ctx, messageReceived, user);
                             } else if (operationCode == 4) {
                                 cout << endl << "----Online User List Request----" << endl;
                                 user = ctx.getUser(sd);
@@ -67,8 +68,11 @@ int main(int argc, char* const argv[]) {
                                 cout << "Request handled" << endl;
                                 cout << "---------------------------------" << endl;
                             } else if (operationCode == 5) {
-                                cout << "\n----Error on a client----" << endl;
-                                // printBuffer(messageReceived);
+                                cout << "\n----A client wants to close a chat----" << endl;
+                                user = ctx.getUser(sd);
+                                chat(ctx, messageReceived, user);
+                                //remove active chat
+                                //disconnect user
                                 cout << "---------------------------------" << endl;
                             }
                         }

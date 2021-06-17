@@ -9,6 +9,7 @@ struct ClientContext {
     SocketClient *clientSocket;
     Crypto *crypto;
     string username;
+    string peerUsername;
 
     ClientContext() {
         clientSocket = new SocketClient(SOCK_STREAM);
@@ -281,7 +282,6 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
     EVP_PKEY *keyDH = NULL;
     EVP_PKEY *peerKeyDH = NULL;
     EVP_PKEY *peerPubKey = NULL;
-    string peerUsername;
     string input;
     bool verify = false;
 
@@ -298,8 +298,8 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
 
         // Get peer username
         buffer.insert(buffer.end(), tempBuffer.begin() + 1, tempBuffer.begin() + tempBufferLen);
-        peerUsername = extract(buffer);
-        cout << peerUsername << " sent you a request to talk" << endl;
+        ctx.peerUsername = extract(buffer);
+        cout << ctx.peerUsername << " sent you a request to talk" << endl;
 
         // Accept or refuse request
         cout << "Do you want to accept the request? (y/n):" << endl;
@@ -394,10 +394,10 @@ void sendRequestToTalk(ClientContext &ctx){
     unsigned int tempBufferLen = 0;
     unsigned int signedPartLen = 0;
     unsigned int pubKeyDHLen = 0;
+    string usernameB;
     EVP_PKEY *keyDHB = NULL;
     EVP_PKEY *keyDHA = NULL;
     EVP_PKEY *pubKeyB = NULL;
-    string usernameB;
 
     try {
         // Get user to connect with
@@ -478,4 +478,62 @@ void sendRequestToTalk(ClientContext &ctx){
     } catch(const exception& e) {
         throw;
     }    
+}
+
+void chatA(ClientContext &ctx){
+    vector<unsigned char> buffer;
+    string message;
+    while(true){
+        message = readFromStdout(ctx.username + " : ");
+        if(message.compare("!deh") == 0){
+            append(message, buffer);
+            encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+            buffer.insert(buffer.begin(), OP_ERROR);
+            send(ctx.clientSocket, ctx.crypto, buffer);
+            return;
+        }
+        append(message, buffer);
+        encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        buffer.insert(buffer.begin(), OP_MESSAGE);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) != OP_MESSAGE){
+            cout<<"Chat closed"<<endl;
+            return;
+        }
+        buffer.erase(buffer.begin());
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        cout << ctx.peerUsername + ": " << extract(buffer) << endl;
+    }
+}
+
+void chatB(ClientContext &ctx){
+    vector<unsigned char> buffer;
+    string message;
+    while(true){
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) != OP_MESSAGE){
+            cout<<"Chat closed"<<endl;
+            return;
+        }
+        buffer.erase(buffer.begin());
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        cout << ctx.peerUsername << ": " << extract(buffer) << endl;
+
+        message = readFromStdout(ctx.username + " : ");
+        if(message.compare("!deh") == 0){
+            append(message, buffer);
+            encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+            buffer.insert(buffer.begin(), OP_ERROR);
+            send(ctx.clientSocket, ctx.crypto, buffer);
+            return;
+        }
+
+        buffer.clear();
+        append(message, buffer);
+        encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        buffer.insert(buffer.begin(), OP_MESSAGE);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+    }
 }

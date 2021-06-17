@@ -177,9 +177,8 @@ void send(SocketServer *socket, Crypto *crypto, OnlineUser receiver, vector<unsi
 void forward(ServerContext ctx, OnlineUser sender, OnlineUser receiver){
     vector<unsigned char> buffer;
     try {
-        receive(ctx.serverSocket, ctx.crypto, sender, buffer);
         send(ctx.serverSocket, ctx.crypto, receiver, buffer);
-    } catch(const std::exception& e) {
+    } catch(const exception& e) {
         throw;
     }
 }
@@ -420,4 +419,11 @@ void logout(ServerContext &ctx, int sd, unsigned int i) {
     } catch(const exception& e) {
         cerr << e.what() << '\n';
     }
+}
+
+void chat(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sender){
+    OnlineUser receiver = ctx.getReceiver(sender);
+    msg.erase(msg.begin());
+    decrypt(ctx.crypto, sender.key_pos, msg);
+    send(ctx.serverSocket, ctx.crypto, receiver, msg);
 }
