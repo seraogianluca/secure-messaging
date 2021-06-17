@@ -164,7 +164,7 @@ void authentication(ClientContext &ctx) {
         if(!ctx.crypto->verifyCertificate(cert)) {
             throw runtime_error("Certificate not valid.");
         }
-        cout << "The certificate is valid." << endl;
+        cout << "Server certificate verified" << endl;
 
         ctx.crypto->getPublicKeyFromCertificate(cert, pubKeyServer);
 
@@ -180,8 +180,6 @@ void authentication(ClientContext &ctx) {
         if(!signatureVerification) {
             throw runtime_error("Sign verification failed");
         }
-
-        cout << "The signature is correct." << endl;
 
         ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHServerLen, pubKeyDHServer);
 
@@ -210,12 +208,14 @@ void authentication(ClientContext &ctx) {
             throw runtime_error("Authentication Failed: the server interrupted the protocol");
         }
         buffer.erase(buffer.begin());
-        cout << "Authentication succeeded" << endl;
+
+        cout << "Generating session key" << endl;
         
         ctx.crypto->secretDerivation(prvKeyDHClient, pubKeyDHServer, tempBuffer.data());
         ctx.crypto->insertKey(tempBuffer.data(), SERVER_SECRET);
         ctx.crypto->setSessionKey(SERVER_SECRET);
 
+        cout << "Authentication succeeded" << endl;
         printOnlineUsersList(ctx, buffer);
     } catch(const exception& e) {
         cout << "Error: " << e.what();
@@ -475,12 +475,13 @@ void sendRequestToTalk(ClientContext &ctx){
         ctx.crypto->insertKey(pubKeyDHBuffer.data(), CLIENT_SECRET);
         decrypt(ctx.crypto, CLIENT_SECRET, buffer);
         cout << "Request to talk: " << extract(buffer) << endl;
+        ctx.peerUsername = usernameB;
     } catch(const exception& e) {
         throw;
     }    
 }
 
-void chatA(ClientContext &ctx){
+bool chatA(ClientContext &ctx){
     vector<unsigned char> buffer;
     string message;
     while(true){
@@ -490,7 +491,7 @@ void chatA(ClientContext &ctx){
             encrypt(ctx.crypto, CLIENT_SECRET, buffer);
             buffer.insert(buffer.begin(), OP_ERROR);
             send(ctx.clientSocket, ctx.crypto, buffer);
-            return;
+            return true;
         }
         append(message, buffer);
         encrypt(ctx.crypto, CLIENT_SECRET, buffer);
@@ -499,35 +500,35 @@ void chatA(ClientContext &ctx){
 
         receive(ctx.clientSocket, ctx.crypto, buffer);
         if(buffer.at(0) != OP_MESSAGE){
-            cout<<"Chat closed"<<endl;
-            return;
+            cout << ctx.peerUsername << " closed the chat" << endl;
+            return false;
         }
         buffer.erase(buffer.begin());
         decrypt(ctx.crypto, CLIENT_SECRET, buffer);
-        cout << ctx.peerUsername + ": " << extract(buffer) << endl;
+        cout << ctx.peerUsername << ": " << extract(buffer) << endl;
     }
 }
 
-void chatB(ClientContext &ctx){
+bool chatB(ClientContext &ctx){
     vector<unsigned char> buffer;
     string message;
     while(true){
         receive(ctx.clientSocket, ctx.crypto, buffer);
         if(buffer.at(0) != OP_MESSAGE){
-            cout<<"Chat closed"<<endl;
-            return;
+            cout << ctx.peerUsername << " closed the chat" << endl;
+            return false;
         }
         buffer.erase(buffer.begin());
         decrypt(ctx.crypto, CLIENT_SECRET, buffer);
         cout << ctx.peerUsername << ": " << extract(buffer) << endl;
 
-        message = readFromStdout(ctx.username + " : ");
+        message = readFromStdout(ctx.username + ": ");
         if(message.compare("!deh") == 0){
             append(message, buffer);
             encrypt(ctx.crypto, CLIENT_SECRET, buffer);
             buffer.insert(buffer.begin(), OP_ERROR);
             send(ctx.clientSocket, ctx.crypto, buffer);
-            return;
+            return true;
         }
 
         buffer.clear();

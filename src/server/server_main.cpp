@@ -28,6 +28,7 @@ int main(int argc, char* const argv[]) {
                                 ctx.serverSocket->disconnectHost(sd, i);
                                 // Remove its chat from the active chats                        
                                 user = ctx.getUser(sd);
+                                ctx.crypto->removeKey(user.key_pos);
                                 ctx.deleteUser(user);
                                 ctx.deleteActiveChat(user);
                             } catch(...) {
@@ -64,15 +65,16 @@ int main(int argc, char* const argv[]) {
                             } else if (operationCode == 4) {
                                 cout << endl << "----Online User List Request----" << endl;
                                 user = ctx.getUser(sd);
+                                cout << user.username << " requested the online users list" << endl;
                                 receiveOnlineUsersRequest(ctx, user, messageReceived);
-                                cout << "Request handled" << endl;
+                                cout << "Online users list sent to " << user.username << endl;
                                 cout << "---------------------------------" << endl;
                             } else if (operationCode == 5) {
                                 cout << "\n----A client wants to close a chat----" << endl;
                                 user = ctx.getUser(sd);
+                                cout << user.username << " wants to close the chat" << endl;
                                 chat(ctx, messageReceived, user);
-                                //remove active chat
-                                //disconnect user
+                                logout(ctx, sd, i);
                                 cout << "---------------------------------" << endl;
                             }
                         }

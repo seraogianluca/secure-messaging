@@ -210,6 +210,7 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
 
         // Extract username
         username = extract(startMessage);
+        cout << username << " wants to authenticate" << endl;
         // Extract nc
         extract(startMessage, nonceClient);
 
@@ -239,6 +240,8 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         // Sending M2
         send(ctx.serverSocket, sd, buffer);
 
+        cout << "Certificate sent to " << username << endl;
+
         // Receiving M3
         receive(ctx.serverSocket, sd, buffer);
         if(buffer[0] != OP_LOGIN) {
@@ -263,9 +266,10 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         if(!verification) {
             throw runtime_error("Signature not verified or message not fresh.");
         }
-        cout << "Signature verified." << endl;
+        cout << username << " authenticated" << endl;
 
         // Generate secret
+        cout << "Generating session key" << endl;
         ctx.crypto->secretDerivation(prvKeyDHServer, pubKeyDHClient, tempBuffer.data());
         ctx.crypto->insertKey(tempBuffer.data(), sd);
 
@@ -273,8 +277,10 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         ctx.onlineUsers.push_back(user);
 
         // Send Online Users List
+        cout << "Sending online users list" << endl;
         sendOnlineUsersList(ctx, user, OP_LOGIN);
-
+        
+        cout << "Authentication succeeded" << endl;
     } catch(const exception& e) {
         errorMessage(e.what(), buffer);
         send(ctx.serverSocket, sd, buffer);
@@ -396,6 +402,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sen
             send(ctx.serverSocket, ctx.crypto, sender, buffer);
             ActiveChat a(sender, receiver);
             ctx.activeChats.push_back(a);
+            cout << "Chat established" << endl;
             cout << "Request to talk succeeded" << endl;
         } else {
             send(ctx.serverSocket, ctx.crypto, sender, buffer);

@@ -13,6 +13,7 @@ int main(int argc, char *const argv[]) {
     fd_set fds;
     int maxfd;
     int option = -1;
+    bool disconnect = false;
    
     try {
         cout << "\n-------Authentication-------" << endl;
@@ -40,6 +41,7 @@ int main(int argc, char *const argv[]) {
             select(maxfd+1, &fds, NULL, NULL, NULL); 
 
             if(FD_ISSET(0, &fds)) {  
+                option = -1;
                 cin >> option;
                 cin.ignore();
             }
@@ -50,9 +52,12 @@ int main(int argc, char *const argv[]) {
                 if(buffer.at(0) == OP_REQUEST_TO_TALK) {
                     cout << "\n-------Received request to talk-------" << endl;
                     receiveRequestToTalk(context, buffer);
-                    buffer.clear();
-                    chatB(context);
                     cout << "---------------------------------------" << endl;
+                    cout << "\n-------Chat-------" << endl;
+                    buffer.clear();
+                    disconnect = chatB(context);
+                    if(disconnect) return 0;
+                    cout << "------------------" << endl;
                 }
             }
 
@@ -64,9 +69,14 @@ int main(int argc, char *const argv[]) {
                     break;
                 case 2:
                     cout << "\n-------Request to talk-------" << endl;
-                    //peer = readFromStdout("Insert username: ");
                     sendRequestToTalk(context);
-                    chatA(context);
+                    cout << "-------------------------------" << endl;
+                    cout << "\n-------Chat-------" << endl;
+                    disconnect = chatA(context);
+                    if(disconnect) return 0;
+                    cout << "------------------" << endl;
+                    break;
+                case -1:
                     break;
                 case 0:
                     cout << "Bye." << endl;
