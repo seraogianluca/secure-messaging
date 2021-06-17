@@ -64,7 +64,9 @@ int main(int argc, char* const argv[]) {
                                 cout << "------------------------------" << endl;
                             } else if (operationCode == 3) {
                                 //Message Forwarding
-                                // TODO:
+                                user = ctx.getUser(sd);
+                                cout<<"user "<<user.username;
+                                chat(ctx, messageReceived, user);
                             } else if (operationCode == 4) {
                                 cout << "\n----Online User List Request----" << endl;
                                 user = ctx.getUser(sd);

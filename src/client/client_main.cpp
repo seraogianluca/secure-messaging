@@ -66,11 +66,13 @@ int main(int argc, char *const argv[]) {
                 case 2:
                     cout << "\n-------Request to talk-------" << endl;
                     //peer = readFromStdout("Insert username: ");
-                    sendRequestToTalk(context);
+                    sendRequestToTalk(context, peer);
+                    chatA(context, username, peer);
                     break;
                 case 3:
                     cout << "\n-------Received request to talk-------" << endl;
-                    receiveRequestToTalk(context, buffer);
+                    receiveRequestToTalk(context, buffer, peer);
+                    chatB(context, username, peer);
                     break;
                 case 0:
                     cout << "Bye." << endl;

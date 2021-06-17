@@ -174,12 +174,11 @@ void send(SocketServer *socket, Crypto *crypto, onlineUser receiver, vector<unsi
     }
 }
 
-void forward(ServerContext ctx, onlineUser sender, onlineUser receiver){
+void forward(ServerContext &ctx, onlineUser sender, onlineUser receiver){
     vector<unsigned char> buffer;
     try {
-        receive(ctx.serverSocket, ctx.crypto, sender, buffer);
         send(ctx.serverSocket, ctx.crypto, receiver, buffer);
-    } catch(const std::exception& e) {
+    } catch(const exception& e) {
         throw;
     }
 }
@@ -408,4 +407,10 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, onlineUser sen
     } catch(const exception& e) {
         throw;
     }  
+}
+
+void chat(ServerContext &ctx, vector<unsigned char> msg, onlineUser sender){
+    onlineUser receiver = ctx.getReceiver(sender);
+    printBuffer(msg);
+    send(ctx.serverSocket, ctx.crypto, receiver, msg);
 }

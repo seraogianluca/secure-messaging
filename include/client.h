@@ -261,7 +261,7 @@ void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> buffer) {
     }
 }
 
-void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
+void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg, string &peerUsername) {
     array<unsigned char, NONCE_SIZE> nonce;
     array<unsigned char, NONCE_SIZE> peerNonce;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
@@ -275,7 +275,6 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
     EVP_PKEY *keyDH = NULL;
     EVP_PKEY *peerKeyDH = NULL;
     EVP_PKEY *peerPubKey = NULL;
-    string peerUsername;
     string input;
     bool verify = false;
 
@@ -377,7 +376,7 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
     }
 }
 
-void sendRequestToTalk(ClientContext &ctx){
+void sendRequestToTalk(ClientContext &ctx, string &usernameB){
     array<unsigned char, NONCE_SIZE> nonce;
     array<unsigned char, NONCE_SIZE> peerNonce;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
@@ -391,7 +390,6 @@ void sendRequestToTalk(ClientContext &ctx){
     EVP_PKEY *keyDHB = NULL;
     EVP_PKEY *keyDHA = NULL;
     EVP_PKEY *pubKeyB = NULL;
-    string usernameB;
 
     try {
         // Get user to connect with
@@ -472,4 +470,53 @@ void sendRequestToTalk(ClientContext &ctx){
     } catch(const exception& e) {
         throw;
     }    
+}
+
+void chatA(ClientContext &ctx, string sender, string receiver){
+    vector<unsigned char> buffer;
+    string message;
+    while(true){
+        message = readFromStdout(sender+" : ");
+        if(message.compare("!deh") == 0){
+            return;
+        }
+        buffer.insert(buffer.end(), message.begin(), message.end());
+        encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        buffer.insert(buffer.begin(), OP_MESSAGE);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) != OP_MESSAGE){
+            break;
+        }
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        buffer.erase(buffer.begin());
+        cout << receiver +": " << extract(buffer) << endl;
+    }
+}
+
+void chatB(ClientContext &ctx, string sender, string receiver){
+    vector<unsigned char> buffer;
+    string message;
+    while(true){
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) != OP_MESSAGE){
+            break;
+        }
+        printBuffer(buffer);
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        cout<<"dopo decrypt"<<endl;
+        printBuffer(buffer);
+        buffer.erase(buffer.begin());
+        cout << receiver +": " << extract(buffer) << endl;
+
+        message = readFromStdout(sender+" : ");
+        if(message.compare("!deh") == 0){
+            return;
+        }
+        buffer.insert(buffer.end(), message.begin(), message.end());
+        encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        buffer.insert(buffer.begin(), OP_MESSAGE);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+    }
 }
