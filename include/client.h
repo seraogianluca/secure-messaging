@@ -8,6 +8,7 @@ struct ClientContext {
     EVP_PKEY *prvKeyClient;
     SocketClient *clientSocket;
     Crypto *crypto;
+    string username;
 
     ClientContext() {
         clientSocket = new SocketClient(SOCK_STREAM);
@@ -37,7 +38,7 @@ struct ClientContext {
     }
 };
 
-void sendOnlineUsersListRequest(ClientContext &ctx);
+void onlineUsersListRequest(ClientContext &ctx);
 void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageReceived);
 
 void receive(SocketClient *socket, vector<unsigned char> &buffer) {
@@ -127,7 +128,7 @@ string readFromStdout(string message) {
     return value;
 }
 
-void authentication(ClientContext &ctx, string username) {
+void authentication(ClientContext &ctx) {
     vector<unsigned char> buffer;
     vector<unsigned char> signature;
     array<unsigned char, NONCE_SIZE> nonceClient;
@@ -146,7 +147,7 @@ void authentication(ClientContext &ctx, string username) {
         // M1: 0, username, nc
         ctx.crypto->generateNonce(nonceClient.data());
         buffer.push_back(OP_LOGIN);
-        append(username, buffer);
+        append(ctx.username, buffer);
         append(nonceClient, NONCE_SIZE, buffer);
         send(ctx.clientSocket, buffer);
 
@@ -224,7 +225,7 @@ void authentication(ClientContext &ctx, string username) {
     }
 }
 
-void sendOnlineUsersListRequest(ClientContext &ctx) {
+void onlineUsersListRequest(ClientContext &ctx) {
     vector<unsigned char> buffer;
     string message = "I want online users";
     try {
@@ -253,8 +254,13 @@ void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> buffer) {
             ctx.addOnlineUser(name);
         }
         cout << "\nOnline Users: " << endl;
-        for (string user : ctx.onlineUsers) {
-            cout << user << endl;
+        for(string user : ctx.onlineUsers) {
+            if(ctx.username.compare(user) != 0) {
+                cout << user << endl;
+            }
+        }
+        if(ctx.onlineUsers.size() == 1) {
+            cout << "You are the only user online." << endl;
         }
     } catch(const exception& e) {
         throw runtime_error("Error occurred printing the online users list");

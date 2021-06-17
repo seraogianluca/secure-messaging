@@ -234,21 +234,19 @@ int Crypto::encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
         if(EVP_EncryptInit(ctx, AUTH_ENCR, s.session_key, s.iv) != 1)
             throw runtime_error("An error occurred while initializing the context.");
             
-        //AAD: header in the clear that contains the IV
+        // AAD: Insert the counter
         if(EVP_EncryptUpdate(ctx, NULL, &len, s.iv, IV_SIZE) != 1)
-            throw runtime_error("An error occurred in adding AAD header.");
+            throw runtime_error("An error occurred while encrypting the message.");
 
         s.getCounter(bufferCounter);
-
-        if(EVP_EncryptUpdate(ctx, ciphertext, &len, bufferCounter, sizeof(uint16_t)) != 1)
+        if(EVP_EncryptUpdate(ctx, NULL, &len, bufferCounter, sizeof(uint16_t)) != 1)
+            throw runtime_error("An error occurred while encrypting the message.");
+            
+        if(EVP_EncryptUpdate(ctx, ciphertext, &len, msg, msg_len) != 1)
             throw runtime_error("An error occurred while encrypting the message.");
         ciphr_len = len;
-            
-        if(EVP_EncryptUpdate(ctx, ciphertext+sizeof(uint16_t), &len, msg, msg_len) != 1)
-            throw runtime_error("An error occurred while encrypting the message.");
-        ciphr_len += len;
 
-        if(EVP_EncryptFinal(ctx, ciphertext + ciphr_len, &len) != 1)
+        if(EVP_EncryptFinal(ctx, ciphertext + len, &len) != 1)
             throw runtime_error("An error occurred while finalizing the ciphertext.");
         ciphr_len += len;
 
@@ -258,6 +256,8 @@ int Crypto::encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
         
         memcpy(buffer+start, s.iv, IV_SIZE);
         start += IV_SIZE;
+        memcpy(buffer+start, bufferCounter, sizeof(uint16_t));
+        start += sizeof(uint16_t);
         memcpy(buffer+start, ciphertext, ciphr_len);
         start += ciphr_len;
         memcpy(buffer+start, tag, TAG_SIZE);
@@ -287,7 +287,7 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
     if (msg_len < (IV_SIZE + TAG_SIZE))
         throw runtime_error("Message length not valid");
 
-    ciphr_len = msg_len - IV_SIZE - TAG_SIZE;
+    ciphr_len = msg_len - IV_SIZE - TAG_SIZE - sizeof(uint16_t);
     ciphr_msg = new (nothrow) unsigned char[ciphr_len];
 
     if(!ciphr_msg)
@@ -305,14 +305,18 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
 
     try {
         memcpy(recv_iv, msg, IV_SIZE);
-        memcpy(recv_tag,msg+msg_len-TAG_SIZE, TAG_SIZE);
-        memcpy(ciphr_msg, msg+IV_SIZE, ciphr_len);
+        memcpy(bufferCounter, msg + IV_SIZE, sizeof(uint16_t));
+        memcpy(ciphr_msg, msg + IV_SIZE + sizeof(uint16_t), ciphr_len);
+        memcpy(recv_tag, msg + msg_len - TAG_SIZE, TAG_SIZE);
         session& s = sessions.at(currentSession);
 
         if(!EVP_DecryptInit(ctx, AUTH_ENCR, s.session_key, recv_iv))
             throw runtime_error("An error occurred while initializing the context.");
         
         if(!EVP_DecryptUpdate(ctx, NULL, &len, recv_iv, IV_SIZE))
+            throw runtime_error("An error occurred while getting AAD header.");
+        
+        if(!EVP_DecryptUpdate(ctx, NULL, &len, bufferCounter, sizeof(uint16_t)))
             throw runtime_error("An error occurred while getting AAD header.");
             
         if(!EVP_DecryptUpdate(ctx, tempBuffer, &len, ciphr_msg, ciphr_len))
@@ -324,11 +328,11 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
         
         ret = EVP_DecryptFinal(ctx, tempBuffer + len, &len);
 
-        memcpy(bufferCounter, tempBuffer, sizeof(uint16_t));
         if(!s.verifyFreshness(bufferCounter)){
             throw runtime_error("Freshness not confirmed.");
         }
-        memcpy(buffer, tempBuffer + sizeof(uint16_t), ciphr_len - sizeof(uint16_t));
+
+        memcpy(buffer, tempBuffer, pl_len);
     } catch(const exception& e) {
         delete[] ciphr_msg;
         delete[] tempBuffer;
@@ -342,7 +346,6 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
     
     if(ret > 0){
         pl_len += len;
-        pl_len -= sizeof(uint16_t);
     } else
         pl_len = -1;
 

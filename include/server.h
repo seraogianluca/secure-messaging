@@ -123,7 +123,7 @@ struct ServerContext {
     }
 };
 
-void sendOnlineUsersList(ServerContext &ctx, onlineUser user);
+void sendOnlineUsersList(ServerContext &ctx, onlineUser user, unsigned char opCode);
 
 void receive(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
     std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
@@ -272,7 +272,7 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         ctx.onlineUsers.push_back(user);
 
         // Send Online Users List
-        sendOnlineUsersList(ctx, user);
+        sendOnlineUsersList(ctx, user, OP_LOGIN);
 
     } catch(const exception& e) {
         errorMessage(e.what(), buffer);
@@ -288,7 +288,7 @@ void receiveOnlineUsersRequest(ServerContext &ctx, onlineUser user, vector<unsig
         if(receivedMessage[0] != OP_ONLINE_USERS) {
             throw runtime_error("OP Code not valid");
         }
-        sendOnlineUsersList(ctx, user);
+        sendOnlineUsersList(ctx, user, OP_ONLINE_USERS);
     } catch(const exception& e) {
         errorMessage(e.what(), receivedMessage);
         send(ctx.serverSocket, user.sd, receivedMessage);
@@ -296,20 +296,16 @@ void receiveOnlineUsersRequest(ServerContext &ctx, onlineUser user, vector<unsig
     }   
 }
 
-void sendOnlineUsersList(ServerContext &ctx, onlineUser user) {
+void sendOnlineUsersList(ServerContext &ctx, onlineUser user, unsigned char opCode) {
     vector<unsigned char> buffer;
-    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
-    unsigned int tempBufferLen;
     try {
-        buffer.push_back(OP_LOGIN);
+        buffer.push_back(opCode);
         for(onlineUser user: ctx.onlineUsers) {
             append(user.username, buffer);
         }
         ctx.crypto->setSessionKey(user.key_pos);
-        tempBufferLen = ctx.crypto->encryptMessage(buffer.data(), buffer.size(), tempBuffer.data());
-        buffer.clear();
-        buffer.push_back(OP_LOGIN);
-        buffer.insert(buffer.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+        encrypt(ctx.crypto, user.key_pos, buffer);
+        buffer.insert(buffer.begin(), opCode);
 
         send(ctx.serverSocket, user.sd, buffer);
     }
