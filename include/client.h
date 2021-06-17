@@ -259,6 +259,9 @@ void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> buffer) {
                 cout << user << endl;
             }
         }
+        if(ctx.onlineUsers.size() == 1) {
+            cout << "You are the only user online." << endl;
+        }
     } catch(const exception& e) {
         throw runtime_error("Error occurred printing the online users list");
     }
