@@ -202,7 +202,6 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
     EVP_PKEY *pubKeyDHClient = NULL;
     X509 *cert;
     try {
-
         // Receive M1
         ctx.crypto->generateNonce(nonceServer.data());
         
