@@ -29,7 +29,7 @@ int main(int argc, char *const argv[]) {
         password = readPassword();
         context.username = username;
         context.crypto->readPrivateKey(username, password, context.prvKeyClient);
-        authentication(context);
+        if (!authentication(context)) throw runtime_error("Authentication Failed");
         cout << "-----------------------------" << endl << endl;
 
         while (true) {

@@ -128,7 +128,7 @@ string readFromStdout(string message) {
     return value;
 }
 
-void authentication(ClientContext &ctx) {
+bool authentication(ClientContext &ctx) {
     vector<unsigned char> buffer;
     vector<unsigned char> signature;
     array<unsigned char, NONCE_SIZE> nonceClient;
@@ -176,10 +176,9 @@ void authentication(ClientContext &ctx) {
         signature.insert(signature.end(), nonceClient.begin(), nonceClient.end());
 
         bool signatureVerification = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), pubKeyServer);
-        if(!signatureVerification) {
-            throw runtime_error("Sign verification failed");
+        if(!signatureVerification) {            
+            throw runtime_error("Signature not verified or message not fresh.");
         }
-
         cout << "The signature is correct." << endl;
 
         ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHServerLen, pubKeyDHServer);
@@ -205,8 +204,13 @@ void authentication(ClientContext &ctx) {
 
         // Receive M4: 
         receive(ctx.clientSocket, buffer);
-        if (buffer.at(0) != OP_LOGIN) {
+        if (buffer.at(0) != OP_LOGIN && buffer.at(0) != OP_ERROR) {
             throw runtime_error("Authentication Failed: the server interrupted the protocol");
+        }
+        if(buffer[0] == OP_ERROR) {
+            string message = verifyErrorMessageSignature(ctx.crypto, buffer, pubKeyServer);
+            cout << "Error server-side: " << message << endl;
+            return false;
         }
         buffer.erase(buffer.begin());
         cout << "Authentication succeeded" << endl;
@@ -216,10 +220,10 @@ void authentication(ClientContext &ctx) {
         ctx.crypto->setSessionKey(SERVER_SECRET);
 
         printOnlineUsersList(ctx, buffer);
+        return true;
     } catch(const exception& e) {
-        cout << "Error: " << e.what();
         // Send error message to the server
-        errorMessage(e.what(), buffer);
+        errorMessageSigned(ctx.crypto, e.what(), buffer, ctx.prvKeyClient);
         send(ctx.clientSocket, buffer);
         throw;
     }

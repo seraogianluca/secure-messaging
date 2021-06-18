@@ -310,6 +310,10 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
         memcpy(recv_tag, msg + msg_len - TAG_SIZE, TAG_SIZE);
         session& s = sessions.at(currentSession);
 
+        if(!s.verifyFreshness(bufferCounter)){
+            throw runtime_error("Freshness not confirmed.");
+        }
+
         if(!EVP_DecryptInit(ctx, AUTH_ENCR, s.session_key, recv_iv))
             throw runtime_error("An error occurred while initializing the context.");
         
@@ -327,10 +331,6 @@ int Crypto::decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned ch
             throw runtime_error("An error occurred while setting the expected tag.");
         
         ret = EVP_DecryptFinal(ctx, tempBuffer + len, &len);
-
-        if(!s.verifyFreshness(bufferCounter)){
-            throw runtime_error("Freshness not confirmed.");
-        }
 
         memcpy(buffer, tempBuffer, pl_len);
     } catch(const exception& e) {

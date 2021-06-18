@@ -104,6 +104,45 @@ std::string extract(std::vector<unsigned char> &content) {
     return buffer;
 }
 
+void errorMessageSigned(Crypto *crypto, std::string errorMessage, std::vector<unsigned char> &buffer, EVP_PKEY *prvKey) {
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int tempBufferLen;
+    try {
+        buffer.clear();
+        buffer.push_back(OP_ERROR);
+        buffer.insert(buffer.end(), errorMessage.begin(), errorMessage.end());
+        tempBufferLen = crypto->sign(buffer.data(), buffer.size(), tempBuffer.data(), prvKey);
+        buffer.clear();
+        buffer.push_back(OP_ERROR);
+        append(errorMessage, buffer);
+        append(tempBuffer, tempBufferLen, buffer);
+    } catch(const exception& e) {
+        throw runtime_error(e.what());
+    }
+}
+
+std::string verifyErrorMessageSignature(Crypto *crypto, std::vector<unsigned char> buffer, EVP_PKEY *pubKey) {
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    unsigned int tempBufferLen;
+    std::string message;
+    try {
+        buffer.erase(buffer.begin());
+        message = extract(buffer);
+        tempBufferLen = extract(buffer, tempBuffer);
+        buffer.clear();
+        buffer.push_back(OP_ERROR);
+        buffer.insert(buffer.end(), message.begin(), message.end());
+        bool ver = crypto->verifySignature(tempBuffer.data(), tempBufferLen, buffer.data(), buffer.size(), pubKey);
+        if(ver) {
+            return message;
+        }
+        return "Non authenticated error message";
+    } catch(const std::exception& e) {
+        throw runtime_error(e.what());
+    }
+} 
+
+
 void errorMessage(std::string errorMessage, std::vector<unsigned char> &buffer) {
     buffer.clear();
     buffer.insert(buffer.end(), OP_ERROR);

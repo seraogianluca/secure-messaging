@@ -210,6 +210,7 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
 
         // Extract username
         string username = extract(startMessage);
+        ctx.crypto->readPublicKey(username, pubKeyClient);
         // Extract nc
         extract(startMessage, nonceClient);
 
@@ -241,8 +242,13 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
 
         // Receiving M3
         receive(ctx.serverSocket, sd, buffer);
-        if(buffer[0] != OP_LOGIN) {
+        if(buffer[0] != OP_LOGIN && buffer[0] != OP_ERROR) {
             throw runtime_error("Opcode not valid");
+        }
+        if(buffer[0] == OP_ERROR) {
+            string message = verifyErrorMessageSignature(ctx.crypto, buffer, pubKeyClient);
+            cout << "Error client-side: " << message << endl;
+            return;
         }
         buffer.erase(buffer.begin());
         pubKeyDHBufferLen = extract(buffer, pubKeyDHBuffer);
@@ -255,8 +261,6 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         signature.push_back(OP_LOGIN);
         signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHBufferLen);
         signature.insert(signature.end(), nonceServer.begin(), nonceServer.end());
-
-        ctx.crypto->readPublicKey(username, pubKeyClient);
 
         bool verification = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), pubKeyClient);
 
@@ -276,7 +280,7 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         sendOnlineUsersList(ctx, user, OP_LOGIN);
 
     } catch(const exception& e) {
-        errorMessage(e.what(), buffer);
+        errorMessageSigned(ctx.crypto, e.what(), buffer, prvKeyServer);
         send(ctx.serverSocket, sd, buffer);
         throw;
     }
