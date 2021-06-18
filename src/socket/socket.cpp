@@ -92,7 +92,7 @@ bool SocketClient::wait(int socket) {
 }
 
 void SocketClient::sendMessage(int sd, unsigned char* message, unsigned int message_len) {
-    unsigned int ret;
+    int ret;
 
     if (message_len > MAX_MESSAGE_SIZE) {
         throw runtime_error("Max message size exceeded in Send");

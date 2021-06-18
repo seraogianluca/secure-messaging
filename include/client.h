@@ -1,16 +1,100 @@
-#include "socket.h"
-#include "crypto.h"
-#include <iterator>
-#include <array>
 #include <cstring>
-#include <algorithm>
 #include <termios.h>
+#include "socket.h"
+#include "utils.h"
 
-void keyEstablishmentServer(unsigned int keyPos, string username, string password, EVP_PKEY* serverPubKey);
+struct ClientContext {
+    vector<string> onlineUsers;
+    EVP_PKEY *prvKeyClient;
+    SocketClient *clientSocket;
+    Crypto *crypto;
+    string username;
+    string peerUsername;
 
-//TODO: serve costruttore con parametri di default per fare solo dichiarazione
-Crypto crypto(2);
-SocketClient socketClient(SOCK_STREAM);
+    ClientContext() {
+        clientSocket = new SocketClient(SOCK_STREAM);
+        crypto = new Crypto();
+    }
+
+    void addOnlineUser(string username) {
+        for(string onlineUser : onlineUsers) {
+            if(username.compare(onlineUser) == 0) {
+                return;
+            }
+        }
+        onlineUsers.push_back(username);
+    }
+
+    void clearOnlineUsers() {
+        onlineUsers.clear();
+    }
+
+    bool userIsPresent(string username){
+        for(string user : onlineUsers){
+            if(user.compare(username) == 0){
+                return true;
+            }
+        }
+        return false;
+    }
+};
+
+void onlineUsersListRequest(ClientContext &ctx);
+void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> messageReceived);
+
+void receive(SocketClient *socket, vector<unsigned char> &buffer) {
+    std::array<unsigned char, MAX_MESSAGE_SIZE> msg;
+    unsigned int size;
+
+    try {
+        size = socket->receiveMessage(socket->getMasterFD(), msg.data());
+        buffer.insert(buffer.end(), msg.begin(), msg.begin() + size);
+    } catch(const exception& e) {
+        throw;
+    }
+}
+
+void send(SocketClient *socket, vector<unsigned char> &buffer) {
+    try { 
+        if(buffer.size() > MAX_MESSAGE_SIZE)
+            throw runtime_error("Message too big.");
+            
+        socket->sendMessage(socket->getMasterFD(), buffer.data(), buffer.size());
+        buffer.clear();
+    } catch(const exception& e) {
+        throw;
+    }
+}
+
+void receive(SocketClient *socket, Crypto *crypto, vector<unsigned char> &buffer) {
+    unsigned char opCode;
+
+    try {
+        receive(socket, buffer);
+        opCode = buffer.at(0);
+        buffer.erase(buffer.begin());
+        decrypt(crypto, SERVER_SECRET, buffer);
+
+        if(buffer.at(0) != opCode) {
+            cout << "Message tampered" << endl;
+            throw runtime_error("Message tampered");
+        }
+    } catch(const exception& e) {
+        throw;
+    }
+}
+
+void send(SocketClient *socket, Crypto *crypto, vector<unsigned char> &buffer) {
+    unsigned char opCode;
+    try {
+        opCode = buffer.at(0);
+        encrypt(crypto, SERVER_SECRET, buffer);
+        buffer.insert(buffer.begin(), opCode);
+        send(socket, buffer);
+    } catch(const exception& e) {
+        throw;
+    }
+}
 
 void setStdinEcho(bool enable = true) {
     struct termios tty;
@@ -48,645 +132,424 @@ string readFromStdout(string message) {
     return value;
 }
 
-// ---------- AUTHENTICATION ---------- //
-
-void sendPassword(unsigned char *nonce, string password, string username, EVP_PKEY *server_pubkey) {
-    vector<unsigned char> message;
-    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
-    unsigned char *pwdDigest = NULL;
-    unsigned int ciphertextLen = 0;
-    try {
-        pwdDigest = new (nothrow) unsigned char[DIGEST_LEN];
-
-        if(!pwdDigest)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        crypto.computeHash((unsigned char *) password.c_str(), password.length(), pwdDigest);
-        message.insert(message.end(), pwdDigest, pwdDigest + DIGEST_LEN);
-        message.insert(message.end(), nonce, nonce + NONCE_SIZE);
-        crypto.computeHash(message.data(), DIGEST_LEN + NONCE_SIZE, pwdDigest);
-        ciphertextLen = crypto.publicKeyEncryption(pwdDigest, DIGEST_LEN, buffer.data(), server_pubkey);
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer.data(), ciphertextLen);
-
-        delete[] pwdDigest;
-    } catch(const exception& e) {
-        if(pwdDigest != nullptr) delete[] pwdDigest;
-        throw;
-    }
-}
-
-void authentication(string username, string password) {
+bool authentication(ClientContext &ctx) {
+    vector<unsigned char> buffer;
+    vector<unsigned char> signature;
+    array<unsigned char, NONCE_SIZE> nonceClient;
+    array<unsigned char, NONCE_SIZE> nonceServer;
+    array<unsigned char, MAX_MESSAGE_SIZE> pubKeyDHBuffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    EVP_PKEY *pubKeyServer = NULL;
+    EVP_PKEY *prvKeyDHClient = NULL;
+    EVP_PKEY *pubKeyDHServer = NULL;
     X509 *cert;
-    EVP_PKEY *prvkey = NULL;
-    EVP_PKEY *serverPubKey = NULL;
-    array<unsigned char,MAX_MESSAGE_SIZE> buffer;
-    array<unsigned char,NONCE_SIZE> nonceClient;
-    array<unsigned char,NONCE_SIZE> nonceServer;
-    unsigned char *plaintext = NULL;
-    unsigned int messageReceivedLen;
-    unsigned int plainlen;
-    try {
-        crypto.readPrivateKey(username,password,prvkey);
-
-        // Generate nonce
-        crypto.generateNonce(nonceClient.data());
-
-        // Build hello message
-        buffer[0] = OP_LOGIN;
-        copy(username.begin(), username.end(), buffer.begin() + 1);
-        copy(nonceClient.begin(), nonceClient.end(), buffer.begin() + 1 + username.length());
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer.data(), username.length() + NONCE_SIZE + 1);
-
-        // Receive server hello
-        messageReceivedLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer.data());
-
-        plaintext = new (nothrow) unsigned char[messageReceivedLen];
-        if(!plaintext)
-            throw runtime_error("An error occurred while allocating the buffer.");
-        plainlen = crypto.publicKeyDecryption(buffer.data(), messageReceivedLen,plaintext,prvkey);
-
-        // Check and extract nonce
-        if(!equal(plaintext + plainlen-2*NONCE_SIZE, plaintext + plainlen - NONCE_SIZE, nonceClient.begin()))
-            throw runtime_error("Login Error: The freshness of the message is not confirmed");
-
-        copy_n(plaintext + plainlen - NONCE_SIZE, NONCE_SIZE, nonceServer.begin());
-
-        // Verify certificate
-        crypto.deserializeCertificate(plainlen - 2*NONCE_SIZE, plaintext, cert);
-        if(!crypto.verifyCertificate(cert))
-            throw runtime_error("Pay attention, server is not authenticated.");
-        cout << "Server authenticated." << endl;
-
-        // Send pwd
-        crypto.getPublicKeyFromCertificate(cert,serverPubKey);
-        sendPassword(nonceServer.data(), password, username, serverPubKey);
-
-        //Start Key Establishment
-        keyEstablishmentServer(0, username, password, serverPubKey);
-
-        delete[] plaintext;
-    } catch (const exception &e) {
-        string message = e.what();
-        message = "Authentication Error: " + message;
-        if(plaintext != nullptr) delete[] plaintext;
-        throw runtime_error(message);
-    }
-}
-
-// ---------- KEY ESTABLISHMENT CLIENT-SERVER---------- //
-void keyEstablishmentServer(unsigned int keyPos, string username, string password, EVP_PKEY* serverPubKey) {
-    EVP_PKEY *clientPrvKeyDH = NULL;
-    EVP_PKEY *clientPubKeyDH = NULL;
-    EVP_PKEY *clientPrvKey = NULL;
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
-    unsigned char *secret = NULL;
-    unsigned int ciphertextLen;
-    unsigned int plaintextLen;
+    unsigned int tempBufferLen;
+    unsigned int pubKeyDHServerLen;
+    unsigned int pubKeyDHClientLen;
 
     try {
-        // Generate public key
-        crypto.keyGeneration(clientPrvKeyDH);
-        crypto.readPrivateKey(username, password, clientPrvKey);
+        // M1: 0, username, nc
+        ctx.crypto->generateNonce(nonceClient.data());
+        buffer.push_back(OP_LOGIN);
+        append(ctx.username, buffer);
+        append(nonceClient, NONCE_SIZE, buffer);
+        send(ctx.clientSocket, buffer);
 
-        // Send public key to peer
-        plaintextLen = crypto.serializePublicKey(clientPrvKeyDH, plaintext.data());
-        ciphertextLen = crypto.publicKeyEncryption(plaintext.data(), plaintextLen, ciphertext.data(), serverPubKey);
-        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), ciphertextLen);
-
-        // Receive peer's public key
-        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext.data());
-        if(ciphertextLen == 0) {
-            throw runtime_error("Error receiving the ciphertext of the server PubKey");
+        // Receive M2: 0, cert, g^b mod p, ns, <0, g^b mod p, nc > pKs
+        receive(ctx.clientSocket, buffer);
+        if (buffer.at(0) != OP_LOGIN) {
+            throw runtime_error("Opcode not valid");
         }
-        plaintextLen = crypto.publicKeyDecryption(ciphertext.data(), ciphertextLen, plaintext.data(), clientPrvKey);
-        crypto.deserializePublicKey(plaintext.data(), plaintextLen, clientPubKeyDH);
+        buffer.erase(buffer.begin());
+        tempBufferLen = extract(buffer, tempBuffer);
+        ctx.crypto->deserializeCertificate(tempBufferLen, tempBuffer.data(), cert);
 
-        // Secret derivation
-        secret = new (nothrow) unsigned char[DIGEST_LEN];
-
-        if(!secret)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        crypto.secretDerivation(clientPrvKeyDH, clientPubKeyDH, secret);
-        crypto.insertKey(secret, keyPos);
-
-        delete[] secret;    
-    } catch(const exception& e) {
-        string message = e.what();
-        message = "Error in the key establishment:\n\t" + message;
-        if(secret != nullptr) delete[] secret;
-        throw runtime_error(message);
-    }
-}
-
-
-// ---------- KEY ESTABLISHMENT PEER-TO-PEER---------- //
-void sendKey(string username, string password, EVP_PKEY *pubKey, EVP_PKEY *prvKeyDH) {
-    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    unsigned int bufferLen;
-    unsigned int ciphertextLen;
-    try {
-        // Generate public key
-        bufferLen = crypto.serializePublicKey(prvKeyDH, buffer.data());
-
-        // Encrypting with peer's public key
-        ciphertextLen = crypto.publicKeyEncryption(buffer.data(), bufferLen, ciphertext.data(), pubKey);
-
-        // Send public key to peer
-        crypto.setSessionKey(SERVER_SECRET);
-        bufferLen = crypto.encryptMessage(ciphertext.data(), ciphertextLen, buffer.data());
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer.data(), bufferLen);
-    } catch(const exception& e) {
-        throw;
-    }
-}
-
-void receiveKey(string username, string password, EVP_PKEY *prvKeyDH) {
-    EVP_PKEY *prvKey = NULL;
-    EVP_PKEY *pubKeyDH = NULL;
-    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
-    array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
-    unsigned char *secret = NULL;
-    unsigned int bufferLen;
-    unsigned int plaintextLen;
-
-    try {
-        // Receive peer's public key
-
-        bufferLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer.data());
-        crypto.setSessionKey(SERVER_SECRET);
-
-        plaintextLen = crypto.decryptMessage(buffer.data(), bufferLen, plaintext.data());
-        crypto.readPrivateKey(username, password, prvKey);
-
-        bufferLen = crypto.publicKeyDecryption(plaintext.data(), plaintextLen, buffer.data(), prvKey);
-        crypto.deserializePublicKey(buffer.data(), bufferLen, pubKeyDH);
-
-        // Secret derivation
-        secret = new (nothrow) unsigned char[DIGEST_LEN];
-        if (!secret)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        crypto.secretDerivation(prvKeyDH, pubKeyDH, secret);
-        crypto.insertKey(secret, 1);
-
-        delete[] secret;
-    } catch(const exception& e) {
-        if(secret != nullptr) delete[] secret;
-        throw;
-    }
-}
-
-// ---------- ONLINE USERS UTILITY ---------- //
-void askOnlineUserList() {
-    const char* plaintext;
-    unsigned char *ciphertext;
-    unsigned char *buffer;
-    unsigned int ciphertextLen;
-    unsigned int plaintextLen;
-
-    try {
-        plaintextLen = 25;
-        plaintext = "Send me the online users";
-
-        ciphertext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!ciphertext)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        crypto.setSessionKey(0);
-        ciphertextLen = crypto.encryptMessage((unsigned char*)plaintext, plaintextLen, ciphertext);
-        
-        buffer = new (nothrow) unsigned char[ciphertextLen + 1];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        memcpy(buffer, OP_ONLINE_USERS, 1);
-        memcpy(buffer + 1, ciphertext, ciphertextLen);
-        socketClient.sendMessage(socketClient.getMasterFD(), buffer, ciphertextLen+1);
-
-        delete[] ciphertext;
-        delete[] buffer;
-    } catch(const exception& e) {
-        if(ciphertext != nullptr) delete[] ciphertext;
-        if(buffer != nullptr) delete[] buffer;
-        throw;
-    }
-}
-
-bool checkUserOnline(string username, vector<string> onlineUsers) {
-    for (string value : onlineUsers) {
-        if (value.compare(username) == 0) {
-            return true;
+        if(!ctx.crypto->verifyCertificate(cert)) {
+            throw runtime_error("Certificate not valid.");
         }
-    }
-    return false;
-}
+        cout << "Server certificate verified" << endl;
 
-void receiveOnlineUsersList(vector<string> &onlineUsers) {
-    unsigned char *buffer; 
-    unsigned char *plaintext;
-    unsigned int bufferLen;
-    unsigned int plaintextLen;
-    string usersString;
-    string delimiter;
-    string token;
-    size_t pos;
+        ctx.crypto->getPublicKeyFromCertificate(cert, pubKeyServer);
 
-    try {
-        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!buffer)
-            throw runtime_error("An error occurred while allocating the buffer.");
+        pubKeyDHServerLen = extract(buffer, pubKeyDHBuffer);
+        extract(buffer, nonceServer);
+        tempBufferLen = extract(buffer, tempBuffer);
 
-        bufferLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
+        signature.push_back(OP_LOGIN);
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHServerLen);
+        signature.insert(signature.end(), nonceClient.begin(), nonceClient.end());
 
-        plaintext = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!plaintext)
-            throw runtime_error("An error occurred while allocating the buffer.");
-
-        plaintextLen = crypto.decryptMessage(buffer, bufferLen, plaintext);
-        plaintext[plaintextLen] = '\0';
-        usersString = string((const char*) plaintext);
-
-        cout << "Online Users" << endl;
-
-        if (usersString.compare("None") != 0) {
-            delimiter = "\n";
-            pos = 0;
-
-            while ((pos = usersString.find(delimiter)) != string::npos) {
-                token = usersString.substr(0, pos);
-                cout << "- " << token << endl;
-                onlineUsers.push_back(token);
-                usersString.erase(0, pos + delimiter.length());
-            }
-
-        } else {
-            cout << "** No other users online" << endl;
-            onlineUsers.clear();
+        bool signatureVerification = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), pubKeyServer);
+        if(!signatureVerification) {            
+            throw runtime_error("Signature not verified or message not fresh.");
         }
-    } catch(const exception& e) {
-        if (buffer != nullptr) delete[] buffer;
-        if (plaintext != nullptr) delete[] plaintext;
-        throw;
-    }
-}
+        cout << "The signature is correct." << endl;
 
-// ---------- REQUEST TO TALK ---------- //
-void requestToTalkInit(array<unsigned char, NONCE_SIZE> &nonce, string username) {
-    array<unsigned char, MAX_MESSAGE_SIZE> message;
-    array<unsigned char, MAX_MESSAGE_SIZE> encryptedMessage;
-    unsigned int encryptedMessageLen;
+        ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHServerLen, pubKeyDHServer);
 
-    try {
-        crypto.generateNonce(nonce.data());
+        // Send M3: 0, g^a mod p, ns, < 0, g^a mod b,  ns>
+        buffer.clear();
+        buffer.push_back(OP_LOGIN);
 
-        copy(username.begin(), username.end(), message.begin());
-        copy_n(nonce.begin(), NONCE_SIZE, message.begin() + username.length());
+        ctx.crypto->keyGeneration(prvKeyDHClient);
+        pubKeyDHClientLen = ctx.crypto->serializePublicKey(prvKeyDHClient, pubKeyDHBuffer.data());
+        append(pubKeyDHBuffer, pubKeyDHClientLen, buffer);
 
-        crypto.setSessionKey(0);
-        encryptedMessageLen = crypto.encryptMessage(message.data(), NONCE_SIZE + username.length(), encryptedMessage.data());
-
-        copy_n(OP_REQUEST_TO_TALK, 1, message.begin());    
-        copy_n(encryptedMessage.begin(), encryptedMessageLen, message.begin() + 1);
+        signature.clear();
+        signature.push_back(OP_LOGIN);
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHClientLen);
+        signature.insert(signature.end(), nonceServer.begin(), nonceServer.end());
         
-        socketClient.sendMessage(socketClient.getMasterFD(), message.data(), encryptedMessageLen + 1);
-    } catch(const exception& e) {
-        throw;
-    }
-}
-
-bool extractPubKeyB(EVP_PKEY *&pubKeyB, array<unsigned char, NONCE_SIZE> nonce, array<unsigned char, NONCE_SIZE> &nonceB, string username, string password) {
-    EVP_PKEY *prvKeyA;
-    array<unsigned char,MAX_MESSAGE_SIZE> buffer;
-    array<unsigned char,MAX_MESSAGE_SIZE> plaintext;
-    vector<unsigned char> encryptedNonces;
-    unsigned int plaintextLen;
-    unsigned int bufferLen;
-    unsigned int pubKeyBLen;
-    unsigned int headerLen = sizeof(uint64_t) + 2; // "OK" + 8 bytes
-    uint64_t encryptedNoncesLen;
-
-    try {
-        bufferLen = socketClient.receiveMessage(socketClient.getMasterFD(), buffer.data());
-        plaintextLen = crypto.decryptMessage(buffer.data(), bufferLen, plaintext.data());
-
-        if(equal(plaintext.begin(), plaintext.begin() + 2, "OK")) {
-            memcpy(&encryptedNoncesLen, plaintext.data() + 2, sizeof(uint64_t));
-            encryptedNonces.insert(encryptedNonces.end(), plaintext.begin() + headerLen, plaintext.begin() + headerLen + encryptedNoncesLen);
-            crypto.readPrivateKey(username, password, prvKeyA);
-            crypto.publicKeyDecryption(encryptedNonces.data(), encryptedNoncesLen, buffer.data(), prvKeyA);
+        tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), ctx.prvKeyClient);
         
-            if(!equal(buffer.begin(), buffer.begin() + NONCE_SIZE, nonce.begin()))
-                throw runtime_error("Request to talk operation not successful: nonce are different, the message is not fresh (error occurred receiving M4 of the protocol).");
-        
-            copy(buffer.begin() + NONCE_SIZE, buffer.begin() + 2*NONCE_SIZE, nonceB.begin());
-            copy(plaintext.begin() + headerLen + encryptedNoncesLen, plaintext.begin() + plaintextLen, buffer.begin());
-            pubKeyBLen = plaintextLen - headerLen - encryptedNoncesLen;
-            crypto.deserializePublicKey(buffer.data(), pubKeyBLen, pubKeyB);
-            return true;
+        append(tempBuffer, tempBufferLen, buffer);
 
-        } else if(equal(plaintext.begin(), plaintext.begin() + 2, "NO")) {
-            cout << "Request to talk refused." << endl;
-            return false;
-        } else {
-            throw runtime_error("Request to talk operation not successful: OK is missing (error occurred receiving M4 of the protocol).");
+        send(ctx.clientSocket, buffer);
+
+        // Receive M4: 
+        receive(ctx.clientSocket, buffer);
+        if (buffer.at(0) != OP_LOGIN && buffer.at(0) != OP_ERROR) {
+            throw runtime_error("Authentication Failed: the server interrupted the protocol");
         }
-    } catch(const exception& e) {
-        throw;
-    }
-}
-
-void sendNoncesToB(EVP_PKEY* pubKeyB, array<unsigned char,NONCE_SIZE> nonceB) {
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    array<unsigned char, MAX_MESSAGE_SIZE> message;
-    unsigned int ciphertextLen;
-
-    try {            
-        ciphertextLen = crypto.publicKeyEncryption(nonceB.data(), NONCE_SIZE, ciphertext.data(), pubKeyB);
-        copy_n("OK", 2, message.begin());
-        copy_n(ciphertext.begin(), ciphertextLen, message.begin() + 2);
-
-        ciphertextLen = crypto.encryptMessage(message.data(), ciphertextLen + 2, ciphertext.data());
-        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), ciphertextLen);
-    } catch(const exception& e) {
-        throw;
-    }
-}
-
-void finalizeRequestToTalk() {
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
-    unsigned int ciphertextLen;
-
-    try {
-        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext.data());
-        crypto.decryptMessage(ciphertext.data(), ciphertextLen, plaintext.data());
-
-        if(!equal(plaintext.begin(), plaintext.begin() + 2, "OK")) {
-            throw runtime_error("Request to talk operation not successful: error occurred receiving M8 of the protocol");
-        }
-    } catch(const exception& e) {
-        throw;
-    }
-}
-
-void extractPubKeyA(array<unsigned char, NONCE_SIZE> &nonceA, string &peerAUsername, EVP_PKEY *&pubKeyA) {
-    array <unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    array <unsigned char, MAX_MESSAGE_SIZE> plaintext;
-    unsigned int ciphertextLen;
-    unsigned int plaintextLen;
-    unsigned int keyBufferLen;
-    uint64_t peerALen;
-
-    try {
-        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext.data());
-
-        crypto.setSessionKey(0);
-        plaintextLen = crypto.decryptMessage(ciphertext.data(), ciphertextLen, plaintext.data()); 
-
-        memcpy(&peerALen, plaintext.data(), sizeof(uint64_t));
-
-        peerAUsername = string(plaintext.begin() + sizeof(uint64_t), plaintext.begin() + sizeof(uint64_t) + peerALen);
-        keyBufferLen = plaintextLen - NONCE_SIZE - peerALen - sizeof(uint64_t);
-
-        copy_n(plaintext.begin() + sizeof(uint64_t) + peerALen, keyBufferLen, ciphertext.data());
-        crypto.deserializePublicKey(ciphertext.data(), keyBufferLen, pubKeyA);
-
-        copy_n(plaintext.begin() + sizeof(uint64_t) + peerALen + keyBufferLen, NONCE_SIZE, nonceA.data());
-    } catch(const exception& e) {
-        throw;
-    }
-}
-
-void sendNoncesToA(array<unsigned char, NONCE_SIZE> &nonce, array<unsigned char, NONCE_SIZE> nonceA, EVP_PKEY *pubKeyA) {
-    array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    unsigned int ciphertextLen;
-    uint64_t noncesLen;
-    
-    try {
-        crypto.generateNonce(nonce.data());
-
-        copy_n(nonceA.begin(), NONCE_SIZE, plaintext.data());
-        copy_n(nonce.begin(), NONCE_SIZE, plaintext.data() + NONCE_SIZE);
-
-        noncesLen = crypto.publicKeyEncryption(plaintext.data(), 2 * NONCE_SIZE, ciphertext.data(), pubKeyA);
-        
-        copy_n("OK", 2, plaintext.data());
-        memcpy(plaintext.data() + 2, &noncesLen, sizeof(uint64_t));
-        copy_n(ciphertext.begin(), noncesLen, plaintext.data() + 2 + sizeof(uint64_t));
-        
-        crypto.setSessionKey(0);
-        ciphertextLen = crypto.encryptMessage(plaintext.data(), 2 + sizeof(uint64_t) + noncesLen, ciphertext.data());
-        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), ciphertextLen);
-    } catch(const exception& e) {
-        throw;
-    }   
-}
-
-void refuseRequestToTalk() {
-    array<unsigned char, 2> plaintext;
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    unsigned int ciphertextLen;
-
-    try {
-        copy_n("NO", 2, plaintext.data());
-        crypto.setSessionKey(0);
-        ciphertextLen = crypto.encryptMessage(plaintext.data(), 2, ciphertext.data());
-        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), ciphertextLen);
-    } catch(const exception& e) {
-        throw;
-    }
-}
-
-void validateFreshness(array<unsigned char, NONCE_SIZE> nonce, string username, string password) {
-    EVP_PKEY *prvKeyB;
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
-    unsigned int plaintextLen;
-    unsigned int ciphertextLen;
-    
-    try {
-        ciphertextLen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext.data());
-        crypto.setSessionKey(0);
-        plaintextLen = crypto.decryptMessage(ciphertext.data(), ciphertextLen, plaintext.data());
-
-        if(!equal(plaintext.begin(), plaintext.begin() + 2, "OK")) 
-            throw runtime_error("Request to talk operation not successful: wrong OP (error occurred receiving M6)");
-
-        crypto.readPrivateKey(username, password, prvKeyB);
-        ciphertextLen = crypto.publicKeyDecryption(plaintext.begin() + 2, plaintextLen - 2, ciphertext.data(), prvKeyB);
-
-        if(!equal(ciphertext.begin(), ciphertext.begin() + NONCE_SIZE, nonce.begin()))
-            throw runtime_error("Request to talk operation not successful: nonce are different, the message is not fresh (error occurred receiving M6).");
-    } catch(const exception& e) {
-        throw;
-    }   
-}
-
-void sendOkMessage() {
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    array<unsigned char, 2> plaintext;
-    unsigned int ciphertextLen;
-
-    try {
-        copy_n("OK", 2, plaintext.data());
-        crypto.setSessionKey(0);
-        ciphertextLen = crypto.encryptMessage(plaintext.data(), 2, ciphertext.data());
-        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), ciphertextLen);
-    } catch(const exception& e) {
-        throw;
-    }
-}
-
-bool sendRequestToTalk(string usernameReceiver, string usernameSender, string password) {
-    array<unsigned char, NONCE_SIZE> nonce;
-    array<unsigned char, NONCE_SIZE> nonceB;
-    EVP_PKEY *pubKeyB = NULL;
-    EVP_PKEY *prvKeyDH = NULL;
-
-    try {
-        // Send Message M1
-        requestToTalkInit(nonce, usernameReceiver);
-        cout << "\nRequest to talk sent to " << usernameReceiver << endl;
-
-        // Receive Message M4:
-        if(!extractPubKeyB(pubKeyB, nonce, nonceB, usernameSender, password)) {
+        if(buffer[0] == OP_ERROR) {
+            string message = verifyErrorMessageSignature(ctx.crypto, buffer, pubKeyServer);
+            cout << "Error server-side: " << message << endl;
             return false;
         }
+        buffer.erase(buffer.begin());
 
-        // Send Message M5:
-        sendNoncesToB(pubKeyB, nonceB);
+        cout << "Generating session key" << endl;
+        
+        ctx.crypto->secretDerivation(prvKeyDHClient, pubKeyDHServer, tempBuffer.data());
+        ctx.crypto->insertKey(tempBuffer.data(), SERVER_SECRET);
+        ctx.crypto->setSessionKey(SERVER_SECRET);
 
-        // Receive Message M8:
-        finalizeRequestToTalk();
-
-        cout << "Request to talk accepted by " << usernameReceiver << endl;
-        crypto.keyGeneration(prvKeyDH);
-        sendKey(usernameSender, password, pubKeyB, prvKeyDH);
-        receiveKey(usernameSender, password, prvKeyDH);
-
+        cout << "Authentication succeeded" << endl;
+        printOnlineUsersList(ctx, buffer);
         return true;
     } catch(const exception& e) {
-        cout << "Error in send request to talk: " << e.what() << endl;
+        // Send error message to the server
+        errorMessageSigned(ctx.crypto, e.what(), buffer, ctx.prvKeyClient);
+        send(ctx.clientSocket, buffer);
         throw;
     }
 }
 
-bool receiveRequestToTalk(string username, string password, string &peerAUsername) {
-    string confirmation;
+void onlineUsersListRequest(ClientContext &ctx) {
+    vector<unsigned char> buffer;
+    string message = "I want online users";
+    try {
+        buffer.push_back(OP_ONLINE_USERS);
+        buffer.insert(buffer.end(), message.begin(), message.end());
+        encrypt(ctx.crypto, SERVER_SECRET, buffer);
+        buffer.insert(buffer.begin(), OP_ONLINE_USERS);
+        send(ctx.clientSocket, buffer);
+
+        receive(ctx.clientSocket, buffer);
+        buffer.erase(buffer.begin());
+        printOnlineUsersList(ctx, buffer);
+    } catch(const exception& e) {
+        throw runtime_error("Error sending the online users list request");
+    }
+}
+
+void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> buffer) {
+    // The buffer parameter has been added to reuse this method in the authentication.
+    try {
+        decrypt(ctx.crypto, SERVER_SECRET, buffer);
+        buffer.erase(buffer.begin());
+
+        while(buffer.size() != 0) {
+            string name = extract(buffer);
+            ctx.addOnlineUser(name);
+        }
+        cout << "\nOnline Users: " << endl;
+        for(string user : ctx.onlineUsers) {
+            if(ctx.username.compare(user) != 0) {
+                cout << user << endl;
+            }
+        }
+        if(ctx.onlineUsers.size() == 1) {
+            cout << "You are the only user online." << endl;
+        }
+    } catch(const exception& e) {
+        throw runtime_error("Error occurred printing the online users list");
+    }
+}
+
+bool receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
     array<unsigned char, NONCE_SIZE> nonce;
-    array<unsigned char, NONCE_SIZE> nonceA;
-    EVP_PKEY *pubKeyA = NULL;
-    EVP_PKEY *prvKeyDH = NULL;
+    array<unsigned char, NONCE_SIZE> peerNonce;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> keyBuffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> keyBufferDH;
+    vector<unsigned char> buffer;
+    vector<unsigned char> signature;
+    unsigned int tempBufferLen = 0;
+    unsigned int keyBufferLen = 0;
+    unsigned int keyBufferDHLen = 0;
+    EVP_PKEY *keyDH = NULL;
+    EVP_PKEY *peerKeyDH = NULL;
+    EVP_PKEY *peerPubKey = NULL;
+    string input;
+    bool verify = false;
 
     try {
-        // Receive M2:
-        extractPubKeyA(nonceA, peerAUsername, pubKeyA);
-        cout << peerAUsername << " wants to talk with you" << endl;
+        // Receive request
+        msg.erase(msg.begin());
+        tempBufferLen = ctx.crypto->decryptMessage(msg.data(), msg.size(), tempBuffer.data());
 
-        // Send M3:
-        // Accept
-        confirmation = readFromStdout("Type y to accept --> ");
-        if (strcasecmp((const char *)confirmation.c_str(), "Y")) {
-            cout << "The request to talk has been refused." << endl;
-            refuseRequestToTalk();
+        if(tempBuffer.at(0) != OP_REQUEST_TO_TALK) {
+            errorMessage("Request to talk failed", buffer);
+            send(ctx.clientSocket, ctx.crypto, buffer);
+            throw runtime_error("Request to talk failed");
+        }
+
+        // Get peer username
+        buffer.insert(buffer.end(), tempBuffer.begin() + 1, tempBuffer.begin() + tempBufferLen);
+        ctx.peerUsername = extract(buffer);
+        cout << ctx.peerUsername << " sent you a request to talk" << endl;
+
+        // Accept or refuse request
+        cout << "Do you want to accept the request? (y/n):" << endl;
+        while(true) {
+            getline(cin, input);
+            if(input.length() == 0) {
+                cout << "Insert at least a character." << endl;
+            } else if(input.compare("y") == 0) {
+                cout << "Request accepted" << endl;
+                break;
+            } else if (input.compare("n") == 0) {
+                cout << "Request refused" << endl;
+                buffer.clear();
+                errorMessage("Request to talk refused", buffer);
+                send(ctx.clientSocket, ctx.crypto, buffer);
+                cout << "Request to talk refused" << endl;
+                return false;
+            } else {
+                cout << "Insert a valid answer" << endl;
+            }       
+        }
+
+        // Send nonce and DH public key
+        extract(buffer, peerNonce);
+        ctx.crypto->generateNonce(nonce.data());
+        ctx.crypto->keyGeneration(keyDH);
+
+        buffer.clear();
+        buffer.push_back(OP_REQUEST_TO_TALK);
+
+        tempBufferLen = ctx.crypto->serializePublicKey(keyDH, tempBuffer.data());
+        append(tempBuffer, tempBufferLen, buffer);
+        append(nonce, NONCE_SIZE, buffer);
+
+        signature.insert(signature.end(), tempBuffer.begin(), tempBuffer.begin() + tempBufferLen);
+        signature.insert(signature.end(), peerNonce.begin(), peerNonce.end());
+        tempBufferLen = ctx.crypto->sign(signature.data(), signature.size(), tempBuffer.data(), ctx.prvKeyClient);
+        append(tempBuffer, tempBufferLen, buffer);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+
+        // Receive peer's public key
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) == OP_ERROR) {
+            buffer.erase(buffer.begin());
+            cout << extract(buffer) << endl;
             return false;
         }
 
-        sendNoncesToA(nonce, nonceA, pubKeyA);
-
-        // Receive M6:
-        validateFreshness(nonce, username, password);
-
-        // Send M7:
-        sendOkMessage();
-        crypto.keyGeneration(prvKeyDH);
-
-        //Receive key from A
-        receiveKey(username, password, prvKeyDH);
-        sendKey(username, password, pubKeyA, prvKeyDH);
-
-        return true;   
-    } catch(const exception& e) {
-        cout << "Error in receive request to talk: " << e.what() << endl;
-        return false;
-    }
-}
-
-// ---------- MESSAGE UTILITY ---------- //
-void sendMessage(string message) {
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
-    unsigned int ciphertextLen;
-    unsigned int bufferLen;
-
-    try {
-        if(message.length() > MAX_MESSAGE_SIZE) 
-            throw runtime_error("Message size is greater than the maximum");
+        buffer.erase(buffer.begin());
+        keyBufferDHLen = extract(buffer, keyBufferDH);
+        ctx.crypto->deserializePublicKey(keyBufferDH.data(), keyBufferDHLen, peerKeyDH);
         
-        crypto.setSessionKey(CLIENT_SECRET);        
-        ciphertextLen = crypto.encryptMessage((unsigned char*)message.c_str(), message.length(), ciphertext.data());
-        crypto.setSessionKey(SERVER_SECRET);
+        signature.clear();
+        signature.insert(signature.end(), keyBufferDH.begin(), keyBufferDH.begin() + keyBufferDHLen);
+        signature.insert(signature.end(), nonce.begin(), nonce.end());
+        
+        tempBufferLen = extract(buffer, tempBuffer);  
 
-        bufferLen = crypto.encryptMessage(ciphertext.data(), ciphertextLen, buffer.data());
-        copy_n(OP_MESSAGE, 1, ciphertext.data());
-        copy_n(buffer.begin(), bufferLen, ciphertext.data() + 1);
+        keyBufferLen = extract(buffer, keyBuffer);
+        ctx.crypto->deserializePublicKey(keyBuffer.data(), keyBufferLen, peerPubKey);     
+        verify = ctx.crypto->verifySignature(tempBuffer.data(), tempBufferLen, signature.data(), signature.size(), peerPubKey);
+        
+        if(!verify) {
+            errorMessage("Signature not verified", buffer);
+            send(ctx.clientSocket, ctx.crypto, buffer);
+            cout<<"Signature not verified"<<endl;
+            return false;
+        }
 
-        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), bufferLen + 1);
+        ctx.crypto->secretDerivation(keyDH, peerKeyDH, tempBuffer.data());
+        ctx.crypto->insertKey(tempBuffer.data(), CLIENT_SECRET);
+
+        buffer.clear();
+        append("Success", buffer);
+        encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        buffer.insert(buffer.begin(), OP_REQUEST_TO_TALK);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+        cout << "Request to talk: Success" << endl;
+        return true;
     } catch(const exception& e) {
         throw;
     }
 }
 
-string receiveMessage(){
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    array<unsigned char, MAX_MESSAGE_SIZE> plaintext;
-    unsigned int cipherlen;
-    unsigned int plainlen;
+bool sendRequestToTalk(ClientContext &ctx){
+    array<unsigned char, NONCE_SIZE> nonce;
+    array<unsigned char, NONCE_SIZE> peerNonce;
+    array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
+    array<unsigned char, MAX_MESSAGE_SIZE> signedPart;
+    array<unsigned char, MAX_MESSAGE_SIZE> pubKeyDHBuffer;
+    vector<unsigned char> buffer;
+    vector<unsigned char> signature;
+    unsigned int tempBufferLen = 0;
+    unsigned int signedPartLen = 0;
+    unsigned int pubKeyDHLen = 0;
+    string usernameB;
+    EVP_PKEY *keyDHB = NULL;
+    EVP_PKEY *keyDHA = NULL;
+    EVP_PKEY *pubKeyB = NULL;
 
     try {
-        cipherlen = socketClient.receiveMessage(socketClient.getMasterFD(), ciphertext.data());
+        // Get user to connect with
+        cout << "Who do you want to chat with?" << endl;
+        while(true) {
+            getline(cin, usernameB);
+            if(usernameB.length() == 0){
+                cout << "Insert at least a character." << endl;
+            } else if(ctx.userIsPresent(usernameB)) {
+                break;
+            } else {
+                cout << "Insert a valid username" << endl;
+            }       
+        }
+
+        // M1: 2||{2,usr_b, n_a}SA ->
+        buffer.push_back(OP_REQUEST_TO_TALK);
+        ctx.crypto->generateNonce(nonce.data());
+        append(usernameB, buffer);
+        append(nonce, NONCE_SIZE, buffer);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+
+        // <- M4: 2||{M3||PK_b} SA
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) == OP_ERROR) {
+            buffer.erase(buffer.begin());
+            cout << extract(buffer) << endl;
+            return false;
+        }
+
+        buffer.erase(buffer.begin());
+        pubKeyDHLen = extract(buffer, pubKeyDHBuffer);
+        ctx.crypto->deserializePublicKey(pubKeyDHBuffer.data(), pubKeyDHLen, keyDHB);
         
-        crypto.setSessionKey(SERVER_SECRET);
-        plainlen = crypto.decryptMessage(ciphertext.data(), cipherlen, plaintext.data());
-        
-        crypto.setSessionKey(CLIENT_SECRET);
+        extract(buffer, peerNonce);
+        signedPartLen = extract(buffer, signedPart); //extraction of the signed part
 
-        cipherlen = crypto.decryptMessage(plaintext.data(), plainlen, ciphertext.data());
-        ciphertext[cipherlen] = '\0';
-    } catch(const exception& e) {
-        return "";
-    }
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHLen);
+        signature.insert(signature.end(), nonce.begin(), nonce.end());
+        tempBufferLen = extract(buffer, tempBuffer);
+        ctx.crypto->deserializePublicKey(tempBuffer.data(), tempBufferLen, pubKeyB);
 
-    return string((const char*)ciphertext.data());  
-}
+        bool signatureVerification = ctx.crypto->verifySignature(signedPart.data(), signedPartLen, signature.data(), signature.size(), pubKeyB);
+        if(!signatureVerification) {
+            errorMessage("Signature not verified", buffer);
+            send(ctx.clientSocket, ctx.crypto, buffer);
+            cout << "Signature not verified" << endl;
+            return false;
+        }
 
-// ---------- CLOSE CONNECTION ---------- //
-void sendCloseConnection(string username) {
-    string msg;
-    array<unsigned char, MAX_MESSAGE_SIZE> ciphertext;
-    array<unsigned char, MAX_MESSAGE_SIZE> buffer;
-    unsigned int ciphertextLen;
-    unsigned int bufferLen;
+        // M5: 2||{2||g^a mod p||<g^a mod p || n_b>PK_a}SA ->
+        buffer.clear();
+        ctx.crypto->keyGeneration(keyDHA);
+        buffer.push_back(OP_REQUEST_TO_TALK);
+        pubKeyDHLen = ctx.crypto->serializePublicKey(keyDHA, pubKeyDHBuffer.data());
+        append(pubKeyDHBuffer, pubKeyDHLen, buffer);
 
-    try {
-        crypto.setSessionKey(CLIENT_SECRET);        
-        msg = "!deh";
-        ciphertextLen = crypto.encryptMessage((unsigned char*)msg.c_str(), msg.length(), ciphertext.data());
-        
-        crypto.setSessionKey(SERVER_SECRET);
-        bufferLen = crypto.encryptMessage(ciphertext.data(), ciphertextLen, buffer.data());
+        signature.clear();
+        signature.insert(signature.end(), pubKeyDHBuffer.begin(), pubKeyDHBuffer.begin() + pubKeyDHLen);
+        signature.insert(signature.end(), peerNonce.begin(), peerNonce.end());
+        signedPartLen = ctx.crypto->sign(signature.data(), signature.size(), signedPart.data(), ctx.prvKeyClient);
+        append(signedPart, signedPartLen, buffer);
+        send(ctx.clientSocket, ctx.crypto, buffer);
 
-        copy_n(OP_LOGOUT, 1, ciphertext.data());
-        copy_n(buffer.data(), bufferLen, ciphertext.data() + 1);
-        socketClient.sendMessage(socketClient.getMasterFD(), ciphertext.data(), bufferLen + 1);
-        
-        crypto.removeKey(CLIENT_SECRET);
-        crypto.setSessionKey(SERVER_SECRET);
+        // M7: <- 2||{2{success}AB}
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) == OP_ERROR){
+            buffer.erase(buffer.begin());
+            cout << extract(buffer) << endl;
+            return false;
+        }
+
+        buffer.erase(buffer.begin());
+        ctx.crypto->secretDerivation(keyDHA, keyDHB, pubKeyDHBuffer.data());
+        ctx.crypto->insertKey(pubKeyDHBuffer.data(), CLIENT_SECRET);
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        cout << "Request to talk: " << extract(buffer) << endl;
+        ctx.peerUsername = usernameB;
+        return true;
     } catch(const exception& e) {
         throw;
+    }    
+}
+
+bool chatA(ClientContext &ctx){
+    vector<unsigned char> buffer;
+    string message;
+    while(true){
+        message = readFromStdout(ctx.username + " : ");
+        if(message.compare("!deh") == 0){
+            append(message, buffer);
+            encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+            buffer.insert(buffer.begin(), OP_ERROR);
+            send(ctx.clientSocket, ctx.crypto, buffer);
+            ctx.crypto->removeKey(CLIENT_SECRET);
+            return true;
+        }
+        append(message, buffer);
+        encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        buffer.insert(buffer.begin(), OP_MESSAGE);
+        send(ctx.clientSocket, ctx.crypto, buffer);
+
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) != OP_MESSAGE){
+            cout << ctx.peerUsername << " closed the chat" << endl;
+            ctx.crypto->removeKey(CLIENT_SECRET);
+            return false;
+        }
+        buffer.erase(buffer.begin());
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        cout << ctx.peerUsername << ": " << extract(buffer) << endl;
+    }
+}
+
+bool chatB(ClientContext &ctx){
+    vector<unsigned char> buffer;
+    string message;
+    while(true){
+        receive(ctx.clientSocket, ctx.crypto, buffer);
+        if(buffer.at(0) != OP_MESSAGE){
+            cout << ctx.peerUsername << " closed the chat" << endl;
+            ctx.crypto->removeKey(CLIENT_SECRET);
+            return false;
+        }
+        buffer.erase(buffer.begin());
+        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        cout << ctx.peerUsername << ": " << extract(buffer) << endl;
+
+        message = readFromStdout(ctx.username + ": ");
+        if(message.compare("!deh") == 0){
+            append(message, buffer);
+            encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+            buffer.insert(buffer.begin(), OP_ERROR);
+            send(ctx.clientSocket, ctx.crypto, buffer);
+            ctx.crypto->removeKey(CLIENT_SECRET);
+            return true;
+        }
+
+        buffer.clear();
+        append(message, buffer);
+        encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+        buffer.insert(buffer.begin(), OP_MESSAGE);
+        send(ctx.clientSocket, ctx.crypto, buffer);
     }
 }

@@ -5,38 +5,32 @@ void showMenu();
 void insertCommand();
 
 int main(int argc, char *const argv[]) {
-    string input;
-    string peer;
+    ClientContext context;
+    vector<unsigned char> buffer;
     string username;
     string password;
-    string message;
-    unsigned char *buffer = NULL;
-    vector<string> onlineUsers;
     fd_set fds;
     int maxfd;
     int option = -1;
-
+    bool disconnect = false;
+   
     try {
-        buffer = new (nothrow) unsigned char[MAX_MESSAGE_SIZE];
-        if(!buffer) throw runtime_error("Buffer not allocated.");
-
         cout << "\n-------Authentication-------" << endl;
-
-        socketClient.makeConnection();
-        socketClient.receiveMessage(socketClient.getMasterFD(), buffer);
-        cout << "Connection confirmed: " << buffer << endl;
+        context.clientSocket->makeConnection();
+        receive(context.clientSocket, buffer);
+        cout << "Connection confirmed: " << buffer.data() << endl;
+        buffer.clear();
         username = readFromStdout("Insert username: ");
         password = readPassword();
-        authentication(username, password);
-        crypto.setSessionKey(0);
-
+        context.username = username;
+        context.crypto->readPrivateKey(username, password, context.prvKeyClient);
+        if (!authentication(context)) throw runtime_error("Authentication Failed");
         cout << "-----------------------------" << endl << endl;
 
-        receiveOnlineUsersList(onlineUsers);    
         while (true) {
-            maxfd = (socketClient.getMasterFD() > STDIN_FILENO) ? socketClient.getMasterFD() : STDIN_FILENO;
+            maxfd = (context.clientSocket->getMasterFD() > STDIN_FILENO) ? context.clientSocket->getMasterFD() : STDIN_FILENO;
             FD_ZERO(&fds);
-            FD_SET(socketClient.getMasterFD(), &fds); 
+            FD_SET(context.clientSocket->getMasterFD(), &fds); 
             FD_SET(STDIN_FILENO, &fds); 
 
             showMenu();
@@ -46,99 +40,59 @@ int main(int argc, char *const argv[]) {
             select(maxfd+1, &fds, NULL, NULL, NULL); 
 
             if(FD_ISSET(0, &fds)) {  
+                option = -1;
                 cin >> option;
                 cin.ignore();
             }
 
-            if(FD_ISSET(socketClient.getMasterFD(), &fds)) option = 3;
-
-
+            if(FD_ISSET(context.clientSocket->getMasterFD(), &fds)) {
+                receive(context.clientSocket, buffer);
+                
+                if(buffer.at(0) == OP_REQUEST_TO_TALK) {
+                    cout << "\n-------Received request to talk-------" << endl;
+                    if(!receiveRequestToTalk(context, buffer)) break;
+                    cout << "---------------------------------------" << endl;
+                    cout << "\n-------Chat-------" << endl;
+                    buffer.clear();
+                    disconnect = chatB(context);
+                    if(disconnect) return 0;
+                    cout << "------------------" << endl;
+                }
+            }
 
             switch(option) {
                 case 1:
-                    askOnlineUserList();
-                    receiveOnlineUsersList(onlineUsers);
+                    cout << "\n--------- Online User List ---------" << endl;
+                    onlineUsersListRequest(context);
+                    cout << "-------------------------------------" << endl;
                     break;
                 case 2:
                     cout << "\n-------Request to talk-------" << endl;
-                    peer = readFromStdout("Insert username: ");
-
-                    if(!checkUserOnline(peer, onlineUsers)) {
-                        cout << "No user online with this username: insert a valid username or ask for the list of online users." << endl;
-                        cout << "-----------------------------" << endl;
-                        break;
-                    }
-
-                    if(!sendRequestToTalk(peer, username, password))
-                        break;
-                    cout << "-----------------------------" << endl;
-
-                    while(true){
-                        message = readFromStdout(username + ": ");
-
-                        if(message.compare("!deh") == 0){
-                            cout << "You closed the chat." << endl;
-                            sendCloseConnection(username);
-                            break;
-                        }
-
-                        sendMessage(message);
-                        message = receiveMessage();
-
-                        if(message.compare("!deh") == 0){
-                            cout << peer << " closed the chat." << endl;
-                            crypto.removeKey(1);
-                            crypto.setSessionKey(0);
-                            break;
-                        }
-
-                        cout << peer << ": " << message << endl;
-                    }
-
+                    if(!sendRequestToTalk(context)) break;
+                    cout << "-------------------------------" << endl;
+                    cout << "\n-------Chat-------" << endl;
+                    disconnect = chatA(context);
+                    if(disconnect) return 0;
+                    cout << "------------------" << endl;
                     break;
-                case 3:
-                    cout << "\n-------Received request to talk-------" << endl;
-                    if(!receiveRequestToTalk(username, password, peer))
-                        break;
-                    cout << "------------------------------------------" << endl;
-
-                    while(true){
-                        message = receiveMessage();
-
-                        if(message.compare("!deh") == 0){
-                            cout << peer << " closed the chat." << endl;
-                            crypto.removeKey(1);
-                            crypto.setSessionKey(0);
-                            break;
-                        }
-
-                        cout << peer << ": " << message << endl;
-                        message = readFromStdout(username + ": ");
-
-                        if(message.compare("!deh") == 0){
-                            cout << "You closed the chat." << endl;
-                            sendCloseConnection(username);
-                            break;
-                        }
-
-                        sendMessage(message);
-                    }
+                case -1:
                     break;
                 case 0:
                     cout << "Bye." << endl;
+                    buffer.clear();
+                    buffer.insert(buffer.begin(), OP_LOGOUT);
+                    append("logout", buffer);
+                    send(context.clientSocket, context.crypto, buffer);
                     return 0;
                 default:
                     cout << "Insert a valid command." << endl;
             }
         }
     } catch (const exception &e) {
-        if(buffer != nullptr) delete[] buffer;
         cout << "Exit due to an error:\n" << endl;
         cerr << e.what() << endl;
         return 0;
     }
-
-    delete[] buffer;
     return 0;
 }
 
