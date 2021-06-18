@@ -261,15 +261,15 @@ void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> buffer) {
 
         while(buffer.size() != 0) {
             string name = extract(buffer);
-            ctx.addOnlineUser(name);
+            if(name.compare(ctx.username) != 0) {
+                ctx.addOnlineUser(name);
+            }
         }
         cout << "\nOnline Users: " << endl;
         for(string user : ctx.onlineUsers) {
-            if(ctx.username.compare(user) != 0) {
-                cout << user << endl;
-            }
+            cout << user << endl;
         }
-        if(ctx.onlineUsers.size() == 1) {
+        if(ctx.onlineUsers.size() == 0) {
             cout << "You are the only user online." << endl;
         }
     } catch(const exception& e) {
