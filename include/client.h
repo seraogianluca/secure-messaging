@@ -55,7 +55,10 @@ void receive(SocketClient *socket, vector<unsigned char> &buffer) {
 }
 
 void send(SocketClient *socket, vector<unsigned char> &buffer) {
-    try {
+    try { 
+        if(buffer.size() > MAX_MESSAGE_SIZE)
+            throw runtime_error("Message too big.");
+            
         socket->sendMessage(socket->getMasterFD(), buffer.data(), buffer.size());
         buffer.clear();
     } catch(const exception& e) {
@@ -268,7 +271,7 @@ void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> buffer) {
     }
 }
 
-void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
+bool receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
     array<unsigned char, NONCE_SIZE> nonce;
     array<unsigned char, NONCE_SIZE> peerNonce;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
@@ -316,7 +319,7 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
                 errorMessage("Request to talk refused", buffer);
                 send(ctx.clientSocket, ctx.crypto, buffer);
                 cout << "Request to talk refused" << endl;
-                return;
+                return false;
             } else {
                 cout << "Insert a valid answer" << endl;
             }       
@@ -345,7 +348,7 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
         if(buffer.at(0) == OP_ERROR) {
             buffer.erase(buffer.begin());
             cout << extract(buffer) << endl;
-            return;
+            return false;
         }
 
         buffer.erase(buffer.begin());
@@ -366,7 +369,7 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
             errorMessage("Signature not verified", buffer);
             send(ctx.clientSocket, ctx.crypto, buffer);
             cout<<"Signature not verified"<<endl;
-            return;
+            return false;
         }
 
         ctx.crypto->secretDerivation(keyDH, peerKeyDH, tempBuffer.data());
@@ -378,12 +381,13 @@ void receiveRequestToTalk(ClientContext &ctx, vector<unsigned char> msg) {
         buffer.insert(buffer.begin(), OP_REQUEST_TO_TALK);
         send(ctx.clientSocket, ctx.crypto, buffer);
         cout << "Request to talk: Success" << endl;
+        return true;
     } catch(const exception& e) {
         throw;
     }
 }
 
-void sendRequestToTalk(ClientContext &ctx){
+bool sendRequestToTalk(ClientContext &ctx){
     array<unsigned char, NONCE_SIZE> nonce;
     array<unsigned char, NONCE_SIZE> peerNonce;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
@@ -425,7 +429,7 @@ void sendRequestToTalk(ClientContext &ctx){
         if(buffer.at(0) == OP_ERROR) {
             buffer.erase(buffer.begin());
             cout << extract(buffer) << endl;
-            return;
+            return false;
         }
 
         buffer.erase(buffer.begin());
@@ -445,7 +449,7 @@ void sendRequestToTalk(ClientContext &ctx){
             errorMessage("Signature not verified", buffer);
             send(ctx.clientSocket, ctx.crypto, buffer);
             cout << "Signature not verified" << endl;
-            return;
+            return false;
         }
 
         // M5: 2||{2||g^a mod p||<g^a mod p || n_b>PK_a}SA ->
@@ -467,7 +471,7 @@ void sendRequestToTalk(ClientContext &ctx){
         if(buffer.at(0) == OP_ERROR){
             buffer.erase(buffer.begin());
             cout << extract(buffer) << endl;
-            return;
+            return false;
         }
 
         buffer.erase(buffer.begin());
@@ -476,6 +480,7 @@ void sendRequestToTalk(ClientContext &ctx){
         decrypt(ctx.crypto, CLIENT_SECRET, buffer);
         cout << "Request to talk: " << extract(buffer) << endl;
         ctx.peerUsername = usernameB;
+        return true;
     } catch(const exception& e) {
         throw;
     }    

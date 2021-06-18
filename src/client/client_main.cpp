@@ -50,7 +50,7 @@ int main(int argc, char *const argv[]) {
                 
                 if(buffer.at(0) == OP_REQUEST_TO_TALK) {
                     cout << "\n-------Received request to talk-------" << endl;
-                    receiveRequestToTalk(context, buffer);
+                    if(!receiveRequestToTalk(context, buffer)) break;
                     cout << "---------------------------------------" << endl;
                     cout << "\n-------Chat-------" << endl;
                     buffer.clear();
@@ -68,7 +68,7 @@ int main(int argc, char *const argv[]) {
                     break;
                 case 2:
                     cout << "\n-------Request to talk-------" << endl;
-                    sendRequestToTalk(context);
+                    if(!sendRequestToTalk(context)) break;
                     cout << "-------------------------------" << endl;
                     cout << "\n-------Chat-------" << endl;
                     disconnect = chatA(context);

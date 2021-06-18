@@ -61,7 +61,7 @@ struct ServerContext {
     }
 
     void deleteActiveChat(OnlineUser user) {
-        int i = 0;
+        unsigned int i = 0;
         bool found = false;
         for (ActiveChat chat : activeChats) {
             if(chat.a.username.compare(user.username) == 0 || (chat.b.username.compare(user.username) == 0)) {
@@ -71,7 +71,7 @@ struct ServerContext {
             i++;
         }
 
-        if (found && i < activeChats.size()) {
+        if (found && (i < activeChats.size())) {
             activeChats.erase(activeChats.begin() + i);
             return;
         }
@@ -139,6 +139,9 @@ void receive(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
 
 void send(SocketServer *socket, int sd, vector<unsigned char> &buffer) {
     try {
+        if(buffer.size() > MAX_MESSAGE_SIZE)
+            throw runtime_error("Message too big.");
+
         socket->sendMessage(sd, buffer.data(), buffer.size());
         buffer.clear();
     } catch(const exception& e) {
@@ -429,8 +432,13 @@ void logout(ServerContext &ctx, int sd, unsigned int i) {
 }
 
 void chat(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sender){
-    OnlineUser receiver = ctx.getReceiver(sender);
-    msg.erase(msg.begin());
-    decrypt(ctx.crypto, sender.key_pos, msg);
-    send(ctx.serverSocket, ctx.crypto, receiver, msg);
+    OnlineUser receiver;
+    try {
+        receiver = ctx.getReceiver(sender);
+        msg.erase(msg.begin());
+        decrypt(ctx.crypto, sender.key_pos, msg);
+        send(ctx.serverSocket, ctx.crypto, receiver, msg);
+    } catch(const exception& e) {
+        throw;
+    }
 }
