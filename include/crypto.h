@@ -67,11 +67,15 @@ class Crypto {
     private:
         vector<session> sessions;
         unsigned int currentSession = 0;
+
         // Diffie-Hellman
         void buildParameters(EVP_PKEY *&dh_params);
-        
-    public:
+        // Hash
+        void computeHash(unsigned char *msg, unsigned int msg_size, unsigned char *digest);
+        // Certificates
+        void loadCRL(X509_CRL*& crl);
 
+    public:
         Crypto() {
             sessions.resize(MAX_CLIENTS);
         }
@@ -86,32 +90,25 @@ class Crypto {
         void readPublicKey(string user, EVP_PKEY *&pubKey);
 
         // Authenticated encryption
-        int encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned char *buffer);
-        int decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned char *buffer);
+        unsigned int encryptMessage(unsigned char *msg, unsigned int msg_len, unsigned char *buffer);
+        unsigned int decryptMessage(unsigned char *msg, unsigned int msg_len, unsigned char *buffer);
        
         // Certificates
         void loadCertificate(X509*& cert, string path);
-        int serializeCertificate(X509* cert, unsigned char* cert_buf);
+        unsigned int serializeCertificate(X509* cert, unsigned char* cert_buf);
         void deserializeCertificate(int cert_len,unsigned char* cert_buff, X509*& buff);
-        void loadCRL(X509_CRL*& crl);
         bool verifyCertificate(X509* cert_to_verify);
 
         // Public Key handling
-        int serializePublicKey(EVP_PKEY *pub_key, unsigned char *pubkey_buf);
+        unsigned int serializePublicKey(EVP_PKEY *pub_key, unsigned char *pubkey_buf);
         void deserializePublicKey(unsigned char *pubkey_buf, unsigned int pubkey_size, EVP_PKEY *&pubkey);
-        int publicKeyEncryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *pubkey);
-        int publicKeyDecryption(unsigned char *msg, unsigned int msg_len, unsigned char *buff, EVP_PKEY *prvkey);
         void getPublicKeyFromCertificate(X509 *cert, EVP_PKEY *&pubkey);
-        
-        // Hash
-        //TODO: may be private
-        void computeHash(unsigned char *msg, unsigned int msg_size, unsigned char *digest);
 
         // Diffie-Hellmann
         void keyGeneration(EVP_PKEY *&my_prvkey);
         void secretDerivation(EVP_PKEY *my_pubkey, EVP_PKEY *peer_pubkey, unsigned char *buffer);
 
         // Digital Signature
-        int sign(unsigned char *message, unsigned int messageLen, unsigned char *buffer, EVP_PKEY *prvKey);
+        unsigned int sign(unsigned char *message, unsigned int messageLen, unsigned char *buffer, EVP_PKEY *prvKey);
         bool verifySignature(unsigned char *signature, unsigned int signLen, unsigned char *message, unsigned int messageLen, EVP_PKEY *pubKey);
 };

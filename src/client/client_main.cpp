@@ -7,17 +7,12 @@ void insertCommand();
 int main(int argc, char *const argv[]) {
     ClientContext context;
     vector<unsigned char> buffer;
+    string username;
+    string password;
     fd_set fds;
     int maxfd;
     int option = -1;
-
-
-    string input;
-    string peer;
-    string username;
-    string password;
-    string message;
-    vector<string> onlineUsers;
+    bool disconnect = false;
    
     try {
         cout << "\n-------Authentication-------" << endl;
@@ -45,6 +40,7 @@ int main(int argc, char *const argv[]) {
             select(maxfd+1, &fds, NULL, NULL, NULL); 
 
             if(FD_ISSET(0, &fds)) {  
+                option = -1;
                 cin >> option;
                 cin.ignore();
             }
@@ -52,7 +48,16 @@ int main(int argc, char *const argv[]) {
             if(FD_ISSET(context.clientSocket->getMasterFD(), &fds)) {
                 receive(context.clientSocket, buffer);
                 
-                if(buffer.at(0) == OP_REQUEST_TO_TALK) option = 3;
+                if(buffer.at(0) == OP_REQUEST_TO_TALK) {
+                    cout << "\n-------Received request to talk-------" << endl;
+                    if(!receiveRequestToTalk(context, buffer)) break;
+                    cout << "---------------------------------------" << endl;
+                    cout << "\n-------Chat-------" << endl;
+                    buffer.clear();
+                    disconnect = chatB(context);
+                    if(disconnect) return 0;
+                    cout << "------------------" << endl;
+                }
             }
 
             switch(option) {
@@ -62,17 +67,22 @@ int main(int argc, char *const argv[]) {
                     cout << "-------------------------------------" << endl;
                     break;
                 case 2:
-                    cout << "\n------------Request to talk-----------" << endl;
-                    sendRequestToTalk(context);
-                    cout << "---------------------------------------" << endl;
+                    cout << "\n-------Request to talk-------" << endl;
+                    if(!sendRequestToTalk(context)) break;
+                    cout << "-------------------------------" << endl;
+                    cout << "\n-------Chat-------" << endl;
+                    disconnect = chatA(context);
+                    if(disconnect) return 0;
+                    cout << "------------------" << endl;
                     break;
-                case 3:
-                    cout << "\n-------Received request to talk-------" << endl;
-                    receiveRequestToTalk(context, buffer);
-                    cout << "---------------------------------------" << endl;
+                case -1:
                     break;
                 case 0:
                     cout << "Bye." << endl;
+                    buffer.clear();
+                    buffer.insert(buffer.begin(), OP_LOGOUT);
+                    append("logout", buffer);
+                    send(context.clientSocket, context.crypto, buffer);
                     return 0;
                 default:
                     cout << "Insert a valid command." << endl;

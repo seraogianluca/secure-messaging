@@ -27,6 +27,12 @@ void append(std::array<unsigned char, contentSize> content, unsigned int content
 
     if (contentLen > UINT16_MAX)
         throw std::runtime_error("Content too big.");
+    
+    if (contentLen > UINT_MAX - buffer.size() - sizeof(uint16_t))
+        throw runtime_error("Content too big.");
+    
+    if (buffer.size() + contentLen + sizeof(uint16_t) > MAX_MESSAGE_SIZE)
+        throw runtime_error("Content too big.");
 
     size = (uint16_t)contentLen;
 
@@ -37,30 +43,18 @@ void append(std::array<unsigned char, contentSize> content, unsigned int content
     buffer.insert(buffer.end(), content.begin(), content.begin() + contentLen);
 }
 
-/*
-void append(unsigned char *content, unsigned int contentLen, std::vector<unsigned char> &buffer) {
-    unsigned char sizeArray[2];
-    uint16_t size = 0;
-
-    if (contentLen > UINT16_MAX)
-        throw std::runtime_error("Content too big.");
-
-    size = (uint16_t)contentLen;
-
-    sizeArray[0] = size & 0xFF; //low part
-    sizeArray[1] = size >> 8;   //higher part
-
-    buffer.insert(buffer.end(), sizeArray, sizeArray + 2);
-    buffer.insert(buffer.end(), content, content + contentLen);
-}
-*/
-
 void append(std::string content, std::vector<unsigned char> &buffer) {
     unsigned char sizeArray[2];
     uint16_t size = 0;
 
     if (content.length() > UINT16_MAX)
         throw std::runtime_error("Content too big.");
+    
+    if (content.length() > UINT_MAX - buffer.size() - sizeof(uint16_t))
+        throw runtime_error("Content too big.");
+    
+    if (buffer.size() + content.length() + sizeof(uint16_t) > MAX_MESSAGE_SIZE)
+        throw runtime_error("Content too big.");
 
     size = (uint16_t)content.length();
 
