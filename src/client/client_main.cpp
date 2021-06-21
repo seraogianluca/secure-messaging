@@ -46,17 +46,19 @@ int main(int argc, char *const argv[]) {
             }
 
             if(FD_ISSET(context.clientSocket->getMasterFD(), &fds)) {
+                buffer.clear();
                 receive(context.clientSocket, buffer);
                 
                 if(buffer.at(0) == OP_REQUEST_TO_TALK) {
                     cout << "\n-------Received request to talk-------" << endl;
-                    if(!receiveRequestToTalk(context, buffer)) break;
-                    cout << "---------------------------------------" << endl;
-                    cout << "\n-------Chat-------" << endl;
-                    buffer.clear();
-                    disconnect = chatB(context);
-                    if(disconnect) return 0;
-                    cout << "------------------" << endl;
+                    if(receiveRequestToTalk(context, buffer)){
+                        cout << "---------------------------------------" << endl;
+                        cout << "\n-------Chat-------" << endl;
+                        buffer.clear();
+                        disconnect = chatB(context);
+                        if(disconnect) return 0;
+                        cout << "------------------" << endl;
+                    }
                 }
             }
 

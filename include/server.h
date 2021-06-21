@@ -1,8 +1,12 @@
 #include <fstream>
 #include <sstream>
 #include <iterator>
+#include <thread>
+#include <mutex>
 #include "socket.h"
 #include "utils.h"
+
+
 
 
 struct OnlineUser {
@@ -34,6 +38,7 @@ struct ServerContext {
     vector<ActiveChat> activeChats;
     SocketServer *serverSocket;
     Crypto *crypto;
+    mutex m;
 
     ServerContext() {
         serverSocket = new SocketServer(SOCK_STREAM);
@@ -328,6 +333,7 @@ void sendOnlineUsersList(ServerContext &ctx, OnlineUser user, unsigned char opCo
 }
     
 void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sender){
+    lock_guard<mutex> lock(ctx.m);
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
     array<unsigned char, NONCE_SIZE> nonce;
     vector<unsigned char> buffer;
@@ -366,7 +372,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sen
         append(sender.username, buffer);
         append(nonce, NONCE_SIZE, buffer);
         send(ctx.serverSocket, ctx.crypto, receiver, buffer);
-
+        
         // Receive M3 FROM B
         receive(ctx.serverSocket, ctx.crypto, receiver, buffer);
         if(buffer.at(0) == OP_ERROR) {

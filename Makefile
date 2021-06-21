@@ -19,7 +19,7 @@ $(info "============== Compiling for linux ======================")
 TARGET = server_main.out client_main.out clean
 CC = g++
 LINKFLAG = -lssl -lcrypto
-CFLAGS = -Wall -std=c++2a
+CFLAGS = -Wall -std=c++2a -pthread
 endif
 
 all: $(TARGET)

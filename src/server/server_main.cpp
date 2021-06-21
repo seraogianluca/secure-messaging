@@ -21,7 +21,6 @@ int main(int argc, char* const argv[]) {
 
                         receive(ctx.serverSocket, sd, messageReceived);
                         cout << "Message received length: " << messageReceived.size() << endl;
-
                         if (messageReceived.size() == 0)  {
                             try {
                                 //Somebody disconnected , get his details and print 
@@ -46,7 +45,8 @@ int main(int argc, char* const argv[]) {
                             if (operationCode == 0) {
                                 // Login
                                 cout << endl << "-------Authentication-------" << endl;
-                                authentication(ctx, sd, messageReceived);
+                                thread thr(authentication,std::ref(ctx), sd, messageReceived);
+                                thr.join();
                                 cout << "-----------------------------" << endl;
                             } else if (operationCode == 1) {
                                 cout << endl << "-------Close connection--------" << endl;
@@ -56,7 +56,8 @@ int main(int argc, char* const argv[]) {
                                 // Request to talk
                                 cout << endl << "-------Request to Talk-------" << endl;
                                 user = ctx.getUser(sd);
-                                requestToTalk(ctx, messageReceived, user);
+                                thread thr1(requestToTalk,std::ref(ctx), messageReceived, user);
+                                thr1.join();
                                 cout << "------------------------------" << endl;
                             } else if (operationCode == 3) {
                                 //Message Forwarding
@@ -79,7 +80,6 @@ int main(int argc, char* const argv[]) {
                             }
                         }
                     }  
-
                     messageReceived.clear();
                 }
             }
