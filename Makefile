@@ -10,7 +10,7 @@ ifeq ($(OS), Darwin)
 $(info "================= Compiling for mac ======================")
 TARGET = clean server_main.out client_main.out
 CC = clang++
-LINKFLAG = ${LDFLAGS} -lcrypto 
+LINKFLAG = ${LDFLAGS} -lcrypto -lpthread -lc++
 CFLAGS = ${CPPFLAGS} -Wall -std=c++20
 endif
 

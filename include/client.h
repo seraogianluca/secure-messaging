@@ -1,5 +1,6 @@
 #include <cstring>
 #include <termios.h>
+#include <sys/select.h>
 #include "socket.h"
 #include "utils.h"
 
@@ -492,64 +493,57 @@ bool sendRequestToTalk(ClientContext &ctx){
     }    
 }
 
-bool chatA(ClientContext &ctx){
+bool chat(ClientContext &ctx){
     vector<unsigned char> buffer;
     string message;
-    while(true){
-        message = readFromStdout(ctx.username + " : ");
-        if(message.compare("!deh") == 0){
-            append(message, buffer);
-            encrypt(ctx.crypto, CLIENT_SECRET, buffer);
-            buffer.insert(buffer.begin(), OP_ERROR);
-            send(ctx.clientSocket, ctx.crypto, buffer);
-            ctx.crypto->removeKey(CLIENT_SECRET);
-            return true;
-        }
-        append(message, buffer);
-        encrypt(ctx.crypto, CLIENT_SECRET, buffer);
-        buffer.insert(buffer.begin(), OP_MESSAGE);
-        send(ctx.clientSocket, ctx.crypto, buffer);
+    fd_set fds;
+    int maxfd;
 
-        receive(ctx.clientSocket, ctx.crypto, buffer);
-        if(buffer.at(0) != OP_MESSAGE){
-            cout << ctx.peerUsername << " closed the chat" << endl;
-            ctx.crypto->removeKey(CLIENT_SECRET);
-            return false;
-        }
-        buffer.erase(buffer.begin());
-        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
-        cout << ctx.peerUsername << ": " << extract(buffer) << endl;
-    }
-}
+    try {
+        while(true) {
+            maxfd = (ctx.clientSocket->getMasterFD() > STDIN_FILENO) ? ctx.clientSocket->getMasterFD() : STDIN_FILENO;
+            FD_ZERO(&fds);
+            FD_SET(ctx.clientSocket->getMasterFD(), &fds); 
+            FD_SET(STDIN_FILENO, &fds); 
 
-bool chatB(ClientContext &ctx){
-    vector<unsigned char> buffer;
-    string message;
-    while(true){
-        receive(ctx.clientSocket, ctx.crypto, buffer);
-        if(buffer.at(0) != OP_MESSAGE){
-            cout << ctx.peerUsername << " closed the chat" << endl;
-            ctx.crypto->removeKey(CLIENT_SECRET);
-            return false;
-        }
-        buffer.erase(buffer.begin());
-        decrypt(ctx.crypto, CLIENT_SECRET, buffer);
-        cout << ctx.peerUsername << ": " << extract(buffer) << endl;
+            select(maxfd+1, &fds, NULL, NULL, NULL); 
+            if(FD_ISSET(0, &fds)) { 
+                do {
+                    getline(cin, message);
+                    if(message.length() == 0) {
+                        cout << "Insert at least a character." << endl;
+                    }
+                } while (message.length() == 0); 
 
-        message = readFromStdout(ctx.username + ": ");
-        if(message.compare("!deh") == 0){
-            append(message, buffer);
-            encrypt(ctx.crypto, CLIENT_SECRET, buffer);
-            buffer.insert(buffer.begin(), OP_ERROR);
-            send(ctx.clientSocket, ctx.crypto, buffer);
-            ctx.crypto->removeKey(CLIENT_SECRET);
-            return true;
-        }
+                if(message.compare("!deh") == 0){
+                    append(message, buffer);
+                    encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+                    buffer.insert(buffer.begin(), OP_ERROR);
+                    send(ctx.clientSocket, ctx.crypto, buffer);
+                    ctx.crypto->removeKey(CLIENT_SECRET);
+                    return true;
+                }
 
-        buffer.clear();
-        append(message, buffer);
-        encrypt(ctx.crypto, CLIENT_SECRET, buffer);
-        buffer.insert(buffer.begin(), OP_MESSAGE);
-        send(ctx.clientSocket, ctx.crypto, buffer);
+                buffer.clear();
+                append(message, buffer);
+                encrypt(ctx.crypto, CLIENT_SECRET, buffer);
+                buffer.insert(buffer.begin(), OP_MESSAGE);
+                send(ctx.clientSocket, ctx.crypto, buffer);
+            }
+
+            if(FD_ISSET(ctx.clientSocket->getMasterFD(), &fds)) {
+                receive(ctx.clientSocket, ctx.crypto, buffer);
+                if(buffer.at(0) != OP_MESSAGE){
+                    cout << ctx.peerUsername << " closed the chat" << endl;
+                    ctx.crypto->removeKey(CLIENT_SECRET);
+                    return false;
+                }
+                buffer.erase(buffer.begin());
+                decrypt(ctx.crypto, CLIENT_SECRET, buffer);
+                cout << ctx.peerUsername << ": " << extract(buffer) << endl;
+            }
+        } 
+    } catch(const exception& e) {
+        throw;
     }
 }
