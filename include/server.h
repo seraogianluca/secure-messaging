@@ -355,6 +355,13 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sen
         msg.erase(msg.begin());
         usernameB = extract(msg);
 
+        if(sender.username.compare(usernameB) == 0) {
+            cout << "Receiver not allowed" << endl;
+            errorMessage("Receiver not allowed", buffer);
+            send(ctx.serverSocket, ctx.crypto, sender, buffer);
+            return;
+        }
+
         cout << sender.username << " wants to chat with " << usernameB << endl;
 
         if(ctx.isUserChatting(usernameB)){

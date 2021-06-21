@@ -15,6 +15,7 @@ using namespace std;
 struct session {
     unsigned char *session_key;
     unsigned char iv[IV_SIZE];
+    uint16_t received;
     uint16_t counter;
     
     session(){}
@@ -26,6 +27,7 @@ struct session {
         }
         memcpy(session_key, sk, DIGEST_LEN);
         counter = 0;
+        received = 0;
     }
 
     void generateIV() {
@@ -52,11 +54,11 @@ struct session {
     }
 
     bool verifyFreshness(unsigned char *counterReceived){
-        uint16_t tmp = counter;
+        uint16_t tmp = received;
         uint16_t cr = counterReceived[0] | uint16_t(counterReceived[1]) << 8;
         increment(tmp);
         if(tmp == cr){
-            increment(counter);
+            increment(received);
             return true;
         }
         return false;

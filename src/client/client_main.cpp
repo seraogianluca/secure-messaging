@@ -1,5 +1,4 @@
 #include "include/client.h"
-#include <sys/select.h>
 
 void showMenu();
 void insertCommand();
@@ -55,7 +54,7 @@ int main(int argc, char *const argv[]) {
                         cout << "---------------------------------------" << endl;
                         cout << "\n-------Chat-------" << endl;
                         buffer.clear();
-                        disconnect = chatB(context);
+                        disconnect = chat(context);
                         if(disconnect) return 0;
                         cout << "------------------" << endl;
                     }
@@ -73,7 +72,7 @@ int main(int argc, char *const argv[]) {
                     if(!sendRequestToTalk(context)) break;
                     cout << "-------------------------------" << endl;
                     cout << "\n-------Chat-------" << endl;
-                    disconnect = chatA(context);
+                    disconnect = chat(context);
                     if(disconnect) return 0;
                     cout << "------------------" << endl;
                     break;
