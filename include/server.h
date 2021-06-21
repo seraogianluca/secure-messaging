@@ -192,6 +192,7 @@ void forward(ServerContext ctx, OnlineUser sender, OnlineUser receiver){
 }
 
 void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessage) {
+    lock_guard<mutex> lock(ctx.m);
     vector<unsigned char> buffer;
     vector<unsigned char> signature;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
