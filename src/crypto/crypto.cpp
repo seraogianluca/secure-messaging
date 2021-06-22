@@ -2,11 +2,12 @@
 
 void Crypto::insertKey(unsigned char *key, unsigned int pos) {
     session s(key);
-    sessions.insert(sessions.begin() + pos, s);
+    sessions[pos] = s;
 }
 
 void Crypto::removeKey(unsigned int pos) {
-    sessions.erase(sessions.begin() + pos, sessions.begin() + pos + 1);
+    session& s = sessions.at(pos);
+    s.removeKey();
 }
 
 void Crypto::setSessionKey(unsigned int pos) {

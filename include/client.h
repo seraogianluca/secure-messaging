@@ -245,7 +245,6 @@ void onlineUsersListRequest(ClientContext &ctx) {
         encrypt(ctx.crypto, SERVER_SECRET, buffer);
         buffer.insert(buffer.begin(), OP_ONLINE_USERS);
         send(ctx.clientSocket, buffer);
-
         receive(ctx.clientSocket, buffer);
         buffer.erase(buffer.begin());
         printOnlineUsersList(ctx, buffer);
@@ -259,13 +258,15 @@ void printOnlineUsersList(ClientContext &ctx, vector<unsigned char> buffer) {
     try {
         decrypt(ctx.crypto, SERVER_SECRET, buffer);
         buffer.erase(buffer.begin());
-
+        ctx.clearOnlineUsers();
+        
         while(buffer.size() != 0) {
             string name = extract(buffer);
             if(name.compare(ctx.username) != 0) {
                 ctx.addOnlineUser(name);
             }
         }
+
         cout << "\nOnline Users: " << endl;
         for(string user : ctx.onlineUsers) {
             cout << user << endl;
@@ -412,13 +413,15 @@ bool sendRequestToTalk(ClientContext &ctx){
 
     try {
         // Get user to connect with
-        cout << "Who do you want to chat with?" << endl;
+        cout << "Who do you want to chat with? (!boia to exit)" << endl;
         while(true) {
             getline(cin, usernameB);
             if(usernameB.length() == 0){
                 cout << "Insert at least a character." << endl;
             } else if(ctx.userIsPresent(usernameB)) {
                 break;
+            } else if(usernameB.compare("!boia") == 0) {
+                return false;
             } else {
                 cout << "Insert a valid username" << endl;
             }       
@@ -515,7 +518,7 @@ bool chat(ClientContext &ctx){
                     }
                 } while (message.length() == 0); 
 
-                if(message.compare("!deh") == 0){
+                if(message.compare("!deh") == 0) {
                     append(message, buffer);
                     encrypt(ctx.crypto, CLIENT_SECRET, buffer);
                     buffer.insert(buffer.begin(), OP_ERROR);
@@ -533,14 +536,17 @@ bool chat(ClientContext &ctx){
 
             if(FD_ISSET(ctx.clientSocket->getMasterFD(), &fds)) {
                 receive(ctx.clientSocket, ctx.crypto, buffer);
-                if(buffer.at(0) != OP_MESSAGE){
+
+                if(buffer.at(0) != OP_MESSAGE) {
                     cout << ctx.peerUsername << " closed the chat" << endl;
                     ctx.crypto->removeKey(CLIENT_SECRET);
                     return false;
                 }
+
                 buffer.erase(buffer.begin());
                 decrypt(ctx.crypto, CLIENT_SECRET, buffer);
                 cout << ctx.peerUsername << ": " << extract(buffer) << endl;
+                buffer.clear();
             }
         } 
     } catch(const exception& e) {

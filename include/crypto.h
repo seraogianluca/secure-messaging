@@ -1,6 +1,6 @@
 #include <iostream>
 #include <string>
-#include <vector>
+#include <array>
 #include <string.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -63,11 +63,17 @@ struct session {
         }
         return false;
     }
+
+    void removeKey() {
+        for(int i = 0; i < DIGEST_LEN; i++) {
+            session_key[i] = 0x00;
+        }
+    }
 };
 
 class Crypto {
     private:
-        vector<session> sessions;
+        array<session, MAX_CLIENTS> sessions;
         unsigned int currentSession = 0;
 
         // Diffie-Hellman
@@ -78,9 +84,7 @@ class Crypto {
         void loadCRL(X509_CRL*& crl);
 
     public:
-        Crypto() {
-            sessions.resize(MAX_CLIENTS);
-        }
+        Crypto() {}
 
         void insertKey(unsigned char *key, unsigned int pos);
         void removeKey(unsigned int pos);
