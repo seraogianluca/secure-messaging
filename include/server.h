@@ -6,9 +6,6 @@
 #include "socket.h"
 #include "utils.h"
 
-
-
-
 struct OnlineUser {
     string username;
     int sd;
@@ -301,8 +298,9 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
 }
 
 void receiveOnlineUsersRequest(ServerContext &ctx, OnlineUser user, vector<unsigned char> receivedMessage) {
+    lock_guard<mutex> lock(ctx.m);
     try {
-        receivedMessage.erase(receivedMessage.begin());
+        receivedMessage.erase(receivedMessage.begin());    
         decrypt(ctx.crypto, user.key_pos, receivedMessage);
         if(receivedMessage[0] != OP_ONLINE_USERS) {
             throw runtime_error("OP Code not valid");
@@ -434,6 +432,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sen
 }
 
 void logout(ServerContext &ctx, int sd, unsigned int i) {
+    lock_guard<mutex> lock(ctx.m);
     OnlineUser user;
 
     try {
@@ -449,6 +448,7 @@ void logout(ServerContext &ctx, int sd, unsigned int i) {
 }
 
 void chat(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sender){
+    lock_guard<mutex> lock(ctx.m);
     OnlineUser receiver;
     try {
         receiver = ctx.getReceiver(sender);
@@ -456,6 +456,6 @@ void chat(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sender){
         decrypt(ctx.crypto, sender.key_pos, msg);
         send(ctx.serverSocket, ctx.crypto, receiver, msg);
     } catch(const exception& e) {
-        throw;
+        cout << "Something went wrong during forwarding" << endl;
     }
 }
