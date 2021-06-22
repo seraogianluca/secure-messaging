@@ -93,6 +93,15 @@ struct ServerContext {
         return false;
     }
 
+    bool isUserOnline(string username){
+        for(OnlineUser u : onlineUsers){
+            if(u.username.compare(username) == 0){
+                return true;
+            }
+        }
+        return false;
+    }
+
     OnlineUser getUser(string username){
         for (OnlineUser user : onlineUsers) {
             if(username.compare(user.username) == 0) {
@@ -216,8 +225,16 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         }
         startMessage.erase(startMessage.begin());
 
+        cout<<"Lunghezza "<<ctx.onlineUsers.size()<<endl;
+
         // Extract username
         username = extract(startMessage);
+        if(ctx.isUserOnline(username)){
+            errorMessage("User is already present", buffer);
+            send(ctx.serverSocket, sd, buffer);
+            return;
+        }
+
         ctx.crypto->readPublicKey(username, pubKeyClient);
         cout << username << " wants to authenticate" << endl;
         // Extract nc

@@ -159,7 +159,7 @@ bool authentication(ClientContext &ctx) {
         // Receive M2: 0, cert, g^b mod p, ns, <0, g^b mod p, nc > pKs
         receive(ctx.clientSocket, buffer);
         if (buffer.at(0) != OP_LOGIN) {
-            throw runtime_error("Opcode not valid");
+            return false;
         }
         buffer.erase(buffer.begin());
         tempBufferLen = extract(buffer, tempBuffer);
