@@ -95,6 +95,6 @@ void showMenu() {
     cout << endl;
     cout << "1. Online users" << endl;
     cout << "2. Request to talk" << endl;
-    cout << "0. Exit" << endl;
+    cout << "Press any other button to exit" << endl;
 }
 
