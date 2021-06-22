@@ -2,11 +2,13 @@
 
 void Crypto::insertKey(unsigned char *key, unsigned int pos) {
     session s(key);
-    sessions.insert(sessions.begin() + pos, s);
+    if(pos > MAX_CLIENTS) throw runtime_error("Insertion not allowed.");
+    sessions[pos] = s;
 }
 
 void Crypto::removeKey(unsigned int pos) {
-    sessions.erase(sessions.begin() + pos, sessions.begin() + pos + 1);
+    session& s = sessions.at(pos);
+    s.removeKey();
 }
 
 void Crypto::setSessionKey(unsigned int pos) {

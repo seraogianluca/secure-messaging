@@ -1,5 +1,4 @@
 #include "include/client.h"
-#include <sys/select.h>
 
 void showMenu();
 void insertCommand();
@@ -36,57 +35,53 @@ int main(int argc, char *const argv[]) {
             showMenu();
             cout << "--> ";
             cout.flush();  
+            option = -1;
             
             select(maxfd+1, &fds, NULL, NULL, NULL); 
 
             if(FD_ISSET(0, &fds)) {  
-                option = -1;
                 cin >> option;
                 cin.ignore();
             }
 
             if(FD_ISSET(context.clientSocket->getMasterFD(), &fds)) {
+                buffer.clear();
                 receive(context.clientSocket, buffer);
                 
                 if(buffer.at(0) == OP_REQUEST_TO_TALK) {
                     cout << "\n-------Received request to talk-------" << endl;
-                    if(!receiveRequestToTalk(context, buffer)) break;
-                    cout << "---------------------------------------" << endl;
-                    cout << "\n-------Chat-------" << endl;
-                    buffer.clear();
-                    disconnect = chatB(context);
-                    if(disconnect) return 0;
-                    cout << "------------------" << endl;
+                    if(receiveRequestToTalk(context, buffer)){
+                        cout << "---------------------------------------" << endl;
+                        cout << "\n-------Chat-------" << endl;
+                        buffer.clear();
+                        disconnect = chat(context);
+                        if(disconnect) return 0;
+                        cout << "------------------" << endl;
+                    }
                 }
             }
 
-            switch(option) {
-                case 1:
-                    cout << "\n--------- Online User List ---------" << endl;
-                    onlineUsersListRequest(context);
-                    cout << "-------------------------------------" << endl;
-                    break;
-                case 2:
-                    cout << "\n-------Request to talk-------" << endl;
-                    if(!sendRequestToTalk(context)) break;
+            if(option == 1){
+                cout << "\n--------- Online User List ---------" << endl;
+                onlineUsersListRequest(context);
+                cout << "-------------------------------------" << endl;
+            } else if(option == 2){
+                cout << "\n-------Request to talk-------" << endl;
+                if(sendRequestToTalk(context)){
                     cout << "-------------------------------" << endl;
                     cout << "\n-------Chat-------" << endl;
-                    disconnect = chatA(context);
+                    disconnect = chat(context);
                     if(disconnect) return 0;
                     cout << "------------------" << endl;
-                    break;
-                case -1:
-                    break;
-                case 0:
-                    cout << "Bye." << endl;
-                    buffer.clear();
-                    buffer.insert(buffer.begin(), OP_LOGOUT);
-                    append("logout", buffer);
-                    send(context.clientSocket, context.crypto, buffer);
-                    return 0;
-                default:
-                    cout << "Insert a valid command." << endl;
-            }
+                }
+            } else if(option == 0){
+                cout << "Bye." << endl;
+                buffer.clear();
+                buffer.insert(buffer.begin(), OP_LOGOUT);
+                append("logout", buffer);
+                send(context.clientSocket, context.crypto, buffer);
+                return 0;
+            } 
         }
     } catch (const exception &e) {
         cout << "Exit due to an error:\n" << endl;

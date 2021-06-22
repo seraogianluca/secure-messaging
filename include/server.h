@@ -1,9 +1,10 @@
 #include <fstream>
 #include <sstream>
 #include <iterator>
+#include <thread>
+#include <mutex>
 #include "socket.h"
 #include "utils.h"
-
 
 struct OnlineUser {
     string username;
@@ -34,6 +35,7 @@ struct ServerContext {
     vector<ActiveChat> activeChats;
     SocketServer *serverSocket;
     Crypto *crypto;
+    mutex m;
 
     ServerContext() {
         serverSocket = new SocketServer(SOCK_STREAM);
@@ -82,6 +84,15 @@ struct ServerContext {
     bool isUserChatting(string username){
         for(ActiveChat chat: activeChats) {
             if(chat.a.username.compare(username) == 0 || chat.b.username.compare(username) == 0){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool isUserOnline(string username){
+        for(OnlineUser u : onlineUsers){
+            if(u.username.compare(username) == 0){
                 return true;
             }
         }
@@ -187,6 +198,7 @@ void forward(ServerContext ctx, OnlineUser sender, OnlineUser receiver){
 }
 
 void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessage) {
+    lock_guard<mutex> lock(ctx.m);
     vector<unsigned char> buffer;
     vector<unsigned char> signature;
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
@@ -210,8 +222,16 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
         }
         startMessage.erase(startMessage.begin());
 
+        cout<<"Lunghezza "<<ctx.onlineUsers.size()<<endl;
+
         // Extract username
         username = extract(startMessage);
+        if(ctx.isUserOnline(username)){
+            errorMessage("User is already present", buffer);
+            send(ctx.serverSocket, sd, buffer);
+            return;
+        }
+
         ctx.crypto->readPublicKey(username, pubKeyClient);
         cout << username << " wants to authenticate" << endl;
         // Extract nc
@@ -295,8 +315,9 @@ void authentication(ServerContext &ctx, int sd, vector<unsigned char> startMessa
 }
 
 void receiveOnlineUsersRequest(ServerContext &ctx, OnlineUser user, vector<unsigned char> receivedMessage) {
+    lock_guard<mutex> lock(ctx.m);
     try {
-        receivedMessage.erase(receivedMessage.begin());
+        receivedMessage.erase(receivedMessage.begin());    
         decrypt(ctx.crypto, user.key_pos, receivedMessage);
         if(receivedMessage[0] != OP_ONLINE_USERS) {
             throw runtime_error("OP Code not valid");
@@ -328,6 +349,7 @@ void sendOnlineUsersList(ServerContext &ctx, OnlineUser user, unsigned char opCo
 }
     
 void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sender){
+    lock_guard<mutex> lock(ctx.m);
     array<unsigned char, MAX_MESSAGE_SIZE> tempBuffer;
     array<unsigned char, NONCE_SIZE> nonce;
     vector<unsigned char> buffer;
@@ -349,6 +371,13 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sen
         msg.erase(msg.begin());
         usernameB = extract(msg);
 
+        if(sender.username.compare(usernameB) == 0) {
+            cout << "Receiver not allowed" << endl;
+            errorMessage("Receiver not allowed", buffer);
+            send(ctx.serverSocket, ctx.crypto, sender, buffer);
+            return;
+        }
+
         cout << sender.username << " wants to chat with " << usernameB << endl;
 
         if(ctx.isUserChatting(usernameB)){
@@ -366,7 +395,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sen
         append(sender.username, buffer);
         append(nonce, NONCE_SIZE, buffer);
         send(ctx.serverSocket, ctx.crypto, receiver, buffer);
-
+        
         // Receive M3 FROM B
         receive(ctx.serverSocket, ctx.crypto, receiver, buffer);
         if(buffer.at(0) == OP_ERROR) {
@@ -420,6 +449,7 @@ void requestToTalk(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sen
 }
 
 void logout(ServerContext &ctx, int sd, unsigned int i) {
+    lock_guard<mutex> lock(ctx.m);
     OnlineUser user;
 
     try {
@@ -435,6 +465,7 @@ void logout(ServerContext &ctx, int sd, unsigned int i) {
 }
 
 void chat(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sender){
+    lock_guard<mutex> lock(ctx.m);
     OnlineUser receiver;
     try {
         receiver = ctx.getReceiver(sender);
@@ -442,6 +473,6 @@ void chat(ServerContext &ctx, vector<unsigned char> msg, OnlineUser sender){
         decrypt(ctx.crypto, sender.key_pos, msg);
         send(ctx.serverSocket, ctx.crypto, receiver, msg);
     } catch(const exception& e) {
-        throw;
+        cout << "Something went wrong during forwarding" << endl;
     }
 }
