@@ -2,6 +2,7 @@
 
 void Crypto::insertKey(unsigned char *key, unsigned int pos) {
     session s(key);
+    if(pos > MAX_CLIENTS) throw runtime_error("Insertion not allowed.");
     sessions[pos] = s;
 }
 

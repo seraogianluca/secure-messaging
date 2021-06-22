@@ -35,11 +35,11 @@ int main(int argc, char *const argv[]) {
             showMenu();
             cout << "--> ";
             cout.flush();  
+            option = -1;
             
             select(maxfd+1, &fds, NULL, NULL, NULL); 
 
             if(FD_ISSET(0, &fds)) {  
-                option = -1;
                 cin >> option;
                 cin.ignore();
             }
@@ -61,33 +61,27 @@ int main(int argc, char *const argv[]) {
                 }
             }
 
-            switch(option) {
-                case 1:
-                    cout << "\n--------- Online User List ---------" << endl;
-                    onlineUsersListRequest(context);
-                    cout << "-------------------------------------" << endl;
-                    break;
-                case 2:
-                    cout << "\n-------Request to talk-------" << endl;
-                    if(!sendRequestToTalk(context)) break;
+            if(option == 1){
+                cout << "\n--------- Online User List ---------" << endl;
+                onlineUsersListRequest(context);
+                cout << "-------------------------------------" << endl;
+            } else if(option == 2){
+                cout << "\n-------Request to talk-------" << endl;
+                if(sendRequestToTalk(context)){
                     cout << "-------------------------------" << endl;
                     cout << "\n-------Chat-------" << endl;
                     disconnect = chat(context);
                     if(disconnect) return 0;
                     cout << "------------------" << endl;
-                    break;
-                case -1:
-                    break;
-                case 0:
-                    cout << "Bye." << endl;
-                    buffer.clear();
-                    buffer.insert(buffer.begin(), OP_LOGOUT);
-                    append("logout", buffer);
-                    send(context.clientSocket, context.crypto, buffer);
-                    return 0;
-                default:
-                    cout << "Insert a valid command." << endl;
-            }
+                }
+            } else if(option == 0){
+                cout << "Bye." << endl;
+                buffer.clear();
+                buffer.insert(buffer.begin(), OP_LOGOUT);
+                append("logout", buffer);
+                send(context.clientSocket, context.crypto, buffer);
+                return 0;
+            } 
         }
     } catch (const exception &e) {
         cout << "Exit due to an error:\n" << endl;
